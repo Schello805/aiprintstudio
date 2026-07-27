@@ -65,4 +65,10 @@ describe("relief mesh", () => {
     expect(report.score).toBeLessThan(100);
     expect(report.issues.join(" ")).toContain("Grundplatte");
   });
+
+  it("uses Sharp-compatible blur values for every quality profile", () => {
+    for (const profile of ["fast", "balanced", "fine", "photo", "logo"] as const) {
+      expect(reliefInternals.profileSettings(profile).inputBlur).toBeGreaterThanOrEqual(0.3);
+    }
+  });
 });

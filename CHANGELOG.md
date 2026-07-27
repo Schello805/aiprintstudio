@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.1
+
+- Korrigiert den ungültigen Blur-Wert des Logo-Qualitätsprofils
+
 ## 0.5.0
 
 - Mehrstufige, profilabhängige Höhenverarbeitung mit Glättung und Detailrückführung

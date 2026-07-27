@@ -141,7 +141,7 @@ function profileSettings(profile: ReliefOptions["profile"]) {
     balanced: { inputBlur: 0.45, gamma: 0.95, contrast: 1.16, detail: 0.8, steps: 48 },
     fine: { inputBlur: 0.35, gamma: 0.92, contrast: 1.12, detail: 1.1, steps: 0 },
     photo: { inputBlur: 0.7, gamma: 0.82, contrast: 1.02, detail: 0.45, steps: 0 },
-    logo: { inputBlur: 0.25, gamma: 1, contrast: 1.35, detail: 1.25, steps: 16 }
+    logo: { inputBlur: 0.3, gamma: 1, contrast: 1.35, detail: 1.25, steps: 16 }
   }[profile];
 }
 
@@ -383,4 +383,4 @@ function buildPreviewSurface(
   return { positions, indices };
 }
 
-export const reliefInternals = { buildCellMask, buildSubjectPixelMask, buildWatertightHeightMesh, buildPreviewSurface, encodeBinaryStl, smoothHeightField, analysePrintability };
+export const reliefInternals = { buildCellMask, buildSubjectPixelMask, buildWatertightHeightMesh, buildPreviewSurface, encodeBinaryStl, smoothHeightField, analysePrintability, profileSettings };
