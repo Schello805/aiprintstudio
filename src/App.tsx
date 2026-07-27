@@ -155,6 +155,7 @@ type SettingsStatus = {
   openAiConfigured: boolean;
   modelSetupAccepted: boolean;
   encryptionAvailable: boolean;
+  storageVersion: number;
 };
 
 function Settings() {
@@ -162,7 +163,8 @@ function Settings() {
   const [status, setStatus] = useState<SettingsStatus>({
     openAiConfigured: false,
     modelSetupAccepted: false,
-    encryptionAvailable: true
+    encryptionAvailable: true,
+    storageVersion: 0
   });
 
   async function refreshStatus() {

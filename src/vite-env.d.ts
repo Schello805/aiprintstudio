@@ -7,6 +7,7 @@ interface Window {
       openAiConfigured: boolean;
       modelSetupAccepted: boolean;
       encryptionAvailable: boolean;
+      storageVersion: number;
     }>;
     saveOpenAiKey: (apiKey: string) => Promise<void>;
     removeOpenAiKey: () => Promise<void>;

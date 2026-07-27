@@ -1,5 +1,5 @@
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, safeStorage, shell } from "electron";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRelief, type ReliefOptions } from "./relief.js";
@@ -8,25 +8,62 @@ const currentDirectory = dirname(fileURLToPath(import.meta.url));
 const developmentUrl = process.env.VITE_DEV_SERVER_URL ?? "http://localhost:5173";
 
 type StoredSettings = {
+  schemaVersion?: number;
   encryptedOpenAiKey?: string;
   modelSetupAccepted?: boolean;
 };
 
+const settingsDirectoryName = "de.michaelschellenberger.aiprintstudio";
+
 function settingsFile(): string {
-  return join(app.getPath("userData"), "settings.json");
+  return join(app.getPath("appData"), settingsDirectoryName, "settings.json");
 }
 
 async function readSettings(): Promise<StoredSettings> {
   try {
     return JSON.parse(await readFile(settingsFile(), "utf8")) as StoredSettings;
   } catch {
-    return {};
+    return migrateLegacySettings();
   }
 }
 
 async function writeSettings(settings: StoredSettings): Promise<void> {
-  await mkdir(app.getPath("userData"), { recursive: true });
-  await writeFile(settingsFile(), `${JSON.stringify(settings, null, 2)}\n`, { mode: 0o600 });
+  const directory = join(app.getPath("appData"), settingsDirectoryName);
+  const target = settingsFile();
+  const temporary = `${target}.tmp`;
+  await mkdir(directory, { recursive: true });
+  settings.schemaVersion = 1;
+  await writeFile(temporary, `${JSON.stringify(settings, null, 2)}\n`, { mode: 0o600 });
+  await rename(temporary, target);
+}
+
+async function migrateLegacySettings(): Promise<StoredSettings> {
+  const candidates = [
+    join(app.getPath("userData"), "settings.json"),
+    join(app.getPath("appData"), "ai-print-studio", "settings.json"),
+    join(app.getPath("appData"), "AI Print Studio", "settings.json")
+  ];
+  for (const candidate of new Set(candidates)) {
+    if (candidate === settingsFile()) continue;
+    try {
+      const settings = JSON.parse(await readFile(candidate, "utf8")) as StoredSettings;
+      await writeSettings(settings);
+      return settings;
+    } catch {
+      // Fehlende oder ungültige Altdateien werden übersprungen.
+    }
+  }
+  return {};
+}
+
+function hasUsableOpenAiKey(settings: StoredSettings): boolean {
+  if (!settings.encryptedOpenAiKey || !safeStorage.isEncryptionAvailable()) return false;
+  try {
+    const decrypted = safeStorage.decryptString(Buffer.from(settings.encryptedOpenAiKey, "base64"));
+    return /^sk-[A-Za-z0-9_-]{20,}$/.test(decrypted);
+  } catch {
+    return false;
+  }
 }
 
 function createWindow(): void {
@@ -58,9 +95,10 @@ app.whenReady().then(() => {
   ipcMain.handle("settings:status", async () => {
     const settings = await readSettings();
     return {
-      openAiConfigured: Boolean(settings.encryptedOpenAiKey),
+      openAiConfigured: hasUsableOpenAiKey(settings),
       modelSetupAccepted: Boolean(settings.modelSetupAccepted),
-      encryptionAvailable: safeStorage.isEncryptionAvailable()
+      encryptionAvailable: safeStorage.isEncryptionAvailable(),
+      storageVersion: settings.schemaVersion ?? 0
     };
   });
   ipcMain.handle("settings:saveOpenAiKey", async (_event, apiKey: string) => {
@@ -74,6 +112,10 @@ app.whenReady().then(() => {
     const settings = await readSettings();
     settings.encryptedOpenAiKey = safeStorage.encryptString(normalized).toString("base64");
     await writeSettings(settings);
+    const persisted = await readSettings();
+    if (!hasUsableOpenAiKey(persisted)) {
+      throw new Error("Der Schlüssel konnte nach dem Speichern nicht wieder sicher gelesen werden.");
+    }
   });
   ipcMain.handle("settings:removeOpenAiKey", async () => {
     const settings = await readSettings();

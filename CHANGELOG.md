@@ -5,6 +5,12 @@ orientiert sich an Keep a Changelog; Versionen folgen Semantic Versioning.
 
 ## [Unreleased]
 
+### Fixed
+
+- Updatefeste Speicherung des OpenAI-Schlüssels in einem stabilen Bundle-ID-Ordner
+- Automatische Migration aus früheren Electron-Datenordnern
+- Sofortige Lese- und Entschlüsselungsprüfung nach dem Speichern
+
 ## [0.2.0] - 2026-07-27
 
 ### Added
