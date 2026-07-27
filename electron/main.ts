@@ -212,6 +212,17 @@ app.whenReady().then(() => {
     if (metadata.width * metadata.height > 40_000_000) {
       throw new Error("Das Bild besitzt zu viele Pixel. Bitte verwende höchstens etwa 40 Megapixel.");
     }
+    const { data: sample } = await sharp(bytes)
+      .rotate()
+      .resize(64, 64, { fit: "inside" })
+      .removeAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    const quantizedColors = new Set<string>();
+    for (let offset = 0; offset < sample.length; offset += 3) {
+      quantizedColors.add(`${sample[offset] >> 5}:${sample[offset + 1] >> 5}:${sample[offset + 2] >> 5}`);
+    }
+    const suggestedProfile = quantizedColors.size <= 48 ? "logo" : "photo";
     const extension = path.toLowerCase().split(".").pop();
     const mime = extension === "png" ? "image/png" : extension === "webp" ? "image/webp" : "image/jpeg";
     return {
@@ -220,6 +231,7 @@ app.whenReady().then(() => {
       size: bytes.length,
       width: metadata.width,
       height: metadata.height,
+      suggestedProfile,
       dataUrl: `data:${mime};base64,${bytes.toString("base64")}`
     };
   });

@@ -71,7 +71,7 @@ export async function createRelief(
   const { data: rgba } = await prepared.clone()
     .raw()
     .toBuffer({ resolveWithObject: true });
-  const subjectPixels = buildSubjectPixelMask(rgba, gridWidth, gridHeight);
+  const subjectPixels = cleanSubjectPixelMask(buildSubjectPixelMask(rgba, gridWidth, gridHeight), gridWidth, gridHeight);
   const cellMask = buildCellMask(subjectPixels, gridWidth, gridHeight);
   const { data } = await prepared
     .flatten({ background: "#ffffff" })
@@ -92,7 +92,10 @@ export async function createRelief(
   const detailed = smoothed.map((value, index) =>
     Math.max(0, Math.min(1, value + (rawLevels[index] - value) * options.detail * profile.detail))
   );
-  const levels = profile.steps ? detailed.map((value) => Math.round(value * profile.steps) / profile.steps) : detailed;
+  const profiledLevels = profile.steps ? detailed.map((value) => Math.round(value * profile.steps) / profile.steps) : detailed;
+  // Eine flache Konturzone verhindert, dass antialiaste Randpixel als hohe,
+  // sägezahnartige Außenwand im Mesh erscheinen.
+  const levels = applyBoundaryRim(profiledLevels, subjectPixels, gridWidth, gridHeight, options.profile === "logo" ? 2 : 1);
   const heights = levels.map((value) => options.baseMm + value * options.reliefMm);
   const mesh = buildWatertightHeightMesh(gridWidth, gridHeight, options.widthMm, heightMm, heights, cellMask);
   const preview = buildPreviewSurface(gridWidth, gridHeight, options.widthMm, heightMm, heights, cellMask);
@@ -292,6 +295,46 @@ function buildCellMask(pixels: boolean[], columns: number, rows: number): boolea
   return cells;
 }
 
+function cleanSubjectPixelMask(pixels: boolean[], width: number, height: number): boolean[] {
+  let current = pixels.slice();
+  for (let pass = 0; pass < 2; pass += 1) {
+    const next = current.slice();
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        let occupied = 0;
+        for (let oy = -1; oy <= 1; oy += 1) for (let ox = -1; ox <= 1; ox += 1) {
+          const nx = x + ox, ny = y + oy;
+          if (nx >= 0 && ny >= 0 && nx < width && ny < height && current[ny * width + nx]) occupied += 1;
+        }
+        next[y * width + x] = occupied >= 5;
+      }
+    }
+    current = next;
+  }
+  return current;
+}
+
+function applyBoundaryRim(levels: number[], mask: boolean[], width: number, height: number, radius: number): number[] {
+  const next = levels.slice();
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const index = y * width + x;
+      if (!mask[index]) { next[index] = 0; continue; }
+      let boundary = false;
+      for (let oy = -radius; oy <= radius && !boundary; oy += 1) {
+        for (let ox = -radius; ox <= radius; ox += 1) {
+          const nx = x + ox, ny = y + oy;
+          if (nx < 0 || ny < 0 || nx >= width || ny >= height || !mask[ny * width + nx]) {
+            boundary = true; break;
+          }
+        }
+      }
+      if (boundary) next[index] = 0;
+    }
+  }
+  return next;
+}
+
 function encodeBinaryStl(mesh: Mesh, title: string): Buffer {
   const buffer = Buffer.alloc(84 + mesh.triangles.length * 50);
   buffer.write(title.slice(0, 80), 0, "ascii");
@@ -383,4 +426,8 @@ function buildPreviewSurface(
   return { positions, indices };
 }
 
-export const reliefInternals = { buildCellMask, buildSubjectPixelMask, buildWatertightHeightMesh, buildPreviewSurface, encodeBinaryStl, smoothHeightField, analysePrintability, profileSettings };
+export const reliefInternals = {
+  buildCellMask, buildSubjectPixelMask, cleanSubjectPixelMask, applyBoundaryRim,
+  buildWatertightHeightMesh, buildPreviewSurface, encodeBinaryStl,
+  smoothHeightField, analysePrintability, profileSettings
+};

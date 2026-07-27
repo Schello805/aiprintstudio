@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.2
+
+- Glättet transparente Motivkonturen und entfernt gezackte Außenwände
+- Fügt einen flachen Sicherheitsrand zwischen Relief und Außenwand ein
+- Erkennt flächige Grafiken automatisch und empfiehlt das Logo-Profil
+- Passt die 3D-Kamera dynamisch an die Modellabmessungen an
+
 ## 0.5.1
 
 - Korrigiert den ungültigen Blur-Wert des Logo-Qualitätsprofils

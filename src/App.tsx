@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 type View = "studio" | "history" | "settings";
 type LegalPage = "imprint" | "privacy" | "cookies" | null;
-type SelectedImage = { path: string; name: string; size: number; width: number; height: number; dataUrl: string };
+type SelectedImage = { path: string; name: string; size: number; width: number; height: number; suggestedProfile: "logo" | "photo"; dataUrl: string };
 type ReliefResult = Awaited<ReturnType<NonNullable<typeof window.desktop>["createRelief"]>>;
 type QualityProfile = "fast" | "balanced" | "fine" | "photo" | "logo";
 type HistoryEntry = {
@@ -82,8 +82,9 @@ export function App() {
       setFileError(null);
       setFile(selected);
       setPreview(selected.dataUrl);
+      setProfile(selected.suggestedProfile);
       setResult(null);
-      setUploadStatus(`${selected.width} × ${selected.height} Pixel erfolgreich geladen.`);
+      setUploadStatus(`${selected.width} × ${selected.height} Pixel geladen · Profil „${selected.suggestedProfile === "logo" ? "Logo" : "Foto"}“ empfohlen.`);
     } catch (error) {
       setFileError(error instanceof Error ? error.message : "Das Bild konnte nicht geöffnet werden.");
       setUploadStatus(null);
@@ -235,6 +236,7 @@ export function App() {
 }
 
 function ReliefPreview({ result }: { result: NonNullable<ReliefResult> }) {
+  const modelSize = Math.max(result.widthMm, result.heightMm);
   const geometry = useMemo(() => {
     const next = new THREE.BufferGeometry();
     next.setAttribute("position", new THREE.Float32BufferAttribute(result.preview.positions, 3));
@@ -249,7 +251,7 @@ function ReliefPreview({ result }: { result: NonNullable<ReliefResult> }) {
   return (
     <div className="preview-card">
       <div className="panel-label">3D-VORSCHAU · ZIEHEN ZUM DREHEN</div>
-      <Canvas camera={{ position: [95, 90, 120], fov: 38 }} dpr={[1, 2]}>
+      <Canvas camera={{ position: [modelSize * 0.9, modelSize * 0.85, modelSize * 1.35], fov: 42 }} dpr={[1, 2]}>
         <color attach="background" args={["#0b0e13"]} />
         <ambientLight intensity={1.5} />
         <directionalLight position={[60, 100, 80]} intensity={3.2} />
@@ -257,8 +259,8 @@ function ReliefPreview({ result }: { result: NonNullable<ReliefResult> }) {
         <mesh geometry={geometry}>
           <meshStandardMaterial color="#b7f58a" roughness={0.62} metalness={0.05} side={THREE.DoubleSide} />
         </mesh>
-        <gridHelper args={[180, 18, "#2e3944", "#1b222b"]} />
-        <OrbitControls makeDefault target={[0, 2, 0]} minDistance={70} maxDistance={280} enableDamping />
+        <gridHelper args={[modelSize * 1.6, 18, "#2e3944", "#1b222b"]} />
+        <OrbitControls makeDefault target={[0, result.options.baseMm + result.options.reliefMm / 2, 0]} minDistance={modelSize * 0.65} maxDistance={modelSize * 3} enableDamping />
       </Canvas>
     </div>
   );

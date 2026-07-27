@@ -19,6 +19,7 @@ interface Window {
       size: number;
       width: number;
       height: number;
+      suggestedProfile: "logo" | "photo";
       dataUrl: string;
     } | null>;
     createRelief: (imagePath: string, options: {

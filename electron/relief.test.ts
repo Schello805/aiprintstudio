@@ -71,4 +71,15 @@ describe("relief mesh", () => {
       expect(reliefInternals.profileSettings(profile).inputBlur).toBeGreaterThanOrEqual(0.3);
     }
   });
+
+  it("cleans isolated mask noise and creates a flat boundary rim", () => {
+    const noisyMask = Array(49).fill(false) as boolean[];
+    for (let y = 1; y <= 5; y += 1) for (let x = 1; x <= 5; x += 1) noisyMask[y * 7 + x] = true;
+    noisyMask[48] = true;
+    const cleaned = reliefInternals.cleanSubjectPixelMask(noisyMask, 7, 7);
+    expect(cleaned[48]).toBe(false);
+    const rimmed = reliefInternals.applyBoundaryRim(Array(49).fill(1), cleaned, 7, 7, 1);
+    expect(rimmed[24]).toBe(1);
+    expect(rimmed[8]).toBe(0);
+  });
 });
