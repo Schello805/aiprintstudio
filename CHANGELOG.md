@@ -5,6 +5,17 @@ orientiert sich an Keep a Changelog; Versionen folgen Semantic Versioning.
 
 ## [Unreleased]
 
+### Added
+
+- Interaktive 3D-Vorschau rechts neben dem Originalbild
+- Drehen und Zoomen der Vorschau direkt im Studio
+
+### Changed
+
+- Exportauflösung von 128 auf 256 erhöht
+- Kontrastnormalisierung und 32 Höhenstufen für klarere Konturen
+- Separates leichtes Vorschaumesh bei voller Exportqualität
+
 ### Fixed
 
 - Relief-Export speichert ohne verwirrenden zweiten Dateidialog automatisch unter `Downloads/AI Print Studio`

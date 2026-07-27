@@ -18,6 +18,10 @@ export type ReliefResult = {
   triangleCount: number;
   widthMm: number;
   heightMm: number;
+  preview: {
+    positions: number[];
+    indices: number[];
+  };
 };
 
 type Vec3 = readonly [number, number, number];
@@ -28,7 +32,7 @@ const safeDefaults: ReliefOptions = {
   widthMm: 100,
   baseMm: 1.6,
   reliefMm: 4,
-  resolution: 128,
+  resolution: 256,
   invert: false
 };
 
@@ -49,15 +53,20 @@ export async function createRelief(
     .resize(gridWidth, gridHeight, { fit: "fill" })
     .flatten({ background: "#ffffff" })
     .grayscale()
+    .normalize({ lower: 1, upper: 99 })
     .raw()
     .toBuffer({ resolveWithObject: true });
 
   const heightMm = options.widthMm * gridHeight / gridWidth;
   const heights = Array.from(data, (value) => {
-    const normalized = options.invert ? value / 255 : 1 - value / 255;
-    return options.baseMm + normalized * options.reliefMm;
+    const luminance = value / 255;
+    const normalized = options.invert ? luminance : 1 - luminance;
+    const contrasted = Math.max(0, Math.min(1, (normalized - 0.5) * 1.18 + 0.5));
+    const stepped = Math.round(contrasted * 31) / 31;
+    return options.baseMm + stepped * options.reliefMm;
   });
   const mesh = buildWatertightHeightMesh(gridWidth, gridHeight, options.widthMm, heightMm, heights);
+  const preview = buildPreviewSurface(gridWidth, gridHeight, options.widthMm, heightMm, heights);
 
   await mkdir(outputDirectory, { recursive: true });
   const stem = sanitizeStem(basename(imagePath, extname(imagePath)));
@@ -74,7 +83,8 @@ export async function createRelief(
     vertexCount: mesh.vertices.length,
     triangleCount: mesh.triangles.length,
     widthMm: options.widthMm,
-    heightMm
+    heightMm,
+    preview
   };
 }
 
@@ -188,4 +198,38 @@ function sanitizeStem(stem: string): string {
   return stem.normalize("NFKD").replace(/[^a-zA-Z0-9_-]+/g, "-").replace(/^-|-$/g, "").slice(0, 80) || "modell";
 }
 
-export const reliefInternals = { buildWatertightHeightMesh, encodeBinaryStl };
+function buildPreviewSurface(
+  columns: number,
+  rows: number,
+  widthMm: number,
+  heightMm: number,
+  heights: number[]
+): { positions: number[]; indices: number[] } {
+  const stride = Math.max(1, Math.ceil(Math.max(columns, rows) / 110));
+  const xs = Array.from(new Set([...Array(Math.ceil((columns - 1) / stride) + 1)].map((_, i) => Math.min(i * stride, columns - 1))));
+  const ys = Array.from(new Set([...Array(Math.ceil((rows - 1) / stride) + 1)].map((_, i) => Math.min(i * stride, rows - 1))));
+  const positions: number[] = [];
+  const indices: number[] = [];
+  for (const y of ys) {
+    for (const x of xs) {
+      positions.push(
+        x * widthMm / (columns - 1) - widthMm / 2,
+        heights[y * columns + x],
+        y * heightMm / (rows - 1) - heightMm / 2
+      );
+    }
+  }
+  const previewColumns = xs.length;
+  for (let y = 0; y < ys.length - 1; y += 1) {
+    for (let x = 0; x < xs.length - 1; x += 1) {
+      const a = y * previewColumns + x;
+      const b = a + 1;
+      const c = a + previewColumns;
+      const d = c + 1;
+      indices.push(a, d, b, a, c, d);
+    }
+  }
+  return { positions, indices };
+}
+
+export const reliefInternals = { buildWatertightHeightMesh, buildPreviewSurface, encodeBinaryStl };

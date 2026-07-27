@@ -33,6 +33,10 @@ interface Window {
       triangleCount: number;
       widthMm: number;
       heightMm: number;
+      preview: {
+        positions: number[];
+        indices: number[];
+      };
     } | null>;
     showItemInFolder: (path: string) => Promise<void>;
     openExternal: (url: string) => Promise<void>;

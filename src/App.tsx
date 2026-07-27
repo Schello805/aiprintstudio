@@ -1,4 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { Canvas } from "@react-three/fiber";
+import { OrbitControls } from "@react-three/drei";
+import * as THREE from "three";
 import {
   Box,
   CheckCircle2,
@@ -72,7 +75,7 @@ export function App() {
         widthMm: 100,
         baseMm: 1.6,
         reliefMm: 4,
-        resolution: 128,
+        resolution: 256,
         invert: false
       });
       if (next) setResult(next);
@@ -117,18 +120,21 @@ export function App() {
               <h2>Vom Bild zum druckbaren Objekt.</h2>
               <p>Lade eine klare Aufnahme hoch. AI Print Studio rekonstruiert, repariert und exportiert dein Modell lokal.</p>
             </div>
-            <div
-              className={preview ? "upload-card has-preview" : "upload-card"}
-              onClick={() => void selectFile()}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(event) => event.key === "Enter" && void selectFile()}
-            >
-              {preview ? (
-                <><img src={preview} alt="Vorschau des ausgewählten Bildes" /><div className="file-overlay"><ImagePlus size={18} /> Bild wechseln</div></>
-              ) : (
-                <><div className="upload-icon"><UploadCloud size={32} /></div><h3>Bild für dein Relief auswählen</h3><p>PNG, JPG oder WEBP · maximal 25 MB</p><button className="choose-file-button" onClick={(event) => { event.stopPropagation(); void selectFile(); }}>Bild auswählen</button><span>Die Datei wird ausschließlich lokal gelesen</span></>
-              )}
+            <div className={result ? "comparison-grid" : "comparison-grid single"}>
+              <div
+                className={preview ? "upload-card has-preview" : "upload-card"}
+                onClick={() => void selectFile()}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(event) => event.key === "Enter" && void selectFile()}
+              >
+                {preview ? (
+                  <><div className="panel-label">ORIGINALBILD</div><img src={preview} alt="Vorschau des ausgewählten Bildes" /><div className="file-overlay"><ImagePlus size={18} /> Bild wechseln</div></>
+                ) : (
+                  <><div className="upload-icon"><UploadCloud size={32} /></div><h3>Bild für dein Relief auswählen</h3><p>PNG, JPG oder WEBP · maximal 25 MB</p><button className="choose-file-button" onClick={(event) => { event.stopPropagation(); void selectFile(); }}>Bild auswählen</button><span>Die Datei wird ausschließlich lokal gelesen</span></>
+                )}
+              </div>
+              {result && <ReliefPreview result={result} />}
             </div>
             {fileError && <div className="error-banner" role="alert"><strong>Bild konnte nicht geladen werden</strong><span>{fileError}</span><button onClick={() => setFileError(null)} aria-label="Fehlermeldung schließen"><X /></button></div>}
             {uploadStatus && !fileError && <div className="upload-status"><CheckCircle2 /> {uploadStatus}</div>}
@@ -157,6 +163,36 @@ export function App() {
 
         <Footer version={version} openLegal={setLegalPage} />
       </main>
+    </div>
+  );
+}
+
+function ReliefPreview({ result }: { result: NonNullable<ReliefResult> }) {
+  const geometry = useMemo(() => {
+    const next = new THREE.BufferGeometry();
+    next.setAttribute("position", new THREE.Float32BufferAttribute(result.preview.positions, 3));
+    next.setIndex(result.preview.indices);
+    next.computeVertexNormals();
+    next.computeBoundingSphere();
+    return next;
+  }, [result]);
+
+  useEffect(() => () => geometry.dispose(), [geometry]);
+
+  return (
+    <div className="preview-card">
+      <div className="panel-label">3D-VORSCHAU · ZIEHEN ZUM DREHEN</div>
+      <Canvas camera={{ position: [95, 90, 120], fov: 38 }} dpr={[1, 2]}>
+        <color attach="background" args={["#0b0e13"]} />
+        <ambientLight intensity={1.5} />
+        <directionalLight position={[60, 100, 80]} intensity={3.2} />
+        <directionalLight position={[-50, 35, -60]} intensity={1.1} color="#b6d7ff" />
+        <mesh geometry={geometry}>
+          <meshStandardMaterial color="#b7f58a" roughness={0.62} metalness={0.05} side={THREE.DoubleSide} />
+        </mesh>
+        <gridHelper args={[180, 18, "#2e3944", "#1b222b"]} />
+        <OrbitControls makeDefault target={[0, 2, 0]} minDistance={70} maxDistance={280} enableDamping />
+      </Canvas>
     </div>
   );
 }

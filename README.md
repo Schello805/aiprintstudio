@@ -20,6 +20,7 @@ standardmäßig auf dem eigenen Mac.
 - Keine Benutzerkonten, Telemetrie oder Cloud-Pflicht
 - API-Schlüssel ausschließlich in der macOS-Keychain
 - STL- und 3MF-Export
+- Interaktive 3D-Vorschau direkt neben dem Originalbild
 
 ## Bereits testbar
 
@@ -27,9 +28,10 @@ standardmäßig auf dem eigenen Mac.
 2. **Relief erstellen** anklicken.
 3. Die erzeugte STL oder 3MF unter `Downloads/AI Print Studio` im Slicer öffnen.
 
-Der aktuelle Modus erzeugt eine wasserdichte rechteckige Reliefplatte mit
+Der aktuelle Modus erzeugt eine hochauflösende, wasserdichte rechteckige Reliefplatte mit
 100 mm Breite, 1,6 mm Grundplatte und bis zu 4 mm Reliefhöhe. Dunkle Bildbereiche
-werden standardmäßig stärker angehoben.
+werden standardmäßig stärker angehoben. Kontrastnormalisierung und 32 feine
+Höhenstufen erhalten Konturen von Logos, Wappen und Strichgrafiken.
 
 ## Technischer Aufbau
 
