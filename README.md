@@ -72,6 +72,13 @@ Unsignierte DMG erzeugen:
 npm run dist
 ```
 
+Die reale Desktop-Brücke der gepackten App kann anschließend geprüft werden:
+
+```bash
+AI_PRINT_STUDIO_SETTINGS_ROOT=/tmp/ai-print-studio-smoke \
+  "release/mac-arm64/AI Print Studio.app/Contents/MacOS/AI Print Studio" --smoke-test
+```
+
 Das Ergebnis liegt unter `release/`. Ohne Apple Developer ID muss die App nach
 dem Download einmalig in **Systemeinstellungen → Datenschutz & Sicherheit**
 freigegeben werden.

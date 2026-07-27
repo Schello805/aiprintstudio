@@ -26,5 +26,10 @@ export default tseslint.config(
   {
     files: ["electron/**/*.ts", "scripts/**/*.mjs", "*.config.{js,ts}"],
     languageOptions: { globals: globals.node }
+  },
+  {
+    files: ["electron/**/*.cjs"],
+    languageOptions: { globals: globals.node },
+    rules: { "@typescript-eslint/no-require-imports": "off" }
   }
 );

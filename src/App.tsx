@@ -183,8 +183,9 @@ function Settings() {
   });
 
   async function refreshStatus() {
-    const next = await window.desktop?.getSettingsStatus();
-    if (next) setStatus(next);
+    if (!window.desktop) return;
+    const next = await window.desktop.getSettingsStatus();
+    setStatus(next);
   }
 
   useEffect(() => { void refreshStatus(); }, []);
@@ -210,7 +211,8 @@ function OpenAiDialog({ status, close, refresh }: { status: SettingsStatus; clos
   async function save() {
     setBusy(true); setMessage(null);
     try {
-      await window.desktop?.saveOpenAiKey(key);
+      if (!window.desktop) throw new Error("Die Desktop-Verbindung ist nicht verfügbar. Bitte installiere das aktuelle Update und starte die App neu.");
+      await window.desktop.saveOpenAiKey(key);
       await refresh();
       setMessage("Der Schlüssel wurde verschlüsselt auf diesem Mac gespeichert.");
       setKey("");
@@ -220,9 +222,14 @@ function OpenAiDialog({ status, close, refresh }: { status: SettingsStatus; clos
   }
 
   async function remove() {
-    await window.desktop?.removeOpenAiKey();
-    await refresh();
-    setMessage("Der gespeicherte Schlüssel wurde entfernt.");
+    try {
+      if (!window.desktop) throw new Error("Die Desktop-Verbindung ist nicht verfügbar.");
+      await window.desktop.removeOpenAiKey();
+      await refresh();
+      setMessage("Der gespeicherte Schlüssel wurde entfernt.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Der Schlüssel konnte nicht entfernt werden.");
+    }
   }
 
   return (

@@ -1,6 +1,6 @@
 {
   "name": "ai-print-studio",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "Lokale Bild-zu-3D-Desktop-App für Apple Silicon",
   "author": "Michael Schellenberger",
   "license": "SEE LICENSE IN LICENSE.md",
@@ -56,6 +56,7 @@
     "files": [
       "dist/**",
       "dist-electron/**",
+      "electron/preload.cjs",
       "package.json"
     ],
     "mac": {

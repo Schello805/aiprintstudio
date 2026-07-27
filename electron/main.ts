@@ -16,8 +16,15 @@ type StoredSettings = {
 
 const settingsDirectoryName = "de.michaelschellenberger.aiprintstudio";
 
+function settingsRoot(): string {
+  if (process.argv.includes("--smoke-test") && process.env.AI_PRINT_STUDIO_SETTINGS_ROOT) {
+    return process.env.AI_PRINT_STUDIO_SETTINGS_ROOT;
+  }
+  return app.getPath("appData");
+}
+
 function settingsFile(): string {
-  return join(app.getPath("appData"), settingsDirectoryName, "settings.json");
+  return join(settingsRoot(), settingsDirectoryName, "settings.json");
 }
 
 async function readSettings(): Promise<StoredSettings> {
@@ -29,7 +36,7 @@ async function readSettings(): Promise<StoredSettings> {
 }
 
 async function writeSettings(settings: StoredSettings): Promise<void> {
-  const directory = join(app.getPath("appData"), settingsDirectoryName);
+  const directory = join(settingsRoot(), settingsDirectoryName);
   const target = settingsFile();
   const temporary = `${target}.tmp`;
   await mkdir(directory, { recursive: true });
@@ -68,6 +75,7 @@ function hasUsableOpenAiKey(settings: StoredSettings): boolean {
 }
 
 function createWindow(): void {
+  const preloadPath = join(currentDirectory, "../electron/preload.cjs");
   const window = new BrowserWindow({
     width: 1440,
     height: 920,
@@ -76,7 +84,7 @@ function createWindow(): void {
     titleBarStyle: "hiddenInset",
     backgroundColor: "#090b10",
     webPreferences: {
-      preload: join(currentDirectory, "preload.js"),
+      preload: preloadPath,
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true
@@ -87,6 +95,31 @@ function createWindow(): void {
     void window.loadFile(join(currentDirectory, "../dist/index.html"));
   } else {
     void window.loadURL(developmentUrl);
+  }
+
+  if (process.argv.includes("--smoke-test")) {
+    window.webContents.once("did-finish-load", () => {
+      void window.webContents.executeJavaScript(
+        `(async () => {
+          const bridge = typeof window.desktop === "object";
+          const selectImage = typeof window.desktop?.selectImage === "function";
+          const saveOpenAiKey = typeof window.desktop?.saveOpenAiKey === "function";
+          let settingsPersisted = false;
+          if (saveOpenAiKey) {
+            await window.desktop.saveOpenAiKey("sk-test_abcdefghijklmnopqrstuvwxyz0123456789");
+            settingsPersisted = (await window.desktop.getSettingsStatus()).openAiConfigured;
+          }
+          return JSON.stringify({ bridge, selectImage, saveOpenAiKey, settingsPersisted });
+        })()`
+      ).then((result: string) => {
+        console.log(`SMOKE_RESULT:${result}`);
+        const parsed = JSON.parse(result) as { bridge: boolean; selectImage: boolean; saveOpenAiKey: boolean; settingsPersisted: boolean };
+        app.exit(parsed.bridge && parsed.selectImage && parsed.saveOpenAiKey && parsed.settingsPersisted ? 0 : 1);
+      }).catch((error: unknown) => {
+        console.error("SMOKE_ERROR", error);
+        app.exit(1);
+      });
+    });
   }
 }
 
