@@ -3,6 +3,7 @@
 interface Window {
   desktop?: {
     getVersion: () => Promise<string>;
+    checkForUpdate: () => Promise<{ currentVersion: string; latestVersion: string; available: boolean; url: string }>;
     getSettingsStatus: () => Promise<{
       openAiConfigured: boolean;
       modelSetupAccepted: boolean;
@@ -26,6 +27,9 @@ interface Window {
       reliefMm: number;
       resolution: number;
       invert: boolean;
+      profile: "fast" | "balanced" | "fine" | "photo" | "logo";
+      smoothing: number;
+      detail: number;
     }) => Promise<{
       stlPath: string;
       threeMfPath: string;
@@ -33,6 +37,12 @@ interface Window {
       triangleCount: number;
       widthMm: number;
       heightMm: number;
+      options: {
+        widthMm: number; baseMm: number; reliefMm: number; resolution: number; invert: boolean;
+        profile: "fast" | "balanced" | "fine" | "photo" | "logo"; smoothing: number; detail: number;
+      };
+      printability: { score: number; status: "ready" | "warning" | "critical"; issues: string[]; estimatedVolumeCm3: number };
+      heightmapDataUrl: string;
       preview: {
         positions: number[];
         indices: number[];

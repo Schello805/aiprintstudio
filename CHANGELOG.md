@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.0
+
+- Mehrstufige, profilabhängige Höhenverarbeitung mit Glättung und Detailrückführung
+- Qualitätsprofile für schnelle Entwürfe, Fotos, Logos und feine Modelle
+- Einstellbare Modellmaße, Reliefhöhe, Glättung und Detailstärke
+- Höhenkarten-Vorschau, Druckscore und geschätztes Modellvolumen
+- Lokaler Modellverlauf und manuelle Update-Prüfung über GitHub Releases
+
 Alle wesentlichen Änderungen werden in dieser Datei dokumentiert. Das Format
 orientiert sich an Keep a Changelog; Versionen folgen Semantic Versioning.
 
@@ -9,6 +17,9 @@ orientiert sich an Keep a Changelog; Versionen folgen Semantic Versioning.
 
 - Interaktive 3D-Vorschau rechts neben dem Originalbild
 - Drehen und Zoomen der Vorschau direkt im Studio
+- Konturmaske aus Transparenz oder automatisch erkanntem Randhintergrund
+- Umschaltung zwischen hellen und dunklen erhabenen Bereichen
+- Kostenanzeige für die lokale Umwandlung
 
 ### Changed
 

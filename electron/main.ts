@@ -16,6 +16,17 @@ type StoredSettings = {
 
 const settingsDirectoryName = "de.michaelschellenberger.aiprintstudio";
 
+function isNewerVersion(candidate: string, current: string): boolean {
+  const candidateParts = candidate.split(".").map(Number);
+  const currentParts = current.split(".").map(Number);
+  for (let index = 0; index < Math.max(candidateParts.length, currentParts.length); index += 1) {
+    const next = candidateParts[index] ?? 0;
+    const installed = currentParts[index] ?? 0;
+    if (next !== installed) return next > installed;
+  }
+  return false;
+}
+
 function settingsRoot(): string {
   if (process.argv.includes("--smoke-test") && process.env.AI_PRINT_STUDIO_SETTINGS_ROOT) {
     return process.env.AI_PRINT_STUDIO_SETTINGS_ROOT;
@@ -126,6 +137,15 @@ function createWindow(): void {
 app.whenReady().then(() => {
   nativeTheme.themeSource = "dark";
   ipcMain.handle("app:version", () => app.getVersion());
+  ipcMain.handle("app:checkUpdate", async () => {
+    const response = await fetch("https://api.github.com/repos/Schello805/aiprintstudio/releases/latest", {
+      headers: { Accept: "application/vnd.github+json", "User-Agent": "AI-Print-Studio" }
+    });
+    if (!response.ok) throw new Error("Die Update-Informationen konnten nicht geladen werden.");
+    const release = await response.json() as { tag_name?: string; html_url?: string };
+    const latestVersion = (release.tag_name ?? "").replace(/^v/, "");
+    return { currentVersion: app.getVersion(), latestVersion, available: Boolean(latestVersion && isNewerVersion(latestVersion, app.getVersion())), url: release.html_url ?? "https://github.com/Schello805/aiprintstudio/releases" };
+  });
   ipcMain.handle("settings:status", async () => {
     const settings = await readSettings();
     return {

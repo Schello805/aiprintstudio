@@ -26,4 +26,43 @@ describe("relief mesh", () => {
     expect(stl.readUInt32LE(80)).toBe(mesh.triangles.length);
     expect(stl.length).toBe(84 + mesh.triangles.length * 50);
   });
+
+  it("keeps an irregular masked outline watertight", () => {
+    const cellMask = [
+      false, true, false,
+      true, true, true,
+      false, true, false
+    ];
+    const mesh = reliefInternals.buildWatertightHeightMesh(4, 4, 30, 30, Array(16).fill(3), cellMask);
+    const edges = new Map<string, number>();
+    for (const triangle of mesh.triangles) {
+      for (const [a, b] of [[triangle[0], triangle[1]], [triangle[1], triangle[2]], [triangle[2], triangle[0]]]) {
+        const key = a < b ? `${a}:${b}` : `${b}:${a}`;
+        edges.set(key, (edges.get(key) ?? 0) + 1);
+      }
+    }
+    expect([...edges.values()].every((uses) => uses === 2)).toBe(true);
+    expect(mesh.triangles.length).toBeGreaterThan(0);
+  });
+
+  it("smooths noise while preserving the field dimensions", () => {
+    const values = [0, 0, 0, 0, 1, 0, 0, 0, 0];
+    const smoothed = reliefInternals.smoothHeightField(values, 3, 3, 2);
+    expect(smoothed).toHaveLength(values.length);
+    expect(smoothed[4]).toBeLessThan(1);
+    expect(smoothed[4]).toBeGreaterThan(0);
+  });
+
+  it("warns when the base plate is too thin", () => {
+    const mesh = reliefInternals.buildWatertightHeightMesh(3, 3, 20, 20, Array(9).fill(1));
+    const report = reliefInternals.analysePrintability(
+      mesh,
+      Array(9).fill(1),
+      { widthMm: 20, baseMm: 0.8, reliefMm: 2, resolution: 32, invert: false, profile: "balanced", smoothing: 2, detail: 1 },
+      Array(4).fill(true),
+      3
+    );
+    expect(report.score).toBeLessThan(100);
+    expect(report.issues.join(" ")).toContain("Grundplatte");
+  });
 });

@@ -2,6 +2,7 @@ const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("desktop", Object.freeze({
   getVersion: () => ipcRenderer.invoke("app:version"),
+  checkForUpdate: () => ipcRenderer.invoke("app:checkUpdate"),
   getSettingsStatus: () => ipcRenderer.invoke("settings:status"),
   saveOpenAiKey: (apiKey) => ipcRenderer.invoke("settings:saveOpenAiKey", apiKey),
   removeOpenAiKey: () => ipcRenderer.invoke("settings:removeOpenAiKey"),
