@@ -1,6 +1,6 @@
 {
   "name": "ai-print-studio",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Lokale Bild-zu-3D-Desktop-App für Apple Silicon",
   "author": "Michael Schellenberger",
   "license": "SEE LICENSE IN LICENSE.md",
@@ -12,7 +12,7 @@
     "test": "vitest run",
     "lint": "eslint . --max-warnings 0",
     "verify": "npm run lint && npm run test && npm run build",
-    "dist": "npm run build && electron-builder --mac dmg",
+    "dist": "npm run build && electron-builder --mac dmg --publish never",
     "revision": "node scripts/revision.mjs"
   },
   "dependencies": {
