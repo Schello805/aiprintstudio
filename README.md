@@ -8,8 +8,8 @@ standardmäßig auf dem eigenen Mac.
 [![Quality](https://github.com/Schello805/aiprintstudio/actions/workflows/quality.yml/badge.svg)](https://github.com/Schello805/aiprintstudio/actions/workflows/quality.yml)
 
 > Status: frühe Entwicklung. Die Benutzeroberfläche und Desktop-Grundstruktur
-> sind lauffähig; die lokale Rekonstruktions- und Reparaturpipeline wird
-> schrittweise integriert.
+> sind lauffähig. Der lokale Reliefmodus erzeugt bereits testbare STL- und
+> 3MF-Dateien; die vollständige Rundum-Rekonstruktion wird schrittweise integriert.
 
 ## Leitprinzipien
 
@@ -20,6 +20,17 @@ standardmäßig auf dem eigenen Mac.
 - Keine Benutzerkonten, Telemetrie oder Cloud-Pflicht
 - API-Schlüssel ausschließlich in der macOS-Keychain
 - STL- und 3MF-Export
+
+## Bereits testbar
+
+1. Im Studio ein PNG-, JPG- oder WEBP-Bild auswählen.
+2. **Relief erstellen** anklicken.
+3. Zielordner wählen.
+4. Die erzeugte STL oder 3MF im Slicer öffnen.
+
+Der aktuelle Modus erzeugt eine wasserdichte rechteckige Reliefplatte mit
+100 mm Breite, 1,6 mm Grundplatte und bis zu 4 mm Reliefhöhe. Dunkle Bildbereiche
+werden standardmäßig stärker angehoben.
 
 ## Technischer Aufbau
 

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Box,
   CheckCircle2,
@@ -14,10 +14,10 @@ import {
   UploadCloud,
   X
 } from "lucide-react";
-import { validateImageFile } from "./domain/image-validation";
-
 type View = "studio" | "history" | "settings";
 type LegalPage = "imprint" | "privacy" | "cookies" | null;
+type SelectedImage = { path: string; name: string; size: number; dataUrl: string };
+type ReliefResult = Awaited<ReturnType<NonNullable<typeof window.desktop>["createRelief"]>>;
 
 const navigation = [
   { id: "studio" as const, label: "Studio", icon: Sparkles },
@@ -29,26 +29,44 @@ export function App() {
   const [view, setView] = useState<View>("studio");
   const [legalPage, setLegalPage] = useState<LegalPage>(null);
   const [version, setVersion] = useState("0.1.0");
-  const [file, setFile] = useState<File | null>(null);
+  const [file, setFile] = useState<SelectedImage | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<ReliefResult>(null);
 
   useEffect(() => {
     void window.desktop?.getVersion().then(setVersion);
   }, []);
 
-  function selectFile(nextFile?: File) {
-    if (!nextFile) return;
-    const validation = validateImageFile(nextFile);
-    if (!validation.valid) {
-      setFileError(validation.message);
-      return;
+  async function selectFile() {
+    try {
+      const selected = await window.desktop?.selectImage();
+      if (!selected) return;
+      setFileError(null);
+      setFile(selected);
+      setPreview(selected.dataUrl);
+      setResult(null);
+    } catch (error) {
+      setFileError(error instanceof Error ? error.message : "Das Bild konnte nicht geöffnet werden.");
     }
-    setFileError(null);
-    if (preview) URL.revokeObjectURL(preview);
-    setFile(nextFile);
-    setPreview(URL.createObjectURL(nextFile));
+  }
+
+  async function generateRelief() {
+    if (!file) return;
+    setBusy(true); setFileError(null); setResult(null);
+    try {
+      const next = await window.desktop?.createRelief(file.path, {
+        widthMm: 100,
+        baseMm: 1.6,
+        reliefMm: 4,
+        resolution: 128,
+        invert: false
+      });
+      if (next) setResult(next);
+    } catch (error) {
+      setFileError(error instanceof Error ? error.message : "Das Modell konnte nicht erstellt werden.");
+    } finally { setBusy(false); }
   }
 
   if (legalPage) {
@@ -71,7 +89,7 @@ export function App() {
         </nav>
         <div className="sidebar-status">
           <span className="status-dot" />
-          <div><strong>Lokale Engine</strong><span>Bereit für Einrichtung</span></div>
+          <div><strong>Lokale Relief-Engine</strong><span>Bereit · läuft offline</span></div>
         </div>
       </aside>
 
@@ -89,14 +107,11 @@ export function App() {
             </div>
             <div
               className={preview ? "upload-card has-preview" : "upload-card"}
-              onClick={() => inputRef.current?.click()}
-              onDragOver={(event) => event.preventDefault()}
-              onDrop={(event) => { event.preventDefault(); selectFile(event.dataTransfer.files[0]); }}
+              onClick={() => void selectFile()}
               role="button"
               tabIndex={0}
-              onKeyDown={(event) => event.key === "Enter" && inputRef.current?.click()}
+              onKeyDown={(event) => event.key === "Enter" && void selectFile()}
             >
-              <input ref={inputRef} type="file" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp" hidden onChange={(event) => selectFile(event.target.files?.[0])} />
               {preview ? (
                 <><img src={preview} alt="Vorschau des ausgewählten Bildes" /><div className="file-overlay"><ImagePlus size={18} /> Bild wechseln</div></>
               ) : (
@@ -110,8 +125,16 @@ export function App() {
             </div>
             <div className="action-bar">
               <div><Box size={20} /><div><strong>{fileError ?? (file ? file.name : "Noch kein Bild gewählt")}</strong><span>{fileError ? "Bitte wähle eine andere Datei." : file ? `${(file.size / 1_048_576).toFixed(1)} MB · bereit zur Analyse` : "Wähle zuerst eine geeignete Aufnahme aus."}</span></div></div>
-              <button className="primary-button" disabled={!file}>Modell erstellen <ChevronRight size={18} /></button>
+              <button className="primary-button" disabled={!file || busy} onClick={() => void generateRelief()}>{busy ? "Mesh wird erzeugt …" : "Relief erstellen"} <ChevronRight size={18} /></button>
             </div>
+            {busy && <div className="progress-card"><span /><div><strong>Lokale 3D-Verarbeitung</strong><p>Höhenmodell und wasserdichtes Mesh werden berechnet …</p></div></div>}
+            {result && (
+              <div className="result-card">
+                <div className="result-check"><CheckCircle2 /></div>
+                <div><strong>Modell erfolgreich erstellt</strong><p>{result.triangleCount.toLocaleString("de-DE")} Dreiecke · {result.widthMm.toFixed(0)} × {result.heightMm.toFixed(0)} mm · STL und 3MF</p></div>
+                <button className="secondary-button" onClick={() => void window.desktop?.showItemInFolder(result.stlPath)}>Im Finder zeigen</button>
+              </div>
+            )}
           </section>
         )}
 
@@ -153,7 +176,7 @@ function Settings() {
     <>
       <section className="settings-grid">
         <article><div className="setting-icon"><Sparkles /></div><div><h3>OpenAI-Analyse</h3><p>Optional: Erkennt das Motiv und schlägt passende Druckparameter vor.</p></div><button onClick={() => setDialog("openai")}>{status.openAiConfigured ? "Verwalten" : "Einrichten"}</button></article>
-        <article><div className="setting-icon"><Layers3 /></div><div><h3>Lokales 3D-Modell</h3><p>TripoSR wird lokal eingerichtet und anschließend ohne 3D-API ausgeführt.</p></div><button onClick={() => setDialog("model")}>{status.modelSetupAccepted ? "Fortsetzen" : "Installieren"}</button></article>
+        <article><div className="setting-icon"><Layers3 /></div><div><h3>Lokale Relief-Engine</h3><p>Integriert · erzeugt wasserdichte STL- und 3MF-Dateien vollständig offline.</p></div><button onClick={() => setDialog("model")}>Details</button></article>
         <article><div className="setting-icon"><CheckCircle2 /></div><div><h3>Hardwareprofil</h3><p>Apple M3 · 16 GB · automatische CPU-/Metal-Auswahl</p></div><span className="tag">Erkannt</span></article>
       </section>
       {dialog === "openai" && <OpenAiDialog status={status} close={() => setDialog(null)} refresh={refreshStatus} />}
@@ -207,37 +230,23 @@ function OpenAiDialog({ status, close, refresh }: { status: SettingsStatus; clos
   );
 }
 
-function ModelDialog({ close, refresh }: { close: () => void; refresh: () => Promise<void> }) {
-  const [accepted, setAccepted] = useState(false);
-  const [prepared, setPrepared] = useState(false);
-
-  async function prepare() {
-    await window.desktop?.acceptModelSetup();
-    await refresh();
-    setPrepared(true);
-  }
-
+function ModelDialog({ close }: { close: () => void; refresh: () => Promise<void> }) {
   return (
     <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && close()}>
       <section className="modal" role="dialog" aria-modal="true" aria-labelledby="model-title">
         <button className="modal-close" onClick={close} aria-label="Dialog schließen"><X /></button>
         <div className="modal-icon"><Layers3 /></div>
         <p className="eyebrow">LOKALE 3D-ENGINE</p>
-        <h2 id="model-title">TripoSR einrichten</h2>
-        <p>Das Modell rekonstruiert die Geometrie lokal. Es ist MIT-lizenziert; Bilder verlassen deinen Mac nicht. Für deinen M3 mit 16 GB verwendet die App ein speichersparendes Profil.</p>
+        <h2 id="model-title">Relief-Engine ist bereit</h2>
+        <p>Der aktuelle stabile Modus erzeugt aus der Bildhelligkeit eine geschlossene, druckbare Reliefplatte. Er benötigt keinen Modelldownload und überträgt keine Bilder.</p>
         <div className="install-summary">
-          <span><strong>Modell</strong> TripoSR</span>
-          <span><strong>Speicher</strong> ca. 1–2 GB</span>
-          <span><strong>Backend</strong> automatisch CPU / Metal</span>
+          <span><strong>Ausgabe</strong> STL und 3MF</span>
+          <span><strong>Geometrie</strong> wasserdichtes Höhen-Mesh</span>
+          <span><strong>Verarbeitung</strong> vollständig lokal</span>
         </div>
-        {!prepared ? (
-          <label className="consent"><input type="checkbox" checked={accepted} onChange={(event) => setAccepted(event.target.checked)} /><span>Ich akzeptiere den lokalen Modelldownload und die MIT-Lizenz von TripoSR.</span></label>
-        ) : (
-          <div className="notice">Einrichtung vorbereitet. Der eigentliche Modelldownload wird mit der 3D-Worker-Integration im nächsten Entwicklungsstand aktiviert.</div>
-        )}
+        <div className="notice">Bereit zum Testen: Im Studio ein Bild auswählen und „Relief erstellen“ anklicken.</div>
         <div className="modal-actions">
-          <button className="secondary-button" onClick={close}>{prepared ? "Schließen" : "Abbrechen"}</button>
-          {!prepared && <button className="primary-button" onClick={() => void prepare()} disabled={!accepted}>Einrichtung vorbereiten</button>}
+          <button className="primary-button" onClick={close}>Zum Studio</button>
         </div>
       </section>
     </div>

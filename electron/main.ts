@@ -1,7 +1,8 @@
-import { app, BrowserWindow, ipcMain, nativeTheme, safeStorage, shell } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, nativeTheme, safeStorage, shell } from "electron";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { createRelief, type ReliefOptions } from "./relief.js";
 
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
 const developmentUrl = process.env.VITE_DEV_SERVER_URL ?? "http://localhost:5173";
@@ -84,6 +85,30 @@ app.whenReady().then(() => {
     settings.modelSetupAccepted = true;
     await writeSettings(settings);
   });
+  ipcMain.handle("image:select", async () => {
+    const result = await dialog.showOpenDialog({
+      title: "Bild für das 3D-Modell auswählen",
+      properties: ["openFile"],
+      filters: [{ name: "Bilder", extensions: ["png", "jpg", "jpeg", "webp"] }]
+    });
+    if (result.canceled || !result.filePaths[0]) return null;
+    const path = result.filePaths[0];
+    const bytes = await readFile(path);
+    if (bytes.length > 25 * 1024 * 1024) throw new Error("Das Bild darf höchstens 25 MB groß sein.");
+    const extension = path.toLowerCase().split(".").pop();
+    const mime = extension === "png" ? "image/png" : extension === "webp" ? "image/webp" : "image/jpeg";
+    return { path, name: basename(path), size: bytes.length, dataUrl: `data:${mime};base64,${bytes.toString("base64")}` };
+  });
+  ipcMain.handle("relief:create", async (_event, imagePath: string, options: Partial<ReliefOptions>) => {
+    const directory = await dialog.showOpenDialog({
+      title: "Ordner für STL und 3MF auswählen",
+      buttonLabel: "Hier speichern",
+      properties: ["openDirectory", "createDirectory"]
+    });
+    if (directory.canceled || !directory.filePaths[0]) return null;
+    return createRelief(imagePath, directory.filePaths[0], options);
+  });
+  ipcMain.handle("shell:showItem", (_event, path: string) => shell.showItemInFolder(path));
   ipcMain.handle("shell:openExternal", (_event, url: string) => {
     const parsed = new URL(url);
     if (!["https:", "mailto:"].includes(parsed.protocol)) {
