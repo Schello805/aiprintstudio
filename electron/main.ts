@@ -2,6 +2,7 @@ import { app, BrowserWindow, dialog, ipcMain, nativeTheme, safeStorage, shell } 
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import sharp, { type Metadata } from "sharp";
 import { createRelief, type ReliefOptions } from "./relief.js";
 
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
@@ -135,11 +136,39 @@ app.whenReady().then(() => {
     });
     if (result.canceled || !result.filePaths[0]) return null;
     const path = result.filePaths[0];
-    const bytes = await readFile(path);
-    if (bytes.length > 25 * 1024 * 1024) throw new Error("Das Bild darf höchstens 25 MB groß sein.");
+    let bytes: Buffer;
+    try {
+      bytes = await readFile(path);
+    } catch {
+      throw new Error("Das ausgewählte Bild konnte nicht gelesen werden. Prüfe die Dateiberechtigungen.");
+    }
+    if (bytes.length === 0) throw new Error("Die ausgewählte Bilddatei ist leer.");
+    if (bytes.length > 25 * 1024 * 1024) throw new Error("Das Bild ist größer als 25 MB. Bitte verkleinere es zuerst.");
+    let metadata: Metadata;
+    try {
+      metadata = await sharp(bytes).metadata();
+    } catch {
+      throw new Error("Die Datei ist kein lesbares PNG-, JPG- oder WEBP-Bild oder sie ist beschädigt.");
+    }
+    if (!["png", "jpeg", "webp"].includes(metadata.format ?? "")) {
+      throw new Error(`Das Bildformat „${metadata.format ?? "unbekannt"}“ wird nicht unterstützt. Erlaubt sind PNG, JPG und WEBP.`);
+    }
+    if (!metadata.width || !metadata.height || metadata.width < 32 || metadata.height < 32) {
+      throw new Error("Das Bild muss mindestens 32 × 32 Pixel groß sein.");
+    }
+    if (metadata.width * metadata.height > 40_000_000) {
+      throw new Error("Das Bild besitzt zu viele Pixel. Bitte verwende höchstens etwa 40 Megapixel.");
+    }
     const extension = path.toLowerCase().split(".").pop();
     const mime = extension === "png" ? "image/png" : extension === "webp" ? "image/webp" : "image/jpeg";
-    return { path, name: basename(path), size: bytes.length, dataUrl: `data:${mime};base64,${bytes.toString("base64")}` };
+    return {
+      path,
+      name: basename(path),
+      size: bytes.length,
+      width: metadata.width,
+      height: metadata.height,
+      dataUrl: `data:${mime};base64,${bytes.toString("base64")}`
+    };
   });
   ipcMain.handle("relief:create", async (_event, imagePath: string, options: Partial<ReliefOptions>) => {
     const directory = await dialog.showOpenDialog({

@@ -16,6 +16,8 @@ interface Window {
       path: string;
       name: string;
       size: number;
+      width: number;
+      height: number;
       dataUrl: string;
     } | null>;
     createRelief: (imagePath: string, options: {

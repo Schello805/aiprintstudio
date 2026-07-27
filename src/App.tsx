@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 type View = "studio" | "history" | "settings";
 type LegalPage = "imprint" | "privacy" | "cookies" | null;
-type SelectedImage = { path: string; name: string; size: number; dataUrl: string };
+type SelectedImage = { path: string; name: string; size: number; width: number; height: number; dataUrl: string };
 type ReliefResult = Awaited<ReturnType<NonNullable<typeof window.desktop>["createRelief"]>>;
 
 const navigation = [
@@ -34,21 +34,32 @@ export function App() {
   const [fileError, setFileError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<ReliefResult>(null);
+  const [uploadStatus, setUploadStatus] = useState<string | null>(null);
 
   useEffect(() => {
     void window.desktop?.getVersion().then(setVersion);
   }, []);
 
   async function selectFile() {
+    setFileError(null);
+    setUploadStatus("Dateiauswahl wird geöffnet …");
     try {
-      const selected = await window.desktop?.selectImage();
-      if (!selected) return;
+      if (!window.desktop) {
+        throw new Error("Die Desktop-Verbindung ist nicht verfügbar. Bitte starte die installierte App neu und verwende nicht die Browser-Vorschau.");
+      }
+      const selected = await window.desktop.selectImage();
+      if (!selected) {
+        setUploadStatus("Keine Datei ausgewählt.");
+        return;
+      }
       setFileError(null);
       setFile(selected);
       setPreview(selected.dataUrl);
       setResult(null);
+      setUploadStatus(`${selected.width} × ${selected.height} Pixel erfolgreich geladen.`);
     } catch (error) {
       setFileError(error instanceof Error ? error.message : "Das Bild konnte nicht geöffnet werden.");
+      setUploadStatus(null);
     }
   }
 
@@ -56,7 +67,8 @@ export function App() {
     if (!file) return;
     setBusy(true); setFileError(null); setResult(null);
     try {
-      const next = await window.desktop?.createRelief(file.path, {
+      if (!window.desktop) throw new Error("Die lokale 3D-Engine ist nicht erreichbar. Bitte starte die App neu.");
+      const next = await window.desktop.createRelief(file.path, {
         widthMm: 100,
         baseMm: 1.6,
         reliefMm: 4,
@@ -64,6 +76,7 @@ export function App() {
         invert: false
       });
       if (next) setResult(next);
+      else setUploadStatus("Speichern wurde abgebrochen. Es wurden keine Dateien erzeugt.");
     } catch (error) {
       setFileError(error instanceof Error ? error.message : "Das Modell konnte nicht erstellt werden.");
     } finally { setBusy(false); }
@@ -115,16 +128,18 @@ export function App() {
               {preview ? (
                 <><img src={preview} alt="Vorschau des ausgewählten Bildes" /><div className="file-overlay"><ImagePlus size={18} /> Bild wechseln</div></>
               ) : (
-                <><div className="upload-icon"><UploadCloud size={32} /></div><h3>Bild hier ablegen</h3><p>oder zum Auswählen klicken</p><span>PNG, JPG oder WEBP · maximal 25 MB</span></>
+                <><div className="upload-icon"><UploadCloud size={32} /></div><h3>Bild für dein Relief auswählen</h3><p>PNG, JPG oder WEBP · maximal 25 MB</p><button className="choose-file-button" onClick={(event) => { event.stopPropagation(); void selectFile(); }}>Bild auswählen</button><span>Die Datei wird ausschließlich lokal gelesen</span></>
               )}
             </div>
+            {fileError && <div className="error-banner" role="alert"><strong>Bild konnte nicht geladen werden</strong><span>{fileError}</span><button onClick={() => setFileError(null)} aria-label="Fehlermeldung schließen"><X /></button></div>}
+            {uploadStatus && !fileError && <div className="upload-status"><CheckCircle2 /> {uploadStatus}</div>}
             <div className="workflow-row" aria-label="Verarbeitungsschritte">
               {["Bild analysieren", "3D rekonstruieren", "Mesh reparieren", "Exportieren"].map((step, index) => (
                 <div className="workflow-step" key={step}><span>{index + 1}</span><p>{step}</p>{index < 3 && <ChevronRight size={15} />}</div>
               ))}
             </div>
             <div className="action-bar">
-              <div><Box size={20} /><div><strong>{fileError ?? (file ? file.name : "Noch kein Bild gewählt")}</strong><span>{fileError ? "Bitte wähle eine andere Datei." : file ? `${(file.size / 1_048_576).toFixed(1)} MB · bereit zur Analyse` : "Wähle zuerst eine geeignete Aufnahme aus."}</span></div></div>
+              <div><Box size={20} /><div><strong>{file ? file.name : "Noch kein Bild gewählt"}</strong><span>{file ? `${(file.size / 1_048_576).toFixed(1)} MB · ${file.width} × ${file.height} px · bereit` : "Wähle zuerst eine geeignete Aufnahme aus."}</span></div></div>
               <button className="primary-button" disabled={!file || busy} onClick={() => void generateRelief()}>{busy ? "Mesh wird erzeugt …" : "Relief erstellen"} <ChevronRight size={18} /></button>
             </div>
             {busy && <div className="progress-card"><span /><div><strong>Lokale 3D-Verarbeitung</strong><p>Höhenmodell und wasserdichtes Mesh werden berechnet …</p></div></div>}
@@ -177,7 +192,7 @@ function Settings() {
   return (
     <>
       <section className="settings-grid">
-        <article><div className="setting-icon"><Sparkles /></div><div><h3>OpenAI-Analyse</h3><p>Optional: Erkennt das Motiv und schlägt passende Druckparameter vor.</p></div><button onClick={() => setDialog("openai")}>{status.openAiConfigured ? "Verwalten" : "Einrichten"}</button></article>
+        <article><div className="setting-icon"><Sparkles /></div><div><h3>OpenAI-Analyse</h3><p>{status.openAiConfigured ? "API-Key ist verschlüsselt gespeichert und lesbar." : "Optional: Erkennt das Motiv und schlägt passende Druckparameter vor."}</p></div><div className="setting-action">{status.openAiConfigured ? <span className="tag"><CheckCircle2 /> Eingerichtet</span> : <span className="tag neutral">Nicht eingerichtet</span>}<button onClick={() => setDialog("openai")}>{status.openAiConfigured ? "Verwalten" : "Einrichten"}</button></div></article>
         <article><div className="setting-icon"><Layers3 /></div><div><h3>Lokale Relief-Engine</h3><p>Integriert · erzeugt wasserdichte STL- und 3MF-Dateien vollständig offline.</p></div><button onClick={() => setDialog("model")}>Details</button></article>
         <article><div className="setting-icon"><CheckCircle2 /></div><div><h3>Hardwareprofil</h3><p>Apple M3 · 16 GB · automatische CPU-/Metal-Auswahl</p></div><span className="tag">Erkannt</span></article>
       </section>
