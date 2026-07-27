@@ -76,7 +76,6 @@ export function App() {
         invert: false
       });
       if (next) setResult(next);
-      else setUploadStatus("Speichern wurde abgebrochen. Es wurden keine Dateien erzeugt.");
     } catch (error) {
       setFileError(error instanceof Error ? error.message : "Das Modell konnte nicht erstellt werden.");
     } finally { setBusy(false); }

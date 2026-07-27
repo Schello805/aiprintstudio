@@ -7,6 +7,7 @@ orientiert sich an Keep a Changelog; Versionen folgen Semantic Versioning.
 
 ### Fixed
 
+- Relief-Export speichert ohne verwirrenden zweiten Dateidialog automatisch unter `Downloads/AI Print Studio`
 - Gepackte App lädt die Electron-Desktop-Brücke nun zuverlässig als Sandbox-kompatibles CommonJS-Preload
 - Paket-Smoke-Test prüft Bildauswahl und Einstellungs-IPC in der tatsächlichen `.app`
 - GitHub-Release-Build versucht nicht mehr doppelt über `electron-builder` zu veröffentlichen

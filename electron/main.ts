@@ -204,13 +204,13 @@ app.whenReady().then(() => {
     };
   });
   ipcMain.handle("relief:create", async (_event, imagePath: string, options: Partial<ReliefOptions>) => {
-    const directory = await dialog.showOpenDialog({
-      title: "Ordner für STL und 3MF auswählen",
-      buttonLabel: "Hier speichern",
-      properties: ["openDirectory", "createDirectory"]
-    });
-    if (directory.canceled || !directory.filePaths[0]) return null;
-    return createRelief(imagePath, directory.filePaths[0], options);
+    const outputDirectory = join(app.getPath("downloads"), "AI Print Studio");
+    try {
+      return await createRelief(imagePath, outputDirectory, options);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unbekannter Exportfehler";
+      throw new Error(`Das Relief konnte nicht unter „${outputDirectory}“ gespeichert werden: ${message}`);
+    }
   });
   ipcMain.handle("shell:showItem", (_event, path: string) => shell.showItemInFolder(path));
   ipcMain.handle("shell:openExternal", (_event, url: string) => {

@@ -25,8 +25,7 @@ standardmäßig auf dem eigenen Mac.
 
 1. Im Studio ein PNG-, JPG- oder WEBP-Bild auswählen.
 2. **Relief erstellen** anklicken.
-3. Zielordner wählen.
-4. Die erzeugte STL oder 3MF im Slicer öffnen.
+3. Die erzeugte STL oder 3MF unter `Downloads/AI Print Studio` im Slicer öffnen.
 
 Der aktuelle Modus erzeugt eine wasserdichte rechteckige Reliefplatte mit
 100 mm Breite, 1,6 mm Grundplatte und bis zu 4 mm Reliefhöhe. Dunkle Bildbereiche
