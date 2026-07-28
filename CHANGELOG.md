@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.13.9
+
+- Der OpenAI-API-Schlüssel wird nicht mehr im macOS-Schlüsselbund gespeichert.
+- Der Schlüssel bleibt ausschließlich im Arbeitsspeicher der aktuellen
+  App-Sitzung und wird beim Beenden verworfen.
+- Dadurch benötigt AI Print Studio keinen Zugriff auf gespeicherte Passwörter
+  und macOS zeigt keine Schlüsselbund-Passwortabfrage mehr an.
+- Die Einstellungen erklären vor der Eingabe klar die Sitzungsspeicherung und
+  weisen darauf hin, dass der Schlüssel nach einem Neustart erneut einzugeben ist.
+- Alte verschlüsselte Schlüsselwerte werden ohne Entschlüsselung aus der lokalen
+  App-Konfiguration entfernt.
+
 ## 0.13.8
 
 - Ein lokaler Systemcheck prüft vor dem Laden des Studios Plattform,

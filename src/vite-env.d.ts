@@ -7,7 +7,7 @@ interface Window {
     getSettingsStatus: () => Promise<{
       openAiConfigured: boolean;
       modelSetupAccepted: boolean;
-      encryptionAvailable: boolean;
+      sessionOnly: boolean;
       storageVersion: number;
       depthModelAvailable: boolean;
     }>;

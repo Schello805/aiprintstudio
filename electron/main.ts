@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, nativeTheme, safeStorage, shell } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, nativeTheme, shell } from "electron";
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
 import { copyFile, mkdir, mkdtemp, readFile, rename, rm, statfs, writeFile } from "node:fs/promises";
@@ -23,6 +23,7 @@ type StoredSettings = {
 };
 
 const settingsDirectoryName = "de.michaelschellenberger.aiprintstudio";
+let sessionOpenAiKey: string | null = null;
 
 function isNewerVersion(candidate: string, current: string): boolean {
   const candidateParts = candidate.split(".").map(Number);
@@ -210,24 +211,15 @@ async function migrateLegacySettings(): Promise<StoredSettings> {
   return {};
 }
 
-function hasUsableOpenAiKey(settings: StoredSettings): boolean {
-  if (!settings.encryptedOpenAiKey || !safeStorage.isEncryptionAvailable()) return false;
-  try {
-    const decrypted = safeStorage.decryptString(Buffer.from(settings.encryptedOpenAiKey, "base64"));
-    return /^sk-[A-Za-z0-9_-]{20,}$/.test(decrypted);
-  } catch {
-    return false;
-  }
+async function removeLegacyStoredOpenAiKey(): Promise<void> {
+  const settings = await readSettings();
+  if (!settings.encryptedOpenAiKey) return;
+  delete settings.encryptedOpenAiKey;
+  await writeSettings(settings);
 }
 
-function decryptSetting(value?: string): string | null {
-  if (!value || !safeStorage.isEncryptionAvailable()) return null;
-  try { return safeStorage.decryptString(Buffer.from(value, "base64")); }
-  catch { return null; }
-}
-
-async function createPrintableCadPlan(prompt: string, settings: StoredSettings, existingPlan?: CadPlan) {
-  const apiKey = decryptSetting(settings.encryptedOpenAiKey);
+async function createPrintableCadPlan(prompt: string, existingPlan?: CadPlan) {
+  const apiKey = sessionOpenAiKey;
   if (!apiKey) throw new Error("Bitte hinterlege zuerst in den Einstellungen deinen OpenAI API-Schlüssel.");
   const primitiveSchema = {
     type: "object",
@@ -306,17 +298,17 @@ function createWindow(): void {
           const bridge = typeof window.desktop === "object";
           const selectImage = typeof window.desktop?.selectImage === "function";
           const saveOpenAiKey = typeof window.desktop?.saveOpenAiKey === "function";
-          let settingsPersisted = false;
+          let sessionKeyActive = false;
           if (saveOpenAiKey) {
             await window.desktop.saveOpenAiKey("sk-test_abcdefghijklmnopqrstuvwxyz0123456789");
-            settingsPersisted = (await window.desktop.getSettingsStatus()).openAiConfigured;
+            sessionKeyActive = (await window.desktop.getSettingsStatus()).openAiConfigured;
           }
-          return JSON.stringify({ bridge, selectImage, saveOpenAiKey, settingsPersisted });
+          return JSON.stringify({ bridge, selectImage, saveOpenAiKey, sessionKeyActive });
         })()`
       ).then((result: string) => {
         console.log(`SMOKE_RESULT:${result}`);
-        const parsed = JSON.parse(result) as { bridge: boolean; selectImage: boolean; saveOpenAiKey: boolean; settingsPersisted: boolean };
-        app.exit(parsed.bridge && parsed.selectImage && parsed.saveOpenAiKey && parsed.settingsPersisted ? 0 : 1);
+        const parsed = JSON.parse(result) as { bridge: boolean; selectImage: boolean; saveOpenAiKey: boolean; sessionKeyActive: boolean };
+        app.exit(parsed.bridge && parsed.selectImage && parsed.saveOpenAiKey && parsed.sessionKeyActive ? 0 : 1);
       }).catch((error: unknown) => {
         console.error("SMOKE_ERROR", error);
         app.exit(1);
@@ -328,6 +320,7 @@ function createWindow(): void {
 app.whenReady().then(async () => {
   if (!(await ensureCompatibleSystem())) return;
   if (!(await ensureApplicationLocation())) return;
+  await removeLegacyStoredOpenAiKey();
   nativeTheme.themeSource = "dark";
   ipcMain.handle("app:version", () => app.getVersion());
   ipcMain.handle("app:checkUpdate", async () => {
@@ -353,9 +346,9 @@ app.whenReady().then(async () => {
   ipcMain.handle("settings:status", async () => {
     const settings = await readSettings();
     return {
-      openAiConfigured: hasUsableOpenAiKey(settings),
+      openAiConfigured: Boolean(sessionOpenAiKey),
       modelSetupAccepted: Boolean(settings.modelSetupAccepted),
-      encryptionAvailable: safeStorage.isEncryptionAvailable(),
+      sessionOnly: true,
       storageVersion: settings.schemaVersion ?? 0
       ,depthModelAvailable: depthModelAvailable()
     };
@@ -365,21 +358,10 @@ app.whenReady().then(async () => {
     if (!/^sk-[A-Za-z0-9_-]{20,}$/.test(normalized)) {
       throw new Error("Der API-Schlüssel hat kein gültiges OpenAI-Format.");
     }
-    if (!safeStorage.isEncryptionAvailable()) {
-      throw new Error("Die sichere macOS-Schlüsselverschlüsselung ist nicht verfügbar.");
-    }
-    const settings = await readSettings();
-    settings.encryptedOpenAiKey = safeStorage.encryptString(normalized).toString("base64");
-    await writeSettings(settings);
-    const persisted = await readSettings();
-    if (!hasUsableOpenAiKey(persisted)) {
-      throw new Error("Der Schlüssel konnte nach dem Speichern nicht wieder sicher gelesen werden.");
-    }
+    sessionOpenAiKey = normalized;
   });
   ipcMain.handle("settings:removeOpenAiKey", async () => {
-    const settings = await readSettings();
-    delete settings.encryptedOpenAiKey;
-    await writeSettings(settings);
+    sessionOpenAiKey = null;
   });
   ipcMain.handle("settings:acceptModelSetup", async () => {
     const settings = await readSettings();
@@ -462,9 +444,8 @@ app.whenReady().then(async () => {
     if (prompt.length < (existingPlanValue ? 3 : 10) || prompt.length > 800) {
       throw new Error(existingPlanValue ? "Die Folgeanweisung muss 3 bis 800 Zeichen enthalten." : "Beschreibe das Objekt bitte mit 10 bis 800 Zeichen.");
     }
-    const settings = await readSettings();
     const existingPlan = existingPlanValue ? validateCadPlan(existingPlanValue) : undefined;
-    const plan = await createPrintableCadPlan(prompt, settings, existingPlan);
+    const plan = await createPrintableCadPlan(prompt, existingPlan);
     const outputDirectory = join(app.getPath("downloads"), "AI Print Studio");
     await mkdir(outputDirectory, { recursive: true });
     const stlPath = join(outputDirectory, `ki-${Date.now()}.stl`);

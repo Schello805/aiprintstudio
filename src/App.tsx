@@ -834,7 +834,7 @@ function EmptyState({ icon: Icon, title, text }: { icon: typeof Clock3; title: s
 type SettingsStatus = {
   openAiConfigured: boolean;
   modelSetupAccepted: boolean;
-  encryptionAvailable: boolean;
+  sessionOnly: boolean;
   storageVersion: number;
   depthModelAvailable: boolean;
 };
@@ -844,7 +844,7 @@ function Settings() {
   const [status, setStatus] = useState<SettingsStatus>({
     openAiConfigured: false,
     modelSetupAccepted: false,
-    encryptionAvailable: true,
+    sessionOnly: true,
     storageVersion: 0
     ,depthModelAvailable: false
   });
@@ -860,7 +860,7 @@ function Settings() {
   return (
     <>
       <section className="settings-grid">
-        <article><div className="setting-icon"><Sparkles /></div><div><h3>OpenAI · Prompt zu 3D</h3><p>{status.openAiConfigured ? "Bereit für strukturierte CAD-Baupläne aus deinen Beschreibungen." : "Erstellt den CAD-Bauplan; die App baut daraus lokal das STL."}</p></div><div className="setting-action">{status.openAiConfigured ? <span className="tag"><CheckCircle2 /> Eingerichtet</span> : <span className="tag neutral">Nicht eingerichtet</span>}<button onClick={() => setDialog("openai")}>{status.openAiConfigured ? "Verwalten" : "Einrichten"}</button></div></article>
+        <article><div className="setting-icon"><Sparkles /></div><div><h3>OpenAI · Prompt zu 3D</h3><p>{status.openAiConfigured ? "Der API-Schlüssel ist für die aktuelle App-Sitzung aktiv." : "Der Schlüssel bleibt nur im Arbeitsspeicher und wird nicht im Schlüsselbund gespeichert."}</p></div><div className="setting-action">{status.openAiConfigured ? <span className="tag"><CheckCircle2 /> Sitzung aktiv</span> : <span className="tag neutral">Nicht verbunden</span>}<button onClick={() => setDialog("openai")}>{status.openAiConfigured ? "Verwalten" : "Verbinden"}</button></div></article>
         <article><div className="setting-icon"><Layers3 /></div><div><h3>Lokale Relief-Engine</h3><p>Integriert · erzeugt wasserdichte STL- und 3MF-Dateien vollständig offline.</p></div><button onClick={() => setDialog("model")}>Details</button></article>
         <article><div className="setting-icon"><Box /></div><div><h3>Depth Anything V2</h3><p>Lokale KI-Tiefenschätzung für Fotos · Apple Core ML · keine Cloud.</p></div><span className={status.depthModelAvailable ? "tag" : "tag neutral"}>{status.depthModelAvailable ? "Bereit" : "Nur im Release"}</span></article>
         <article><div className="setting-icon"><CheckCircle2 /></div><div><h3>Hardwareprofil</h3><p>Apple M3 · 16 GB · automatische CPU-/Metal-Auswahl</p></div><span className="tag">Erkannt</span></article>
@@ -911,7 +911,7 @@ function OpenAiDialog({ status, close, refresh }: { status: SettingsStatus; clos
       if (!window.desktop) throw new Error("Die Desktop-Verbindung ist nicht verfügbar. Bitte installiere das aktuelle Update und starte die App neu.");
       await window.desktop.saveOpenAiKey(key);
       await refresh();
-      setMessage("Der Schlüssel wurde verschlüsselt auf diesem Mac gespeichert.");
+      setMessage("Der Schlüssel ist nur für diese Sitzung aktiv und wird beim Beenden der App verworfen.");
       setKey("");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Der Schlüssel konnte nicht gespeichert werden.");
@@ -923,7 +923,7 @@ function OpenAiDialog({ status, close, refresh }: { status: SettingsStatus; clos
       if (!window.desktop) throw new Error("Die Desktop-Verbindung ist nicht verfügbar.");
       await window.desktop.removeOpenAiKey();
       await refresh();
-      setMessage("Der gespeicherte Schlüssel wurde entfernt.");
+      setMessage("Der Sitzungsschlüssel wurde entfernt.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Der Schlüssel konnte nicht entfernt werden.");
     }
@@ -935,16 +935,16 @@ function OpenAiDialog({ status, close, refresh }: { status: SettingsStatus; clos
         <button className="modal-close" onClick={close} aria-label="Dialog schließen"><X /></button>
         <div className="modal-icon"><Sparkles /></div>
         <p className="eyebrow">PROMPT ZU 3D</p>
-        <h2 id="openai-title">OpenAI sicher verbinden</h2>
-        <p>OpenAI erstellt einen strukturierten CAD-Bauplan. Geometrie und STL werden lokal erzeugt. Der Schlüssel wird mit der macOS-Systemverschlüsselung geschützt.</p>
+        <h2 id="openai-title">OpenAI für diese Sitzung verbinden</h2>
+        <p>Der Schlüssel bleibt ausschließlich im Arbeitsspeicher von AI Print Studio und wird beim Beenden gelöscht. Die App greift nicht auf deinen macOS-Schlüsselbund oder andere Passwörter zu.</p>
         <label htmlFor="openai-key">OpenAI API-Schlüssel</label>
         <input id="openai-key" type="password" value={key} onChange={(event) => setKey(event.target.value)} placeholder="sk-••••••••••••••••••••" autoComplete="off" />
-        {!status.encryptionAvailable && <div className="notice error">Die macOS-Verschlüsselung ist auf diesem System nicht verfügbar.</div>}
+        <div className="notice">Keine Passwortabfrage: Du gibst den OpenAI-Schlüssel nach jedem Neustart der App erneut ein.</div>
         {message && <div className="notice">{message}</div>}
         <div className="modal-actions">
-          {status.openAiConfigured && <button className="danger-button" onClick={() => void remove()}>Schlüssel entfernen</button>}
+          {status.openAiConfigured && <button className="danger-button" onClick={() => void remove()}>Sitzungsschlüssel entfernen</button>}
           <button className="secondary-button" onClick={close}>Abbrechen</button>
-          <button className="primary-button" onClick={() => void save()} disabled={busy || key.length < 20 || !status.encryptionAvailable}>{busy ? "Speichern …" : status.openAiConfigured ? "Ersetzen" : "Speichern"}</button>
+          <button className="primary-button" onClick={() => void save()} disabled={busy || key.length < 20}>{busy ? "Aktivieren …" : status.openAiConfigured ? "Sitzungsschlüssel ersetzen" : "Für diese Sitzung aktivieren"}</button>
         </div>
       </section>
     </div>

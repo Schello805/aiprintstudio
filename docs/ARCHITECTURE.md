@@ -15,7 +15,7 @@ React Renderer
   │ sichere, typisierte IPC-Aufrufe
 Electron Main Process
   ├── Systemcheck / Hardware- und Ressourcenprüfung
-  ├── Einstellungen / safeStorage
+  ├── Einstellungen / flüchtiger OpenAI-Sitzungsschlüssel
   ├── Verlauf / Updateprüfung
   ├── Dateivalidierung
   ├── OpenAI CAD-Planung (optional)
