@@ -64,6 +64,12 @@ Farbkörper Komponenten eines einzigen Assembly-Objekts; der Build-Bereich
 enthält deshalb genau ein gemeinsames Modell in Millimetern. STL bleibt ein
 einfarbiges Fallback.
 
+Zusätzlich zu den standardisierten Basismaterialien trägt jedes Dreieck seine
+Materialreferenz explizit. `Metadata/model_settings.config` ordnet die
+Farbkörper den Extrudern zu und `Metadata/project_settings.config` übergibt die
+Filamentpalette an Anycubic-/Orca-basierte Slicer. Die Core-3MF-Daten bleiben
+dabei die interoperable Quelle für andere Programme.
+
 ## Prompt zu 3D
 
 OpenAI erzeugt ausschließlich einen strukturierten Plan aus erlaubten

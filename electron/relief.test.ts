@@ -127,12 +127,19 @@ describe("relief mesh", () => {
     ]);
     const zip = await JSZip.loadAsync(archive);
     const model = await zip.file("3D/3dmodel.model")?.async("string");
+    const modelSettings = await zip.file("Metadata/model_settings.config")?.async("string");
+    const projectSettings = await zip.file("Metadata/project_settings.config")?.async("string");
     expect(model).toContain('displaycolor="#FF0000FF"');
     expect(model).toContain('displaycolor="#0000FFFF"');
+    expect(model).toContain('pid="2" p1="0"');
+    expect(model).toContain('pid="2" p1="1"');
     expect(model?.match(/<object /g)).toHaveLength(3);
     expect(model?.match(/<component /g)).toHaveLength(2);
     expect(model?.match(/<item /g)).toHaveLength(1);
     expect(model).toContain('name="AI Print Studio Multicolor"');
+    expect(modelSettings).toContain('<metadata key="extruder" value="1"/>');
+    expect(modelSettings).toContain('<metadata key="extruder" value="2"/>');
+    expect(JSON.parse(projectSettings ?? "{}").filament_colour).toEqual(["#FF0000", "#0000FF"]);
   });
 
   it("merges high-resolution color meshes without overflowing the call stack", () => {

@@ -793,7 +793,13 @@ async function encodeThreeMf(mesh: Mesh, coloredMeshes?: ColoredMesh[]): Promise
   ).join("");
   const objectsXml = parts.map(({ mesh: part, name }, index) => {
     const vertexXml = part.vertices.map(([x, y, z]) => `<vertex x="${x.toFixed(5)}" y="${y.toFixed(5)}" z="${z.toFixed(5)}"/>`).join("");
-    const triangleXml = part.triangles.map(([v1, v2, v3]) => `<triangle v1="${v1}" v2="${v2}" v3="${v3}"/>`).join("");
+    // Einige Slicer (insbesondere Anycubic Slicer Next) übernehmen das
+    // Standardmaterial eines Komponentenobjekts nicht in ein Assembly. Die
+    // redundante Dreieckszuweisung ist Teil des 3MF-Core-Standards und hält die
+    // Farben auch dann eindeutig, wenn der Objektstandard ignoriert wird.
+    const triangleXml = part.triangles.map(([v1, v2, v3]) =>
+      `<triangle v1="${v1}" v2="${v2}" v3="${v3}" pid="2" p1="${index}"/>`
+    ).join("");
     return `<object id="${index + 3}" type="model" name="${escapeXml(name)}" pid="2" pindex="${index}"><mesh><vertices>${vertexXml}</vertices><triangles>${triangleXml}</triangles></mesh></object>`;
   }).join("");
   const assemblyId = parts.length + 3;
@@ -805,6 +811,33 @@ async function encodeThreeMf(mesh: Mesh, coloredMeshes?: ColoredMesh[]): Promise
 <metadata name="Title">AI Print Studio Relief</metadata>
 <resources><basematerials id="2">${materialXml}</basematerials>${objectsXml}${assemblyXml}</resources>
 <build>${buildXml}</build></model>`);
+  if (coloredMeshes?.length) {
+    const partSettings = parts.map(({ name }, index) => `
+    <part id="${index + 3}" subtype="normal_part">
+      <metadata key="name" value="${escapeXml(name)}"/>
+      <metadata key="matrix" value="1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1"/>
+      <metadata key="source_file" value="AI Print Studio"/>
+      <metadata key="source_object_id" value="${assemblyId}"/>
+      <metadata key="source_volume_id" value="${index}"/>
+      <metadata key="source_offset_x" value="0"/>
+      <metadata key="source_offset_y" value="0"/>
+      <metadata key="source_offset_z" value="0"/>
+      <metadata key="extruder" value="${index + 1}"/>
+      <mesh_stat edges_fixed="0" degenerate_facets="0" facets_removed="0" facets_reversed="0" backwards_edges="0"/>
+    </part>`).join("");
+    zip.folder("Metadata")?.file("model_settings.config", `<?xml version="1.0" encoding="UTF-8"?>
+<config>
+  <object id="${assemblyId}">
+    <metadata key="name" value="AI Print Studio Multicolor"/>
+    <metadata key="extruder" value="1"/>${partSettings}
+  </object>
+</config>`);
+    zip.folder("Metadata")?.file("project_settings.config", JSON.stringify({
+      filament_colour: parts.map(({ color }) => color.toUpperCase()),
+      filament_type: parts.map(() => "PLA"),
+      filament_settings_id: parts.map(() => "")
+    }, null, 2));
+  }
   return zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE", compressionOptions: { level: 6 } });
 }
 

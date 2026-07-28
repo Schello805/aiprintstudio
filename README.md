@@ -7,7 +7,7 @@ CAD-Pläne und Mesh-Dateien bleiben standardmäßig auf dem eigenen Mac.
 
 [![Quality](https://github.com/Schello805/aiprintstudio/actions/workflows/quality.yml/badge.svg)](https://github.com/Schello805/aiprintstudio/actions/workflows/quality.yml)
 
-> Aktueller Stand: Version 0.13.3. Bild- und Schrift-Reliefs, mehrfarbige
+> Aktueller Stand: Version 0.13.4. Bild- und Schrift-Reliefs, mehrfarbige
 > AMS-3MF-Dateien sowie einfache, per OpenAI geplante und lokal konstruierte
 > Prompt-zu-3D-Modelle sind testbar. Die vollständige Rundum-Rekonstruktion aus
 > einem einzelnen Bild bleibt eine spätere Ausbaustufe.
@@ -96,6 +96,11 @@ Filamenten zugeordnet werden. Der 3MF-Export enthält getrennte, benannte
 Farbkörper mit Basismaterialien. Sie werden als Komponenten eines einzigen
 gemeinsamen 3MF-Modells exportiert, damit Slicer wie Anycubic Slicer und Bambu
 Studio sie als zusammengehöriges Mehrmaterialobjekt laden.
+
+Für Anycubic Slicer Next und andere Orca-basierte Slicer enthält die Datei
+zusätzlich die konkrete Filamentpalette und eine Extruderzuordnung je Farbkörper.
+Dadurch werden nicht nur die Geometrien gruppiert, sondern auch die in der App
+festgelegten AMS-Farben den Filamentplätzen 1 bis 8 zugeordnet.
 
 Senkrechte Außenkanten, Tragkörper und Farbgrenzen erhalten einheitlich die
 gewählte Farbe **Seiten & Tragkörper**. Die übrigen Farben liegen als 0,4 mm

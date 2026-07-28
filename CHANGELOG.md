@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.13.4
+
+- Mehrfarbige 3MF-Dateien enthalten zusätzlich zur Objektfarbe eine explizite
+  Materialreferenz an jedem Dreieck.
+- Anycubic-/Orca-Projektmetadaten ordnen jeden Farbkörper dem richtigen
+  Extruder beziehungsweise Filamentplatz zu.
+- Die in AI Print Studio gewählte Palette wird als Projektpalette übernommen,
+  sodass Anycubic Slicer Next Rot, Weiß, Schwarz und Gelb nicht mehr gesammelt
+  als Filament 1 lädt.
+- Ein echter Roundtrip mit dem lokal installierten Anycubic-Slicer-Parser
+  bestätigt vier erhaltene Farben und die Extruderzuordnung 1–4.
+
 ## 0.13.3
 
 - Original und 3D-Vorschau bleiben nach der Modellerstellung beim Scrollen

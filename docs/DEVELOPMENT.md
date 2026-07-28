@@ -52,6 +52,9 @@
 - Die konfigurierte Seitenfarbe umfasst Tragkörper, Außenwände und Farbgrenzen.
 - Motivfarben bilden eine 0,4-mm-Decklage auf horizontalen Oberflächen.
 - Das 3MF verwendet Millimeter und genau einen Eintrag im Build-Bereich.
+- Farbdreiecke besitzen explizite Core-3MF-Materialreferenzen.
+- Orca-/Anycubic-Metadaten müssen Palette und Extruderzuordnung aller
+  Farbkörper enthalten.
 - Exportänderungen müssen mindestens mit `electron/relief.test.ts` geprüft werden.
 - Änderungen an IPC-Verträgen müssen Main Process, Preload und
   `src/vite-env.d.ts` gemeinsam aktualisieren.
