@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.13.5
+
+- Sekundäre Aktionen wie **Alle Werkzeuge**, **Erweiterte Einstellungen** und
+  **Motivbereiche manuell korrigieren** besitzen größere Klickflächen,
+  kontrastreiche Hintergründe und klar erkennbare Rahmen.
+- Primäre, sekundäre und Einstellungsbuttons verwenden einheitliche
+  Hover-, Fokus- und Aktivzustände.
+- Werkzeuge im Flächeneditor sind größer und leichter lesbar.
+- Die linke Hauptnavigation hebt Studio, Verlauf und Einstellungen deutlicher
+  als interaktive Bereiche hervor.
+- Die stärkere Buttonhierarchie kommt ohne zusätzliche Inhaltsblöcke aus und
+  vergrößert den Scrollumfang nur minimal.
+
 ## 0.13.4
 
 - Mehrfarbige 3MF-Dateien enthalten zusätzlich zur Objektfarbe eine explizite
