@@ -15,7 +15,7 @@ React Renderer
   │ sichere, typisierte IPC-Aufrufe
 Electron Main Process
   ├── Systemcheck / Hardware- und Ressourcenprüfung
-  ├── Einstellungen / flüchtiger OpenAI-Sitzungsschlüssel
+  ├── Einstellungen / lokaler AES-GCM-Tresor für OpenAI
   ├── Verlauf / Updateprüfung
   ├── Dateivalidierung
   ├── OpenAI CAD-Planung (optional)

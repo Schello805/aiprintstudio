@@ -3,7 +3,7 @@
 ## Unterstützte Versionen
 
 Während der frühen Entwicklung wird nur die jeweils aktuelle veröffentlichte
-Version unterstützt. Der aktuelle Entwicklungsstand ist 0.13.9.
+Version unterstützt. Der aktuelle Entwicklungsstand ist 0.14.0.
 
 ## Sicherheitsproblem melden
 
@@ -18,9 +18,10 @@ Stattdessen bitte einen privaten Security Advisory im GitHub-Repository öffnen:
 - Externe Links werden auf `https:` und `mailto:` beschränkt.
 - Uploads werden anhand Signatur, Format, Größe und Bilddimensionen geprüft.
 - Modell-Downloads benötigen eine bekannte Quelle und SHA-256-Prüfsumme.
-- Der OpenAI-Schlüssel bleibt ausschließlich für die aktuelle Sitzung im
-  Arbeitsspeicher des Electron-Hauptprozesses. Er wird weder in einer Datei noch
-  im macOS-Schlüsselbund gespeichert und beim Beenden verworfen.
+- Der OpenAI-Schlüssel wird mit einem eigenen App-Passwort über `scrypt` und
+  AES-256-GCM authentifiziert verschlüsselt. Gespeichert werden nur Salt, Nonce,
+  Authentifizierungstag und Chiffretext; weder App-Passwort noch Klartext-Key
+  werden dauerhaft abgelegt. Der macOS-Schlüsselbund wird nicht verwendet.
 - Logs enthalten keine Bilder, Schlüssel oder vollständigen lokalen Dateipfade.
 - KI-Ergebnisse gelten als nicht vertrauenswürdig und werden vor dem Export geprüft.
 - Prompt-zu-3D begrenzt Eingabelänge, Bauteilanzahl, Koordinaten,

@@ -9,7 +9,7 @@ CAD-Pläne und Mesh-Dateien bleiben standardmäßig auf dem eigenen Mac.
 
 [![Quality](https://github.com/Schello805/aiprintstudio/actions/workflows/quality.yml/badge.svg)](https://github.com/Schello805/aiprintstudio/actions/workflows/quality.yml)
 
-> Aktueller Stand: Version 0.13.9. Bild- und Schrift-Reliefs, mehrfarbige
+> Aktueller Stand: Version 0.14.0. Bild- und Schrift-Reliefs, mehrfarbige
 > AMS-3MF-Dateien sowie einfache, per OpenAI geplante und lokal konstruierte
 > Prompt-zu-3D-Modelle sind testbar. Die vollständige Rundum-Rekonstruktion aus
 > einem einzelnen Bild bleibt eine spätere Ausbaustufe.
@@ -43,7 +43,7 @@ grundsätzlich kompatibel.
 - OpenAI nur optional für den ausdrücklich gestarteten Prompt-zu-3D-Workflow
 - Druckbarkeit vor künstlerischer Perfektion
 - keine Benutzerkonten, Telemetrie oder Cloud-Pflicht
-- OpenAI-Schlüssel nur im flüchtigen Arbeitsspeicher der aktuellen App-Sitzung
+- lokal verschlüsselter OpenAI-Schlüssel mit eigenem App-Passwort
 - STL-, 3MF- und bei Mehrfoto-Scans USDZ-Export
 - interaktive 3D-Vorschau direkt neben der Eingabe
 - möglichst wenige notwendige Einstellungen und motivabhängige Automatik
@@ -170,7 +170,7 @@ offiziellen Repository stammt.
 | Bildpipeline | Sharp, TypeScript | Masken, Höhenkarten, Farben und Meshaufbau |
 | Native Worker | Swift, Core ML, RealityKit | lokale Tiefe und Mehrfoto-Rekonstruktion |
 | CAD-Pipeline | OpenAI Structured Outputs, lokaler TypeScript-Generator | validierter Plan und Binär-STL |
-| Konfiguration | lokale JSON-Datei, flüchtiger Sitzungsspeicher | Einstellungen ohne dauerhaft gespeicherten API-Schlüssel |
+| Konfiguration | scrypt, AES-256-GCM, lokale JSON-Datei | verschlüsselter API-Schlüssel ohne macOS-Schlüsselbund |
 | Releases | Git-Tags, GitHub Actions | ARM64-DMG und App-Version |
 
 Weitere Details: [Architektur](docs/ARCHITECTURE.md),
@@ -215,16 +215,18 @@ automatisch signiert und notarisiert.
 ## OpenAI-Konfiguration
 
 OpenAI ist optional und wird ausschließlich für **Prompt zu 3D** benötigt. Der
-Schlüssel wird in den Einstellungen nur für die aktuelle App-Sitzung erfasst
-und ausschließlich im Arbeitsspeicher des Electron-Hauptprozesses gehalten.
-Beim Beenden wird er verworfen. AI Print Studio greift dafür nicht auf den
-macOS-Schlüsselbund oder andere gespeicherte Passwörter zu. OpenAI erstellt
-einen strukturierten CAD-Bauplan; Geometrie und STL entstehen anschließend
-lokal.
+Schlüssel wird mit einem selbst gewählten AI-Print-Studio-Passwort über `scrypt`
+und AES-256-GCM lokal verschlüsselt. Weder das Mac-Passwort noch der
+macOS-Schlüsselbund werden verwendet. Das App-Passwort wird nicht gespeichert
+und muss nach einem Neustart zum Entsperren erneut eingegeben werden. OpenAI
+erstellt einen strukturierten CAD-Bauplan; Geometrie und STL entstehen
+anschließend lokal.
 
 Der Schlüssel gehört niemals in Git, eine Frontend-Datei oder ein
-Release-Artefakt. Nach jedem Neustart muss er erneut eingegeben werden. Bild-,
-Schrift-, Relief-, Tiefen- und AMS-Workflows benötigen keinen OpenAI-Schlüssel.
+Release-Artefakt. Bei verlorenem App-Passwort ist keine Wiederherstellung
+möglich; der verschlüsselte Eintrag muss gelöscht und neu angelegt werden.
+Bild-, Schrift-, Relief-, Tiefen- und AMS-Workflows benötigen keinen
+OpenAI-Schlüssel.
 
 ## Veröffentlichung und Versionierung
 

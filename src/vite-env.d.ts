@@ -6,12 +6,13 @@ interface Window {
     checkForUpdate: () => Promise<{ currentVersion: string; latestVersion: string; available: boolean; url: string; directDownload: boolean }>;
     getSettingsStatus: () => Promise<{
       openAiConfigured: boolean;
+      openAiStored: boolean;
       modelSetupAccepted: boolean;
-      sessionOnly: boolean;
       storageVersion: number;
       depthModelAvailable: boolean;
     }>;
-    saveOpenAiKey: (apiKey: string) => Promise<void>;
+    saveOpenAiKey: (apiKey: string, password: string) => Promise<void>;
+    unlockOpenAiKey: (password: string) => Promise<void>;
     removeOpenAiKey: () => Promise<void>;
     acceptModelSetup: () => Promise<void>;
     selectImage: () => Promise<{

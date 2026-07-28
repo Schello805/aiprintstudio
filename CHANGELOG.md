@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.14.0
+
+- Der OpenAI-Key kann dauerhaft lokal gespeichert werden, ohne auf den
+  macOS-Schlüsselbund oder das Mac-Passwort zuzugreifen.
+- Ein selbst gewähltes AI-Print-Studio-Passwort wird mit `scrypt` in einen
+  Schlüssel abgeleitet; AES-256-GCM verschlüsselt und authentifiziert den API-Key.
+- Gespeichert werden ausschließlich Salt, Nonce, Authentifizierungstag und
+  Chiffretext. Das App-Passwort wird nie gespeichert.
+- Nach einem Neustart entsperrt der Nutzer den Tresor mit seinem App-Passwort.
+- Der Einrichtungsdialog erklärt vor der Eingabe eindeutig Speicherung,
+  Passwortverlust und den Verzicht auf den macOS-Schlüsselbund.
+- Falsche Passwörter und veränderte Tresordaten werden mit einer einheitlichen
+  Fehlermeldung abgewiesen.
+
 ## 0.13.9
 
 - Der OpenAI-API-Schlüssel wird nicht mehr im macOS-Schlüsselbund gespeichert.

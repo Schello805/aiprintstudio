@@ -11,6 +11,7 @@ import { createRelief, type ReliefOptions } from "./relief.js";
 import { renderTextImage, type TextImageOptions } from "./text-image.js";
 import { buildCadPlanningRequest, encodeCadStl, validateCadPlan, type CadPlan } from "./cad.js";
 import { checkSystemCompatibility } from "./system-check.js";
+import { decryptApiKey, encryptApiKey, type EncryptedApiKey } from "./api-key-vault.js";
 
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
 const developmentUrl = process.env.VITE_DEV_SERVER_URL ?? "http://localhost:5173";
@@ -19,6 +20,7 @@ const execFileAsync = promisify(execFile);
 type StoredSettings = {
   schemaVersion?: number;
   encryptedOpenAiKey?: string;
+  openAiVault?: EncryptedApiKey;
   modelSetupAccepted?: boolean;
 };
 
@@ -187,7 +189,7 @@ async function writeSettings(settings: StoredSettings): Promise<void> {
   const target = settingsFile();
   const temporary = `${target}.tmp`;
   await mkdir(directory, { recursive: true });
-  settings.schemaVersion = 1;
+  settings.schemaVersion = 2;
   await writeFile(temporary, `${JSON.stringify(settings, null, 2)}\n`, { mode: 0o600 });
   await rename(temporary, target);
 }
@@ -300,7 +302,7 @@ function createWindow(): void {
           const saveOpenAiKey = typeof window.desktop?.saveOpenAiKey === "function";
           let sessionKeyActive = false;
           if (saveOpenAiKey) {
-            await window.desktop.saveOpenAiKey("sk-test_abcdefghijklmnopqrstuvwxyz0123456789");
+            await window.desktop.saveOpenAiKey("sk-test_abcdefghijklmnopqrstuvwxyz0123456789", "smoke-test-passwort");
             sessionKeyActive = (await window.desktop.getSettingsStatus()).openAiConfigured;
           }
           return JSON.stringify({ bridge, selectImage, saveOpenAiKey, sessionKeyActive });
@@ -347,21 +349,31 @@ app.whenReady().then(async () => {
     const settings = await readSettings();
     return {
       openAiConfigured: Boolean(sessionOpenAiKey),
+      openAiStored: Boolean(settings.openAiVault),
       modelSetupAccepted: Boolean(settings.modelSetupAccepted),
-      sessionOnly: true,
       storageVersion: settings.schemaVersion ?? 0
       ,depthModelAvailable: depthModelAvailable()
     };
   });
-  ipcMain.handle("settings:saveOpenAiKey", async (_event, apiKey: string) => {
+  ipcMain.handle("settings:saveOpenAiKey", async (_event, apiKey: string, password: string) => {
     const normalized = apiKey.trim();
-    if (!/^sk-[A-Za-z0-9_-]{20,}$/.test(normalized)) {
-      throw new Error("Der API-Schlüssel hat kein gültiges OpenAI-Format.");
-    }
+    const vault = await encryptApiKey(normalized, password);
+    const settings = await readSettings();
+    settings.openAiVault = vault;
+    await writeSettings(settings);
     sessionOpenAiKey = normalized;
+  });
+  ipcMain.handle("settings:unlockOpenAiKey", async (_event, password: string) => {
+    const settings = await readSettings();
+    if (!settings.openAiVault) throw new Error("Es ist kein verschlüsselter OpenAI-Schlüssel gespeichert.");
+    sessionOpenAiKey = await decryptApiKey(settings.openAiVault, password);
   });
   ipcMain.handle("settings:removeOpenAiKey", async () => {
     sessionOpenAiKey = null;
+    const settings = await readSettings();
+    delete settings.openAiVault;
+    delete settings.encryptedOpenAiKey;
+    await writeSettings(settings);
   });
   ipcMain.handle("settings:acceptModelSetup", async () => {
     const settings = await readSettings();
