@@ -23,6 +23,7 @@ import { RegionEditor } from "./RegionEditor";
 import { SettingTooltip } from "./SettingTooltip";
 import { extractColorPalette } from "./domain/color-palette";
 type View = "studio" | "history" | "settings";
+type StudioTool = "home" | "image" | "text" | "prompt";
 type LegalPage = "imprint" | "privacy" | "cookies" | null;
 type SelectedImage = { path: string; name: string; size: number; width: number; height: number; suggestedProfile: "logo" | "photo"; dataUrl: string };
 type ReliefResult = Awaited<ReturnType<NonNullable<typeof window.desktop>["createRelief"]>>;
@@ -67,6 +68,7 @@ const navigation = [
 
 export function App() {
   const [view, setView] = useState<View>("studio");
+  const [studioTool, setStudioTool] = useState<StudioTool>("home");
   const [legalPage, setLegalPage] = useState<LegalPage>(null);
   const [version, setVersion] = useState("0.1.0");
   const [file, setFile] = useState<SelectedImage | null>(null);
@@ -135,6 +137,7 @@ export function App() {
         return;
       }
       applySelectedImage(selected);
+      setStudioTool("image");
     } catch (error) {
       setFileError(error instanceof Error ? error.message : "Das Bild konnte nicht geöffnet werden.");
       setUploadStatus(null);
@@ -158,6 +161,7 @@ export function App() {
     if (!window.desktop) throw new Error("Text zu STL ist nur in der installierten Desktop-App verfügbar.");
     const selected = await window.desktop.createTextImage(options);
     applySelectedImage(selected);
+    setStudioTool("text");
     setTextDialogOpen(false);
   }
 
@@ -228,7 +232,7 @@ export function App() {
         </div>
         <nav aria-label="Hauptnavigation">
           {navigation.map(({ id, label, icon: Icon }) => (
-            <button key={id} className={view === id ? "nav-item active" : "nav-item"} onClick={() => setView(id)}>
+            <button key={id} className={view === id ? "nav-item active" : "nav-item"} onClick={() => { setView(id); if (id === "studio") setStudioTool("home"); }}>
               <Icon size={19} /><span>{label}</span>
             </button>
           ))}
@@ -245,12 +249,32 @@ export function App() {
           <div className="privacy-pill"><ShieldCheck size={16} /> Verarbeitung auf deinem Mac</div>
         </header>
 
-        {view === "studio" && (
+        {view === "studio" && studioTool === "home" && (
+          <StudioHub
+            openImage={() => void selectFile()}
+            openText={() => { setStudioTool("text"); setTextDialogOpen(true); }}
+            openPrompt={() => { setStudioTool("prompt"); setAi3dDialogOpen(true); }}
+          />
+        )}
+
+        {view === "studio" && studioTool !== "home" && (
           <section className="workspace">
-            <div className="intro">
-              <h2>Vom Bild zum druckbaren Objekt.</h2>
-              <p>Lade eine klare Aufnahme hoch. AI Print Studio rekonstruiert, repariert und exportiert dein Modell lokal.</p>
+            <div className="tool-context">
+              <button onClick={() => { setStudioTool("home"); setFile(null); setPreview(null); setResult(null); }}>← Alle Werkzeuge</button>
+              <span>{studioTool === "image" ? <ImagePlus /> : studioTool === "text" ? <Type /> : <Sparkles />}{studioTool === "image" ? "Bild zu 3D" : studioTool === "text" ? "Schrift zu 3D" : "Prompt zu 3D"}</span>
             </div>
+            <div className="intro">
+              <h2>{studioTool === "text" ? "Von Schrift zum druckbaren Objekt." : studioTool === "prompt" ? "Von deiner Idee zum vollständigen 3D-Modell." : "Vom Bild zum druckbaren Objekt."}</h2>
+              <p>{studioTool === "text" ? "Gestalte saubere Schriftzüge und exportiere sie lokal als STL oder farbige 3MF." : studioTool === "prompt" ? "Beschreibe dein Objekt. Die KI optimiert die Konstruktion und erzeugt eine druckbare STL." : "Lade eine klare Aufnahme hoch. AI Print Studio rekonstruiert, repariert und exportiert dein Modell lokal."}</p>
+            </div>
+            {studioTool === "prompt" && !ai3dDialogOpen && (
+              <div className="prompt-workspace-card">
+                <Sparkles /><div><strong>KI-Modell aus einer Beschreibung</strong><p>Erstelle beispielsweise ein Haus, eine Figur oder ein Ersatzteil als vollständiges 3D-Objekt.</p></div>
+                <button className="primary-button" onClick={() => setAi3dDialogOpen(true)}>Prompt eingeben <ChevronRight /></button>
+              </div>
+            )}
+            {studioTool !== "prompt" && (
+              <>
             <div className={result ? "comparison-grid" : "comparison-grid single"}>
               <div
                 className={preview ? "upload-card has-preview" : "upload-card"}
@@ -262,7 +286,7 @@ export function App() {
                 {preview ? (
                   <><div className="panel-label">ORIGINALBILD</div><img src={preview} alt="Vorschau des ausgewählten Bildes" /><div className="file-overlay"><ImagePlus size={18} /> Bild wechseln</div></>
                 ) : (
-                  <><div className="upload-icon"><UploadCloud size={32} /></div><h3>Bild, SVG, Schrift oder Prompt in 3D umwandeln</h3><p>Lokales Relief oder vollständiges KI-Modell</p><div className="source-actions"><button className="choose-file-button" onClick={(event) => { event.stopPropagation(); void selectFile(); }}>Datei auswählen</button><button className="text-source-button" onClick={(event) => { event.stopPropagation(); setTextDialogOpen(true); }}><Type /> Schrift zu STL</button><button className="text-source-button ai" onClick={(event) => { event.stopPropagation(); setAi3dDialogOpen(true); }}><Sparkles /> Prompt zu 3D</button></div><span>Reliefs lokal · Prompt-Modelle nur nach ausdrücklichem Cloud-Start</span></>
+                  <><div className="upload-icon">{studioTool === "text" ? <Type size={32} /> : <UploadCloud size={32} />}</div><h3>{studioTool === "text" ? "Schriftzug gestalten" : "Bild oder SVG auswählen"}</h3><p>{studioTool === "text" ? "Text, Schriftart und Ausrichtung festlegen" : "PNG, JPG, WEBP oder SVG"}</p><div className="source-actions"><button className="choose-file-button" onClick={(event) => { event.stopPropagation(); if (studioTool === "text") setTextDialogOpen(true); else void selectFile(); }}>{studioTool === "text" ? "Text eingeben" : "Datei auswählen"}</button></div><span>Die Verarbeitung erfolgt vollständig lokal</span></>
                 )}
               </div>
               {result && <ReliefPreview result={result} />}
@@ -287,12 +311,17 @@ export function App() {
               />
             )}
             <div className="workflow-row" aria-label="Verarbeitungsschritte">
-              {["Bild analysieren", "3D rekonstruieren", "Mesh reparieren", "Exportieren"].map((step, index) => (
+              {[
+                studioTool === "text" ? "Schrift rendern" : "Bild analysieren",
+                studioTool === "text" ? "Konturen extrudieren" : "3D rekonstruieren",
+                "Mesh reparieren",
+                "Exportieren"
+              ].map((step, index) => (
                 <div className="workflow-step" key={step}><span>{index + 1}</span><p>{step}</p>{index < 3 && <ChevronRight size={15} />}</div>
               ))}
             </div>
             <div className="conversion-options">
-              <div className="option-group">
+              {studioTool === "image" ? <div className="option-group">
                 <div className="option-heading"><span className="option-label">ERGEBNISART</span><span className="quality-pill">Optimale Qualität automatisch aktiv</span></div>
                 <div className="mode-grid primary-modes">
                   <button className={processingMode === "auto" ? "mode-option has-tooltip selected" : "mode-option has-tooltip"} onClick={() => { setProcessingMode("auto"); if (file) setProfile(file.suggestedProfile); }} aria-description={modeTooltips.auto}>
@@ -305,7 +334,7 @@ export function App() {
                     <Box /><div><strong>Foto & 3D-Tiefe</strong><span>Lokale KI-Tiefenschätzung</span></div><SettingTooltip text={modeTooltips.depth} />
                   </button>
                 </div>
-              </div>
+              </div> : <div className="text-quality-summary"><Type /><div><strong>Saubere Schriftkonturen automatisch aktiv</strong><span>Die App verwendet die lokale Logo-Engine mit hoher Konturauflösung.</span></div></div>}
               {processingMode === "scan" ? (
                 <div className="scan-guidance">
                   <strong>So gelingt der vollständige 3D-Scan</strong>
@@ -413,6 +442,8 @@ export function App() {
                 <button className="secondary-button" onClick={() => void window.desktop?.showItemInFolder(scanResult.usdzPath)}>Im Finder zeigen</button>
               </div>
             )}
+              </>
+            )}
           </section>
         )}
 
@@ -421,9 +452,76 @@ export function App() {
 
         <Footer version={version} openLegal={setLegalPage} />
       </main>
-      {textDialogOpen && <TextToStlDialog close={() => setTextDialogOpen(false)} create={createTextSource} />}
-      {ai3dDialogOpen && <Ai3dDialog close={() => setAi3dDialogOpen(false)} />}
+      {textDialogOpen && <TextToStlDialog close={() => { setTextDialogOpen(false); if (!file) setStudioTool("home"); }} create={createTextSource} />}
+      {ai3dDialogOpen && <Ai3dDialog close={() => { setAi3dDialogOpen(false); if (studioTool === "prompt") setStudioTool("home"); }} />}
     </div>
+  );
+}
+
+function StudioHub({
+  openImage,
+  openText,
+  openPrompt
+}: {
+  openImage: () => void;
+  openText: () => void;
+  openPrompt: () => void;
+}) {
+  const tools = [
+    {
+      id: "image",
+      icon: ImagePlus,
+      eyebrow: "LOKAL · RELIEF & 3MF",
+      title: "Bild zu 3D",
+      description: "Fotos, Logos, Wappen und SVGs in druckbare Reliefs verwandeln.",
+      detail: "Konturen, Tiefenschätzung, AMS-Farben",
+      action: openImage
+    },
+    {
+      id: "text",
+      icon: Type,
+      eyebrow: "LOKAL · TYPOGRAFIE",
+      title: "Schrift zu 3D",
+      description: "Schriftzüge, Namensschilder und mehrzeilige Texte als STL gestalten.",
+      detail: "Schriftart, Höhe, Ausrichtung, Farbe",
+      action: openText
+    },
+    {
+      id: "prompt",
+      icon: Sparkles,
+      eyebrow: "KI · VOLLSTÄNDIGES OBJEKT",
+      title: "Prompt zu 3D",
+      description: "Eine Idee beschreiben und als vollständiges räumliches Modell erzeugen.",
+      detail: "OpenAI-Optimierung + Meshy-Mesh",
+      action: openPrompt
+    }
+  ];
+  return (
+    <section className="studio-hub">
+      <div className="studio-hub-heading">
+        <p className="eyebrow">DEINE 3D-WERKZEUGE</p>
+        <h2>Was möchtest du erstellen?</h2>
+        <p>Wähle den passenden Einstieg – jedes Werkzeug zeigt nur die Einstellungen, die du dafür brauchst.</p>
+      </div>
+      <div className="studio-tool-grid">
+        {tools.map(({ id, icon: Icon, eyebrow, title, description, detail, action }) => (
+          <button className={`studio-tool-card ${id}`} onClick={action} key={id}>
+            <span className="tool-card-glow" />
+            <div className="tool-card-icon"><Icon /></div>
+            <span className="tool-card-eyebrow">{eyebrow}</span>
+            <h3>{title}</h3>
+            <p>{description}</p>
+            <small>{detail}</small>
+            <strong>Öffnen <ChevronRight /></strong>
+          </button>
+        ))}
+      </div>
+      <div className="studio-hub-footer">
+        <span><ShieldCheck /> Lokale Werkzeuge bleiben auf deinem Mac</span>
+        <span><Palette /> AMS-fähiger 3MF-Export</span>
+        <span><CheckCircle2 /> Druckbarkeit wird automatisch geprüft</span>
+      </div>
+    </section>
   );
 }
 

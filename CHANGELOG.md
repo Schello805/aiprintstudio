@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.11.0
+
+- „Studio“ öffnet jetzt eine übersichtliche Werkzeug-Zentrale statt sofort alle Relief-Einstellungen anzuzeigen.
+- Drei klar getrennte Einstiege führen zu „Bild zu 3D“, „Schrift zu 3D“ und „Prompt zu 3D“.
+- Jede Werkzeugkarte erklärt Ergebnis, Verarbeitung und wichtigste Möglichkeiten vor dem Start.
+- Bild zu 3D behält Foto-, Logo-, Tiefen- und AMS-Werkzeuge in einem fokussierten Workflow.
+- Schrift zu 3D verwendet automatisch die passende Kontur-Engine und blendet ungeeignete Foto- und Tiefenmodi aus.
+- Die Prozessschritte, Überschriften und Upload-Flächen passen sich dem ausgewählten Werkzeug an.
+- Eine sichtbare Rückkehr zu „Alle Werkzeuge“ verhindert Sackgassen und macht den Wechsel zwischen Funktionen eindeutig.
+- Die neue Startzentrale wurde in Desktopbreite und kompaktem Layout visuell geprüft.
+
 ## 0.10.0
 
 - Neuer „Prompt zu 3D“-Workflow für vollständige STL-Objekte über die offizielle Meshy Text-to-3D-API.
