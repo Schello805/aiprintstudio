@@ -13,6 +13,7 @@
     "lint": "eslint . --max-warnings 0",
     "verify": "npm run lint && npm run test && npm run build",
     "build:depth-worker": "zsh scripts/build-depth-worker.sh",
+    "smoke:depth-worker": "node scripts/smoke-depth-worker.mjs",
     "dist": "npm run build && npm run build:depth-worker && electron-builder --mac dmg --publish never",
     "revision": "node scripts/revision.mjs"
   },
