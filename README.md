@@ -9,7 +9,7 @@ CAD-Pläne und Mesh-Dateien bleiben standardmäßig auf dem eigenen Mac.
 
 [![Quality](https://github.com/Schello805/aiprintstudio/actions/workflows/quality.yml/badge.svg)](https://github.com/Schello805/aiprintstudio/actions/workflows/quality.yml)
 
-> Aktueller Stand: Version 0.14.3. Bild- und Schrift-Reliefs, mehrfarbige
+> Aktueller Stand: Version 0.15.0. Bild- und Schrift-Reliefs, mehrfarbige
 > AMS-3MF-Dateien sowie einfache, per OpenAI geplante und lokal konstruierte
 > Prompt-zu-3D-Modelle sind testbar. Die vollständige Rundum-Rekonstruktion aus
 > einem einzelnen Bild bleibt eine spätere Ausbaustufe.
@@ -235,6 +235,14 @@ Release-Tags verwenden das Format `vMAJOR.MINOR.PATCH`. Der Release-Workflow
 ARM64-DMG im zugehörigen GitHub Release.
 
 Projekt-Repository: <https://github.com/Schello805/aiprintstudio>
+
+Die App enthält unter **Über & Technik** eine verständliche Übersicht über
+Arbeitswege, Verarbeitung, Frameworks, lokale KI-Modelle, Datenschutz und
+technische Grenzen. Für eine spätere kommerzielle Veröffentlichung enthält
+[docs/APP_STORE_CHECKLIST.md](docs/APP_STORE_CHECKLIST.md) die noch offenen
+rechtlichen und technischen Punkte. Insbesondere sind das aktuelle
+Impressums-Platzhalterfeld und der bestehende DMG-Build noch nicht für eine
+Mac-App-Store-Veröffentlichung freigegeben.
 
 ## Datenschutz und Sicherheit
 

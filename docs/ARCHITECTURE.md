@@ -102,3 +102,12 @@ getrennte Einstiege mit gemeinsam genutzter Vorschau-, Parameter-, Prüf- und
 Exportlogik. Neue Workflows sollen diesen Aufbau beibehalten.
 Benutzerverwaltung, Telemetrie und Serverbetrieb gehören bewusst nicht zur
 lokalen Desktop-Anwendung.
+
+## Transparenz in der App
+
+Der Hauptmenüpunkt **Über & Technik** erklärt die drei Arbeitswege, die
+Verarbeitungspipeline, verwendete Frameworks und Modelle sowie Datenschutz und
+fachliche Grenzen. Die Inhalte werden bewusst aus Anwendersicht formuliert,
+damit lokale Verarbeitung und optionale OpenAI-Übertragung unterscheidbar
+bleiben. Die vorbereitende Checkliste für eine Store-Veröffentlichung steht in
+[APP_STORE_CHECKLIST.md](APP_STORE_CHECKLIST.md).

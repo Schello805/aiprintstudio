@@ -10,6 +10,7 @@ import {
   Github,
   History,
   ImagePlus,
+  Info,
   Layers3,
   Palette,
   Settings2,
@@ -23,7 +24,7 @@ import { RegionEditor } from "./RegionEditor";
 import { SettingTooltip } from "./SettingTooltip";
 import { extractColorPalette } from "./domain/color-palette";
 import appLogoMark from "../build/icon-mark.png";
-type View = "studio" | "history" | "settings";
+type View = "studio" | "history" | "settings" | "info";
 type StudioTool = "home" | "image" | "text" | "prompt";
 type LegalPage = "imprint" | "privacy" | "cookies" | null;
 type SelectedImage = { path: string; name: string; size: number; width: number; height: number; suggestedProfile: "logo" | "photo"; dataUrl: string };
@@ -67,7 +68,8 @@ const parameterTooltips = {
 const navigation = [
   { id: "studio" as const, label: "Studio", icon: Sparkles },
   { id: "history" as const, label: "Verlauf", icon: History },
-  { id: "settings" as const, label: "Einstellungen", icon: Settings2 }
+  { id: "settings" as const, label: "Einstellungen", icon: Settings2 },
+  { id: "info" as const, label: "Über & Technik", icon: Info }
 ];
 
 export function App() {
@@ -262,7 +264,7 @@ export function App() {
 
       <main>
         <header className="topbar">
-          <div><p className="eyebrow">LOKALE 3D-WERKSTATT</p><h1>{view === "studio" ? "Neues Modell" : view === "history" ? "Verlauf" : "Einstellungen"}</h1></div>
+          <div><p className="eyebrow">LOKALE 3D-WERKSTATT</p><h1>{view === "studio" ? "Neues Modell" : view === "history" ? "Verlauf" : view === "settings" ? "Einstellungen" : "Über & Technik"}</h1></div>
           <div className="privacy-pill"><ShieldCheck size={16} /> Verarbeitung auf deinem Mac</div>
         </header>
 
@@ -465,12 +467,86 @@ export function App() {
 
         {view === "history" && (history.length ? <HistoryView entries={history} clear={() => { setHistory([]); localStorage.removeItem("ai-print-studio-history"); }} /> : <EmptyState icon={Clock3} title="Noch keine Modelle" text="Fertige Modelle erscheinen nach der ersten Umwandlung hier." />)}
         {view === "settings" && <Settings />}
+        {view === "info" && <InfoView version={version} />}
 
         <Footer version={version} openLegal={setLegalPage} />
       </main>
       {textDialogOpen && <TextToStlDialog close={() => { setTextDialogOpen(false); if (!file) setStudioTool("home"); }} create={createTextSource} />}
       {ai3dDialogOpen && <Ai3dDialog close={() => { setAi3dDialogOpen(false); if (studioTool === "prompt") setStudioTool("home"); }} />}
     </div>
+  );
+}
+
+function InfoView({ version }: { version: string }) {
+  const technologies = [
+    ["Desktop-App", "Electron", "Fenster, sichere IPC-Brücke, Dateien und lokale Prozesse", "MIT"],
+    ["Oberfläche", "React · TypeScript · Vite", "Studio, Editor und Zustandsverwaltung", "MIT"],
+    ["3D-Vorschau", "Three.js · React Three Fiber · Drei", "Dreh- und zoombare Mesh-Vorschau", "MIT"],
+    ["Bildverarbeitung", "Sharp", "Rasterung, Masken, Höhenkarten und Farbanalyse", "Apache-2.0"],
+    ["Lokale Foto-Tiefe", "Depth Anything V2 Small · Core ML", "Monokulare Tiefenschätzung auf Apple Silicon", "Apache-2.0"],
+    ["Mehrfoto-Scan", "Apple RealityKit Object Capture", "Photogrammetrie aus 12–300 Bildern", "Apple SDK"],
+    ["Prompt zu 3D", "OpenAI Responses API · Structured Outputs", "Validierter CAD-Bauplan; Geometrie entsteht lokal", "optional"],
+    ["3MF-Verpackung", "JSZip", "Mehrfarbige 3MF-Archive und Slicer-Metadaten", "MIT/GPL-3.0+"]
+  ];
+  return (
+    <section className="info-view">
+      <div className="info-hero">
+        <div className="info-hero-icon"><Info /></div>
+        <div><p className="eyebrow">AI PRINT STUDIO · VERSION {version}</p><h2>So wird aus einer Idee ein druckbares Modell</h2><p>Die App kombiniert lokale Bildanalyse, deterministischen Meshaufbau und optionale KI-Planung. Bilder, Geometrie und Exporte bleiben grundsätzlich auf deinem Mac.</p></div>
+      </div>
+
+      <div className="info-section">
+        <div className="info-heading"><span>01</span><div><h3>Die drei Arbeitswege</h3><p>Welcher Teil lokal läuft und wann ein externer Dienst beteiligt ist.</p></div></div>
+        <div className="info-flow-grid">
+          <article><ImagePlus /><h4>Bild zu 3D</h4><p>Das Bild wird lokal validiert, gerastert und in Motivmaske, Höhenwerte und optional AMS-Farben zerlegt. Daraus entsteht ein geschlossenes Reliefmesh.</p><strong>Vollständig lokal</strong></article>
+          <article><Type /><h4>Schrift zu 3D</h4><p>Die Schrift wird lokal gerendert, konturiert, extrudiert und durch dieselbe Druckbarkeits- und Exportpipeline geführt.</p><strong>Vollständig lokal</strong></article>
+          <article><Sparkles /><h4>Prompt zu 3D</h4><p>Nur Beschreibung und bei Änderungen der aktuelle CAD-Bauplan gehen an OpenAI. Die Antwort wird streng validiert; STL und Vorschau erzeugt die App lokal.</p><strong>OpenAI optional</strong></article>
+        </div>
+      </div>
+
+      <div className="info-section">
+        <div className="info-heading"><span>02</span><div><h3>Verarbeitungspipeline</h3><p>Die Ausgabe wird nicht einfach aus einem Bild „kopiert“, sondern schrittweise konstruiert.</p></div></div>
+        <ol className="pipeline-list">
+          <li><span>1</span><div><strong>Eingabe prüfen</strong><p>Format, Größe, Pixelabmessungen und Transparenz werden validiert.</p></div></li>
+          <li><span>2</span><div><strong>Motiv verstehen</strong><p>Konturen, Flächen, Helligkeit, Tiefe oder Fotoserie werden passend zum Werkzeug analysiert.</p></div></li>
+          <li><span>3</span><div><strong>Geometrie aufbauen</strong><p>Die App erzeugt Höhen, Grundplatte, geglättete Außenkontur und geschlossene Seitenflächen.</p></div></li>
+          <li><span>4</span><div><strong>Druckbarkeit prüfen</strong><p>Zusammenhalt, Mindestbreiten, Steigungen, Dreiecksmenge und Materialvolumen fließen in den Druckscore ein.</p></div></li>
+          <li><span>5</span><div><strong>Exportieren</strong><p>STL für einfarbige Modelle, 3MF für AMS-Farben und USDZ für Mehrfoto-Scans.</p></div></li>
+        </ol>
+      </div>
+
+      <div className="info-section">
+        <div className="info-heading"><span>03</span><div><h3>Frameworks, Modelle und Werkzeuge</h3><p>Die wichtigsten technischen Bausteine dieses Builds.</p></div></div>
+        <div className="technology-table">
+          {technologies.map(([area, name, purpose, license]) => <div key={area}><strong>{area}</strong><span>{name}</span><p>{purpose}</p><small>{license}</small></div>)}
+        </div>
+      </div>
+
+      <div className="info-section info-split">
+        <div>
+          <div className="info-heading"><span>04</span><div><h3>Datenschutz</h3><p>Klare Trennung zwischen lokalen und externen Vorgängen.</p></div></div>
+          <ul className="info-checklist">
+            <li><CheckCircle2 /> Kein Benutzerkonto und keine Werbe- oder Analyse-Tracker</li>
+            <li><CheckCircle2 /> Bilder, Meshes, Höhenkarten und Exporte bleiben lokal</li>
+            <li><CheckCircle2 /> OpenAI nur nach bewusst gestarteter Prompt-zu-3D-Aktion</li>
+            <li><CheckCircle2 /> API-Key lokal mit App-Passwort, scrypt und AES-256-GCM geschützt</li>
+          </ul>
+        </div>
+        <div>
+          <div className="info-heading"><span>05</span><div><h3>Grenzen</h3><p>Was die Ergebnisse beeinflusst.</p></div></div>
+          <ul className="info-checklist neutral">
+            <li><Info /> Ein einzelnes Bild liefert keine echte Rückseiteninformation</li>
+            <li><Info /> Reliefs sind kontrollierte 2,5D-Modelle, keine vollständigen Scans</li>
+            <li><Info /> Prompt zu 3D nutzt bewusst einfache, druckbare CAD-Grundkörper</li>
+            <li><Info /> Vor dem Druck sollte jedes Modell im Slicer kontrolliert werden</li>
+          </ul>
+        </div>
+      </div>
+
+      <div className="info-legal-note">
+        <ShieldCheck /><div><strong>Lizenzen und rechtliche Hinweise</strong><p>Open-Source-Komponenten behalten ihre jeweiligen Lizenzen. Depth Anything V2 Small ist als Apache-2.0-Modell gekennzeichnet. Apple-, OpenAI-, Bambu- und Anycubic-Namen dienen nur der Beschreibung kompatibler Technologien; eine Partnerschaft wird nicht behauptet.</p></div>
+      </div>
+    </section>
   );
 }
 

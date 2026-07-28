@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.15.0
+
+- Der neue Hauptmenüpunkt **Über & Technik** erklärt Bild-, Schrift- und
+  Prompt-Workflows sowie die fünfstufige Verarbeitungspipeline.
+- Eine technische Übersicht nennt die tatsächlich verwendeten Frameworks,
+  Modelle, Werkzeuge und Lizenzen.
+- Datenschutz, lokale Verarbeitung, optionale OpenAI-Nutzung und fachliche
+  Grenzen werden direkt in der App verständlich beschrieben.
+- Eine separate Mac-App-Store-Checkliste dokumentiert rechtliche Pflichtfelder,
+  Datenschutz, EU-Händlerstatus, Verschlüsselung und technische Store-Arbeiten.
+
 ## 0.14.3
 
 - Beim Wechsel zwischen Studio, Verlauf und Einstellungen bleiben Bild,
