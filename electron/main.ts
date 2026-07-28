@@ -177,6 +177,7 @@ function createWindow(): void {
     minWidth: 1040,
     minHeight: 720,
     titleBarStyle: "hiddenInset",
+    trafficLightPosition: { x: 16, y: 18 },
     backgroundColor: "#090b10",
     webPreferences: {
       preload: preloadPath,

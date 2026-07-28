@@ -158,6 +158,7 @@ export function App() {
 
   return (
     <div className="app-shell">
+      <div className="window-titlebar" aria-hidden="true" />
       <aside className="sidebar">
         <div className="brand">
           <div className="brand-mark"><Layers3 size={22} /></div>

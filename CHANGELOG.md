@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.4
+
+- Eigene schwarze macOS-Titelleiste als geschützter Bereich für die Fensterknöpfe
+- Sidebar und Hauptinhalt beginnen vollständig unterhalb der Titelleiste
+- Fensterknöpfe werden innerhalb des neuen Titelbereichs sauber ausgerichtet
+
 ## 0.6.3
 
 - Sofort sichtbare Tooltips für alle Verarbeitungsarten, Qualitätsprofile und Reliefparameter

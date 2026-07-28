@@ -4,7 +4,8 @@
 * { box-sizing: border-box; }
 body { margin: 0; min-width: 1040px; min-height: 100vh; background: radial-gradient(circle at 70% 0%, #151a28 0, #090b10 38%); }
 button { font: inherit; }
-.app-shell { min-height: 100vh; display: grid; grid-template-columns: 232px 1fr; }
+.app-shell { min-height: 100vh; padding-top:36px; display: grid; grid-template-columns: 232px 1fr; }
+.window-titlebar { position:fixed; z-index:100; inset:0 0 auto; height:36px; border-bottom:1px solid #171b22; background:#05070a; -webkit-app-region:drag; user-select:none; }
 .sidebar { border-right: 1px solid #20242d; background: rgba(10,12,17,.94); padding: 46px 18px 24px; display: flex; flex-direction: column; }
 .brand { display: flex; align-items: center; gap: 11px; padding: 0 10px 38px; }
 .brand-mark { width: 39px; height: 39px; display: grid; place-items: center; border-radius: 11px; color: #10131b; background: linear-gradient(145deg,#b9ff65,#69e891); box-shadow: 0 8px 28px #83f27a25; }
