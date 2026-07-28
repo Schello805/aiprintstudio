@@ -302,6 +302,24 @@ describe("relief mesh", () => {
     expect(preview.indices.length).toBeGreaterThan(0);
   });
 
+  it("keeps the full logo resolution in the preview for smooth round edges", () => {
+    const columns = 512, rows = 512;
+    const heights = Array(columns * rows).fill(5.6);
+    const preview = reliefInternals.buildPreviewSurface(
+      columns,
+      rows,
+      100,
+      100,
+      heights,
+      Array((columns - 1) * (rows - 1)).fill(true),
+      undefined,
+      [],
+      0,
+      true
+    );
+    expect(preview.positions).toHaveLength(columns * rows * 3);
+  });
+
   it("uses a manually edited heightmap without renormalizing its levels", async () => {
     const directory = await mkdtemp(join(tmpdir(), "ai-print-editor-test-"));
     try {

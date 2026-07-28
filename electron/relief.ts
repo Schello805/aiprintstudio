@@ -878,7 +878,12 @@ function buildPreviewSurface(
 ): { positions: number[]; indices: number[]; colorParts: Array<{ color: string; indices: number[] }> } {
   // Die Vorschau darf die geglättete Exportkontur nicht durch erneutes grobes
   // Downsampling wieder gezackt darstellen.
-  const stride = Math.max(1, Math.ceil(Math.max(columns, rows) / 480));
+  // Logo-Modelle werden mit bis zu 512 Rasterpunkten erzeugt. Die frühere
+  // Vorschaugrenze von 480 setzte solche Modelle trotzdem auf ungefähr die
+  // halbe Auflösung zurück (stride 2). Besonders an runden Außenkonturen waren
+  // dadurch deutlich sichtbare Polygonsegmente zu sehen, obwohl der Export
+  // feiner war. Bis 720 Punkte bleibt die Originalauflösung jetzt erhalten.
+  const stride = Math.max(1, Math.ceil(Math.max(columns, rows) / 720));
   const xs = Array.from(new Set([...Array(Math.ceil((columns - 1) / stride) + 1)].map((_, i) => Math.min(i * stride, columns - 1))));
   const ys = Array.from(new Set([...Array(Math.ceil((rows - 1) / stride) + 1)].map((_, i) => Math.min(i * stride, rows - 1))));
   const previewColumns = xs.length;

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.15.1
+
+- Die 3D-Vorschau behält bei Logo-Modellen die volle Rasterauflösung bei,
+  sodass Rundungen nicht erneut durch Vorschau-Downsampling kantig werden.
+- Sidebar und macOS-Titelleiste bleiben auf allen Hauptseiten fixiert; nur der
+  rechte Inhaltsbereich scrollt.
+- Ein Regressionstest schützt die hochauflösende Logo-Vorschau.
+
 ## 0.15.0
 
 - Der neue Hauptmenüpunkt **Über & Technik** erklärt Bild-, Schrift- und
