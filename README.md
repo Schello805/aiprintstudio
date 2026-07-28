@@ -1,4 +1,6 @@
 # AI Print Studio
+<img width="150" height="150" alt="Logo Print Studio" src="https://github.com/user-attachments/assets/9a3b6726-66cc-47cd-8208-f1ca2907b1d5" />
+
 
 AI Print Studio ist eine lokale macOS-Anwendung für druckbare 3D-Modelle aus
 Bildern, Schrift und natürlichsprachlichen Beschreibungen. Die erste
