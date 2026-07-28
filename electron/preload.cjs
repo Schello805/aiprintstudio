@@ -9,7 +9,7 @@ contextBridge.exposeInMainWorld("desktop", Object.freeze({
   acceptModelSetup: () => ipcRenderer.invoke("settings:acceptModelSetup"),
   selectImage: () => ipcRenderer.invoke("image:select"),
   createObjectCapture: () => ipcRenderer.invoke("objectCapture:create"),
-  createRelief: (imagePath, options) => ipcRenderer.invoke("relief:create", imagePath, options),
+  createRelief: (imagePath, options, editorHeightmapDataUrl) => ipcRenderer.invoke("relief:create", imagePath, options, editorHeightmapDataUrl),
   showItemInFolder: (path) => ipcRenderer.invoke("shell:showItem", path),
   openExternal: (url) => ipcRenderer.invoke("shell:openExternal", url)
 }));

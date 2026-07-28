@@ -1,4 +1,9 @@
 import { describe, expect, it } from "vitest";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import sharp from "sharp";
+import { createRelief } from "./relief";
 import { reliefInternals } from "./relief";
 
 describe("relief mesh", () => {
@@ -127,5 +132,30 @@ describe("relief mesh", () => {
     expect(corner).toBeDefined();
     expect(corner?.[0]).not.toBeCloseTo(10);
     expect(corner?.[1]).not.toBeCloseTo(0);
+  });
+
+  it("uses a manually edited heightmap without renormalizing its levels", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "ai-print-editor-test-"));
+    try {
+      const imagePath = join(directory, "source.png");
+      const mapPath = join(directory, "edited.png");
+      const source = Buffer.alloc(32 * 32 * 4);
+      for (let y = 2; y < 30; y += 1) for (let x = 2; x < 30; x += 1) {
+        const offset = (y * 32 + x) * 4;
+        source[offset] = 230; source[offset + 1] = 40; source[offset + 2] = 40; source[offset + 3] = 255;
+      }
+      await writeFile(imagePath, await sharp(source, { raw: { width: 32, height: 32, channels: 4 } }).png().toBuffer());
+      const values = Buffer.from(Array.from({ length: 32 * 32 }, (_, index) => index % 32 < 16 ? 64 : 192));
+      await writeFile(mapPath, await sharp(values, { raw: { width: 32, height: 32, channels: 1 } }).png().toBuffer());
+      const result = await createRelief(imagePath, directory, {
+        widthMm: 40, baseMm: 1.6, reliefMm: 4, resolution: 32, invert: false,
+        profile: "logo", smoothing: 5, detail: 2, processingMode: "height"
+      }, mapPath, true);
+      const rendered = await sharp(Buffer.from(result.heightmapDataUrl.split(",")[1], "base64")).raw().toBuffer();
+      expect(rendered[16 * 32 + 8]).toBe(64);
+      expect(rendered[16 * 32 + 24]).toBe(192);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
   });
 });

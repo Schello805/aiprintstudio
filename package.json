@@ -1,6 +1,6 @@
 {
   "name": "ai-print-studio",
-  "version": "0.6.4",
+  "version": "0.7.0",
   "description": "Lokale Bild-zu-3D-Desktop-App für Apple Silicon",
   "author": "Michael Schellenberger",
   "license": "SEE LICENSE IN LICENSE.md",
@@ -13,8 +13,9 @@
     "lint": "eslint . --max-warnings 0",
     "verify": "npm run lint && npm run test && npm run build",
     "build:depth-worker": "zsh scripts/build-depth-worker.sh",
+    "build:dmg-background": "node scripts/build-dmg-background.mjs",
     "smoke:depth-worker": "node scripts/smoke-depth-worker.mjs",
-    "dist": "npm run build && npm run build:depth-worker && electron-builder --mac dmg --publish never",
+    "dist": "npm run build && npm run build:depth-worker && npm run build:dmg-background && electron-builder --mac dmg --publish never",
     "revision": "node scripts/revision.mjs"
   },
   "dependencies": {
@@ -86,6 +87,29 @@
         }
       ],
       "artifactName": "${productName}-${version}-mac-${arch}.${ext}"
+    },
+    "dmg": {
+      "title": "AI Print Studio ${version}",
+      "background": "build/background.png",
+      "iconSize": 92,
+      "iconTextSize": 12,
+      "window": {
+        "width": 640,
+        "height": 420
+      },
+      "contents": [
+        {
+          "x": 170,
+          "y": 245,
+          "type": "file"
+        },
+        {
+          "x": 470,
+          "y": 245,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
     }
   }
 }

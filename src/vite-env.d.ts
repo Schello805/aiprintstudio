@@ -34,7 +34,7 @@ interface Window {
       smoothing: number;
       detail: number;
       processingMode: "auto" | "vector" | "depth" | "height";
-    }) => Promise<{
+    }, editorHeightmapDataUrl?: string) => Promise<{
       stlPath: string;
       threeMfPath: string;
       vertexCount: number;

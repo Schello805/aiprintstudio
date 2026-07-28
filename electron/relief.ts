@@ -58,7 +58,8 @@ export async function createRelief(
   imagePath: string,
   outputDirectory: string,
   requested: Partial<ReliefOptions> = {},
-  depthMapPath?: string
+  depthMapPath?: string,
+  editorHeightmap = false
 ): Promise<ReliefResult> {
   const options = validateOptions({ ...safeDefaults, ...requested });
   const metadata = await sharp(imagePath).metadata();
@@ -84,6 +85,13 @@ export async function createRelief(
   let rawLevels: number[];
   if (activeMode === "vector") {
     rawLevels = buildVectorLevels(rgba, subjectPixels, gridWidth, gridHeight, options.invert);
+  } else if (editorHeightmap && depthMapPath) {
+    const { data } = await sharp(depthMapPath)
+      .resize(gridWidth, gridHeight, { fit: "fill" })
+      .grayscale()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    rawLevels = Array.from(data, (value) => value / 255);
   } else {
     const source = depthMapPath ? sharp(depthMapPath) : prepared.clone().flatten({ background: "#ffffff" }).grayscale();
     const { data } = await source
@@ -98,11 +106,11 @@ export async function createRelief(
       return Math.max(0, Math.min(1, (Math.pow(normalized, profile.gamma) - 0.5) * profile.contrast + 0.5));
     });
   }
-  const smoothed = smoothHeightField(rawLevels, gridWidth, gridHeight, activeMode === "vector" ? Math.min(1, options.smoothing) : options.smoothing);
-  const detailed = smoothed.map((value, index) =>
+  const smoothed = editorHeightmap ? rawLevels : smoothHeightField(rawLevels, gridWidth, gridHeight, activeMode === "vector" ? Math.min(1, options.smoothing) : options.smoothing);
+  const detailed = editorHeightmap ? smoothed : smoothed.map((value, index) =>
     Math.max(0, Math.min(1, value + (rawLevels[index] - value) * options.detail * profile.detail))
   );
-  const profiledLevels = profile.steps ? detailed.map((value) => Math.round(value * profile.steps) / profile.steps) : detailed;
+  const profiledLevels = !editorHeightmap && profile.steps ? detailed.map((value) => Math.round(value * profile.steps) / profile.steps) : detailed;
   // Eine flache Konturzone verhindert, dass antialiaste Randpixel als hohe,
   // sägezahnartige Außenwand im Mesh erscheinen.
   const levels = applyBoundaryRim(profiledLevels, subjectPixels, gridWidth, gridHeight, options.profile === "logo" ? 2 : 1);

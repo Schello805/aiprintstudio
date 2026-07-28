@@ -4,12 +4,13 @@ import { validateImageFile } from "./image-validation";
 describe("validateImageFile", () => {
   it("accepts a supported image within the size limit", () => {
     expect(validateImageFile({ type: "image/png", size: 1024 })).toEqual({ valid: true });
+    expect(validateImageFile({ type: "image/svg+xml", size: 1024 })).toEqual({ valid: true });
   });
 
   it("rejects unsupported formats", () => {
-    expect(validateImageFile({ type: "image/svg+xml", size: 1024 })).toEqual({
+    expect(validateImageFile({ type: "image/gif", size: 1024 })).toEqual({
       valid: false,
-      message: "Bitte verwende ein PNG-, JPG- oder WEBP-Bild."
+      message: "Bitte verwende ein PNG-, JPG-, WEBP- oder SVG-Bild."
     });
   });
 

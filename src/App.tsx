@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Canvas } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
@@ -17,6 +17,7 @@ import {
   UploadCloud,
   X
 } from "lucide-react";
+import { RegionEditor } from "./RegionEditor";
 type View = "studio" | "history" | "settings";
 type LegalPage = "imprint" | "privacy" | "cookies" | null;
 type SelectedImage = { path: string; name: string; size: number; width: number; height: number; suggestedProfile: "logo" | "photo"; dataUrl: string };
@@ -78,6 +79,8 @@ export function App() {
   const [smoothing, setSmoothing] = useState(2);
   const [detail, setDetail] = useState(1);
   const [processingMode, setProcessingMode] = useState<ProcessingMode>("auto");
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [editorHeightmap, setEditorHeightmap] = useState<string | null>(null);
   const [scanResult, setScanResult] = useState<{ usdzPath: string; photoCount: number } | null>(null);
   const [history, setHistory] = useState<HistoryEntry[]>(() => {
     try { return JSON.parse(localStorage.getItem("ai-print-studio-history") ?? "[]") as HistoryEntry[]; }
@@ -105,6 +108,8 @@ export function App() {
       setPreview(selected.dataUrl);
       setProfile(selected.suggestedProfile);
       setResult(null);
+      setEditorOpen(false);
+      setEditorHeightmap(null);
       setUploadStatus(`${selected.width} × ${selected.height} Pixel geladen · Profil „${selected.suggestedProfile === "logo" ? "Logo" : "Foto"}“ empfohlen.`);
     } catch (error) {
       setFileError(error instanceof Error ? error.message : "Das Bild konnte nicht geöffnet werden.");
@@ -122,7 +127,7 @@ export function App() {
         resolution: profileOptions.find((option) => option.id === profile)?.resolution ?? 256,
         invert: raiseLightAreas, profile, smoothing, detail,
         processingMode: processingMode === "scan" ? "auto" : processingMode
-      });
+      }, editorHeightmap ?? undefined);
       if (next) {
         setResult(next);
         const entry: HistoryEntry = {
@@ -151,6 +156,8 @@ export function App() {
       setFileError(error instanceof Error ? error.message : "Der Mehrfoto-Scan konnte nicht erstellt werden.");
     } finally { setBusy(false); }
   }
+
+  const updateEditorHeightmap = useCallback((dataUrl: string | null) => setEditorHeightmap(dataUrl), []);
 
   if (legalPage) {
     return <LegalView page={legalPage} onClose={() => setLegalPage(null)} version={version} />;
@@ -200,13 +207,22 @@ export function App() {
                 {preview ? (
                   <><div className="panel-label">ORIGINALBILD</div><img src={preview} alt="Vorschau des ausgewählten Bildes" /><div className="file-overlay"><ImagePlus size={18} /> Bild wechseln</div></>
                 ) : (
-                  <><div className="upload-icon"><UploadCloud size={32} /></div><h3>Bild für dein Relief auswählen</h3><p>PNG, JPG oder WEBP · maximal 25 MB</p><button className="choose-file-button" onClick={(event) => { event.stopPropagation(); void selectFile(); }}>Bild auswählen</button><span>Die Datei wird ausschließlich lokal gelesen</span></>
+                  <><div className="upload-icon"><UploadCloud size={32} /></div><h3>Bild oder SVG für dein Relief auswählen</h3><p>PNG, JPG, WEBP oder SVG · maximal 25 MB</p><button className="choose-file-button" onClick={(event) => { event.stopPropagation(); void selectFile(); }}>Datei auswählen</button><span>Die Datei wird ausschließlich lokal gelesen</span></>
                 )}
               </div>
               {result && <ReliefPreview result={result} />}
             </div>
             {fileError && <div className="error-banner" role="alert"><strong>Verarbeitung fehlgeschlagen</strong><span>{fileError}</span><button onClick={() => setFileError(null)} aria-label="Fehlermeldung schließen"><X /></button></div>}
             {uploadStatus && !fileError && <div className="upload-status"><CheckCircle2 /> {uploadStatus}</div>}
+            {file && !editorOpen && (
+              <button className={editorHeightmap ? "editor-launch active" : "editor-launch"} onClick={() => setEditorOpen(true)}>
+                <Layers3 /> {editorHeightmap ? "Flächenkorrekturen weiter bearbeiten" : "Motivbereiche manuell korrigieren"}
+                {editorHeightmap && <span>Aktiv</span>}
+              </button>
+            )}
+            {file && preview && editorOpen && (
+              <RegionEditor imageUrl={preview} reliefMm={reliefMm} onHeightmapChange={updateEditorHeightmap} onClose={() => setEditorOpen(false)} />
+            )}
             <div className="workflow-row" aria-label="Verarbeitungsschritte">
               {["Bild analysieren", "3D rekonstruieren", "Mesh reparieren", "Exportieren"].map((step, index) => (
                 <div className="workflow-step" key={step}><span>{index + 1}</span><p>{step}</p>{index < 3 && <ChevronRight size={15} />}</div>

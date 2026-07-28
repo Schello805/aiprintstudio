@@ -283,7 +283,7 @@ app.whenReady().then(async () => {
     const result = await dialog.showOpenDialog({
       title: "Bild für das 3D-Modell auswählen",
       properties: ["openFile"],
-      filters: [{ name: "Bilder", extensions: ["png", "jpg", "jpeg", "webp"] }]
+      filters: [{ name: "Bilder und Vektorgrafiken", extensions: ["png", "jpg", "jpeg", "webp", "svg"] }]
     });
     if (result.canceled || !result.filePaths[0]) return null;
     const path = result.filePaths[0];
@@ -299,10 +299,10 @@ app.whenReady().then(async () => {
     try {
       metadata = await sharp(bytes).metadata();
     } catch {
-      throw new Error("Die Datei ist kein lesbares PNG-, JPG- oder WEBP-Bild oder sie ist beschädigt.");
+      throw new Error("Die Datei ist kein lesbares PNG-, JPG-, WEBP- oder SVG-Bild oder sie ist beschädigt.");
     }
-    if (!["png", "jpeg", "webp"].includes(metadata.format ?? "")) {
-      throw new Error(`Das Bildformat „${metadata.format ?? "unbekannt"}“ wird nicht unterstützt. Erlaubt sind PNG, JPG und WEBP.`);
+    if (!["png", "jpeg", "webp", "svg"].includes(metadata.format ?? "")) {
+      throw new Error(`Das Bildformat „${metadata.format ?? "unbekannt"}“ wird nicht unterstützt. Erlaubt sind PNG, JPG, WEBP und SVG.`);
     }
     if (!metadata.width || !metadata.height || metadata.width < 32 || metadata.height < 32) {
       throw new Error("Das Bild muss mindestens 32 × 32 Pixel groß sein.");
@@ -322,7 +322,8 @@ app.whenReady().then(async () => {
     }
     const suggestedProfile = quantizedColors.size <= 160 ? "logo" : "photo";
     const extension = path.toLowerCase().split(".").pop();
-    const mime = extension === "png" ? "image/png" : extension === "webp" ? "image/webp" : "image/jpeg";
+    const previewBytes = extension === "svg" ? await sharp(bytes).png().toBuffer() : bytes;
+    const mime = extension === "png" || extension === "svg" ? "image/png" : extension === "webp" ? "image/webp" : "image/jpeg";
     return {
       path,
       name: basename(path),
@@ -330,7 +331,7 @@ app.whenReady().then(async () => {
       width: metadata.width,
       height: metadata.height,
       suggestedProfile,
-      dataUrl: `data:${mime};base64,${bytes.toString("base64")}`
+      dataUrl: `data:${mime};base64,${previewBytes.toString("base64")}`
     };
   });
   ipcMain.handle("objectCapture:create", async () => {
@@ -360,17 +361,32 @@ app.whenReady().then(async () => {
       await rm(workspace, { recursive: true, force: true });
     }
   });
-  ipcMain.handle("relief:create", async (_event, imagePath: string, options: Partial<ReliefOptions>) => {
+  ipcMain.handle("relief:create", async (_event, imagePath: string, options: Partial<ReliefOptions>, editorHeightmapDataUrl?: string) => {
     const outputDirectory = join(app.getPath("downloads"), "AI Print Studio");
     let depthMap: Awaited<ReturnType<typeof createDepthMap>> | undefined;
+    let editorDirectory: string | undefined;
     try {
-      if (options.processingMode === "depth") depthMap = await createDepthMap(imagePath);
-      return await createRelief(imagePath, outputDirectory, options, depthMap?.path);
+      let mapPath: string | undefined;
+      if (editorHeightmapDataUrl) {
+        const match = /^data:image\/png;base64,([A-Za-z0-9+/=]+)$/.exec(editorHeightmapDataUrl);
+        if (!match) throw new Error("Die bearbeitete Höhenkarte besitzt ein ungültiges Format.");
+        const bytes = Buffer.from(match[1], "base64");
+        if (!bytes.length || bytes.length > 12 * 1024 * 1024) throw new Error("Die bearbeitete Höhenkarte ist leer oder zu groß.");
+        editorDirectory = await mkdtemp(join(tmpdir(), "ai-print-editor-"));
+        mapPath = join(editorDirectory, "heightmap.png");
+        await writeFile(mapPath, bytes);
+      } else if (options.processingMode === "depth") {
+        depthMap = await createDepthMap(imagePath);
+        mapPath = depthMap.path;
+      }
+      const effectiveOptions = editorHeightmapDataUrl ? { ...options, processingMode: "height" as const } : options;
+      return await createRelief(imagePath, outputDirectory, effectiveOptions, mapPath, Boolean(editorHeightmapDataUrl));
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unbekannter Exportfehler";
       throw new Error(`Das Relief konnte nicht unter „${outputDirectory}“ gespeichert werden: ${message}`);
     } finally {
       await depthMap?.cleanup();
+      if (editorDirectory) await rm(editorDirectory, { recursive: true, force: true });
     }
   });
   ipcMain.handle("shell:showItem", (_event, path: string) => shell.showItemInFolder(path));

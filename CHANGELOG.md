@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.7.0
+
+- Neuer interaktiver Flächeneditor für Logos, Wappen und andere flächige Motive
+- Sichtbare grüne Auswahl mit Umschalt-Mehrfachauswahl, angrenzender Erweiterung, Reduktion, Farbauswahl und Umkehrung
+- Höhenwerkzeuge zum Anheben, Absenken, Glätten, Abrunden und Zurücksetzen auf die Grundfläche
+- Rückgängig/Wiederholen und direkte 3D-Vorschau während der Bearbeitung
+- Manuelle Höhenkarten werden ohne erneute Normalisierung an STL und 3MF übergeben
+- Direkter SVG-Import mit sicher gerasterter Bearbeitungsvorschau
+- Neues selbsterklärendes DMG-Layout mit deutscher Installationsanweisung
+- Erweiterte Druckanalyse als nächster Entwicklungsschritt dokumentiert
+
 ## 0.6.4
 
 - Eigene schwarze macOS-Titelleiste als geschützter Bereich für die Fensterknöpfe

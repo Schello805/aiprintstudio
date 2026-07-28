@@ -26,14 +26,18 @@ standardmäßig auf dem eigenen Mac.
 - Sichtbare Kostenanzeige für die lokale Verarbeitung
 - Konturmodus für Logos, Wappen und Schrift mit geglätteten Außenkanten und
   komponentenbasierten Höhenebenen
+- Interaktiver Flächeneditor mit Mehrfachauswahl, angrenzender Erweiterung,
+  Höhenwerkzeugen, Rückgängig/Wiederholen und Live-3D-Vorschau
+- Direkter SVG-Import für bereits vektorisierte Logos und Wappen
 - Depth Anything V2 Small über Apple Core ML für lokale Foto-Tiefenschätzung
 - Mehrfoto-Rekonstruktion über Apple RealityKit Object Capture
 
 ## Bereits testbar
 
-1. Im Studio ein PNG-, JPG- oder WEBP-Bild auswählen.
-2. **Relief erstellen** anklicken.
-3. Die erzeugte STL oder 3MF unter `Downloads/AI Print Studio` im Slicer öffnen.
+1. Im Studio ein PNG-, JPG-, WEBP- oder SVG-Bild auswählen.
+2. Optional **Motivbereiche manuell korrigieren** öffnen und Flächen anklicken.
+3. **Relief erstellen** anklicken.
+4. Die erzeugte STL oder 3MF unter `Downloads/AI Print Studio` im Slicer öffnen.
 
 Der aktuelle Modus erzeugt eine hochauflösende, wasserdichte Reliefplatte mit
 frei wählbaren Abmessungen. Fünf Qualitätsprofile optimieren Fotos, Logos oder
