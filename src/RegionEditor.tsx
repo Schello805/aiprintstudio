@@ -52,6 +52,7 @@ export function RegionEditor({
   onClose: () => void;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const sliderStartRef = useRef<Uint8ClampedArray | null>(null);
   const [data, setData] = useState<EditorData | null>(null);
   const [levels, setLevels] = useState<Uint8ClampedArray | null>(null);
   const [selection, setSelection] = useState<Set<number>>(new Set());
@@ -165,6 +166,21 @@ export function RegionEditor({
     if (!data || !levels || !selection.size) return;
     commitLevels(setSelectedRegionLevel(levels, selection, data.segmentation.regions, value));
   };
+  const previewLevel = (value: number) => {
+    if (!data || !levels || !selection.size) return;
+    setLevels(setSelectedRegionLevel(levels, selection, data.segmentation.regions, value));
+  };
+  const beginSliderDrag = () => {
+    if (!levels || !selection.size) return;
+    sliderStartRef.current = levels.slice();
+  };
+  const endSliderDrag = () => {
+    const original = sliderStartRef.current;
+    if (!original) return;
+    sliderStartRef.current = null;
+    setUndoStack((current) => [...current.slice(-29), original]);
+    setRedoStack([]);
+  };
   const assignColor = (colorIndex: number) => {
     if (!data || !colorAssignments || !selection.size) return;
     const next = colorAssignments.slice();
@@ -199,6 +215,12 @@ export function RegionEditor({
       if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
+  };
+  const selectDetectedMotif = () => {
+    if (!data) return;
+    const background = [...data.segmentation.regions].sort((a, b) => b.pixels.length - a.pixels.length)[0]?.id;
+    const motif = data.segmentation.regions.filter((region) => region.id !== background).map((region) => region.id);
+    setSelection(new Set(motif.length ? motif : data.segmentation.regions.map((region) => region.id)));
   };
 
   return (
@@ -239,13 +261,19 @@ export function RegionEditor({
         <label className="has-tooltip">
           <span>HÖHE DER AUSWAHL</span>
           <input
+            className="height-range"
             type="range"
             min={0}
             max={255}
             step={1}
             value={currentLevel}
             disabled={!selection.size}
-            onInput={(event) => setLevel(Number(event.currentTarget.value))}
+            onPointerDown={beginSliderDrag}
+            onInput={(event) => previewLevel(Number(event.currentTarget.value))}
+            onPointerUp={endSliderDrag}
+            onPointerCancel={endSliderDrag}
+            onKeyDown={beginSliderDrag}
+            onKeyUp={endSliderDrag}
             aria-label="Höhe der ausgewählten Fläche"
           />
           <span className="height-value">
@@ -275,7 +303,8 @@ export function RegionEditor({
         }}>Kanten abrunden<SettingTooltip text={editorTooltips.round} /></button>
       </div>
       <div className="editor-status">
-        <span>{selection.size ? selection.size <= 20 ? `✓ ${selection.size} Fläche${selection.size === 1 ? "" : "n"} grün ausgewählt` : "✓ Mehrere angrenzende Teilflächen grün ausgewählt" : "Klicke links im Bild auf eine Fläche – sie wird deutlich grün markiert."}</span>
+        <span>{selection.size ? selection.size <= 20 ? `✓ ${selection.size} Fläche${selection.size === 1 ? "" : "n"} grün ausgewählt` : "✓ Mehrere angrenzende Teilflächen grün ausgewählt" : "Klicke links im Bild auf eine Fläche – erst danach wird der Höhenregler aktiv."}</span>
+        {!selection.size && <button onClick={selectDetectedMotif}>Motiv automatisch auswählen</button>}
         <strong>Danach unten „Relief erstellen“ klicken, um das Modell neu zu berechnen.</strong>
       </div>
     </section>

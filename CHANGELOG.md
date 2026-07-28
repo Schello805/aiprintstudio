@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.12.1
+
+- Info-Symbole verwenden ein optisch exakt zentriertes „i“ statt eines innerhalb kleiner Kreise versetzten SVG-Icons.
+- Der Höhenregler aktualisiert die 3D-Vorschau flüssig während des Ziehens.
+- Eine komplette Reglerbewegung erzeugt nur noch einen Undo-Schritt statt einer Änderung pro Pixel.
+- Pointer-Cancel und Tastaturbedienung schließen eine Regleränderung zuverlässig ab.
+- Der größere interaktive Reglerbereich verbessert Treffen und Ziehen mit Maus oder Trackpad.
+- Ohne aktive Auswahl erklärt die Statuszeile eindeutig, warum der Regler deaktiviert ist.
+- „Motiv automatisch auswählen“ aktiviert mit einem Klick alle erkannten Motivflächen.
+
 ## 0.12.0
 
 - Meshy wurde vollständig aus Konfiguration, Oberfläche und aktivem Netzwerkpfad entfernt.
