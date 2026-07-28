@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.12.2
+
+- Außenkanten und Farbübergänge werden konsequent der gewählten Farbe „Seiten & Tragkörper“ zugewiesen.
+- Der einfarbige Tragkörper reicht nun bis zur vollständigen Motivhöhe statt 0,6 mm unter der Oberfläche zu enden.
+- AMS-Farben bilden nur noch eine 0,04 mm dünne Decklage auf horizontalen Oberflächen.
+- Sichtbare rot-weiß-schwarze Streifen und überlappende Farbflächen an senkrechten Kanten werden vermieden.
+- Die 3D-Vorschau verwendet dieselbe stabilisierte Farbzuordnung wie der 3MF-Export.
+- Ein neuer Regressionstest schützt einfarbige Außen- und Motivkanten.
+
 ## 0.12.1
 
 - Info-Symbole verwenden ein optisch exakt zentriertes „i“ statt eines innerhalb kleiner Kreise versetzten SVG-Icons.

@@ -137,12 +137,15 @@ export async function createRelief(
       .toBuffer({ resolveWithObject: true });
     editorColorAssignments = data;
   }
-  const colorAssignments = options.colors.length
+  const detectedColorAssignments = options.colors.length
     ? buildColorCellAssignments(
       rgba, cellMask, gridWidth, gridHeight,
       options.sourceColors.length === options.colors.length ? options.sourceColors : options.colors,
       editorColorAssignments
     )
+    : undefined;
+  const colorAssignments = detectedColorAssignments
+    ? enforceUniformEdgeColor(detectedColorAssignments, cellMask, gridWidth, gridHeight, options.sideColorIndex)
     : undefined;
   const preview = buildPreviewSurface(
     gridWidth, gridHeight, options.widthMm, heightMm, heights, cellMask, colorAssignments, options.colors
@@ -159,7 +162,7 @@ export async function createRelief(
   const coloredMeshes = colorAssignments
     ? buildColoredMeshes(
       gridWidth, gridHeight, options.widthMm, heightMm, heights, cellMask,
-      colorAssignments, options.colors, options.baseMm, options.sideColorIndex
+      colorAssignments, options.colors, options.sideColorIndex
     )
     : undefined;
   await Promise.all([
@@ -540,6 +543,31 @@ function buildColorCellAssignments(
   });
 }
 
+function enforceUniformEdgeColor(
+  assignments: number[],
+  cellMask: boolean[],
+  columns: number,
+  rows: number,
+  sideColorIndex: number
+): number[] {
+  const cellColumns = columns - 1, cellRows = rows - 1;
+  if (cellColumns < 4 || cellRows < 4) return assignments.slice();
+  const original = assignments.slice();
+  const result = assignments.slice();
+  const at = (x: number, y: number) =>
+    x < 0 || y < 0 || x >= cellColumns || y >= cellRows ? -1 : original[y * cellColumns + x];
+  for (let y = 0; y < cellRows; y += 1) {
+    for (let x = 0; x < cellColumns; x += 1) {
+      const index = y * cellColumns + x;
+      const color = original[index];
+      if (!cellMask[index] || color < 0 || color === sideColorIndex) continue;
+      const neighbors = [at(x - 1, y), at(x + 1, y), at(x, y - 1), at(x, y + 1)];
+      if (neighbors.some((neighbor) => neighbor !== color)) result[index] = sideColorIndex;
+    }
+  }
+  return result;
+}
+
 function mergeMeshes(meshes: Mesh[]): Mesh {
   const vertices: Vec3[] = [];
   const triangles: Triangle[] = [];
@@ -560,18 +588,18 @@ function buildColoredMeshes(
   cellMask: boolean[],
   assignments: number[],
   colors: string[],
-  baseMm: number,
   sideColorIndex: number
 ): ColoredMesh[] {
   const outerBoundary = buildSmoothedBoundaryPositions(columns, rows, widthMm, heightMm, cellMask);
-  const colorSkinMm = 0.6;
-  const structureHeights = heights.map((height) => Math.max(baseMm, height - colorSkinMm));
+  const colorSkinMm = 0.04;
+  const structureHeights = heights.slice();
   const structure = buildWatertightHeightMesh(
     columns, rows, widthMm, heightMm, structureHeights, cellMask, 0, outerBoundary
   );
   return colors.map((color, colorIndex) => {
     const mask = assignments.map((assignment) => assignment === colorIndex);
-    const top = buildWatertightHeightMesh(columns, rows, widthMm, heightMm, heights, mask, structureHeights, outerBoundary);
+    const capHeights = heights.map((height) => height + colorSkinMm);
+    const top = buildWatertightHeightMesh(columns, rows, widthMm, heightMm, capHeights, mask, structureHeights, outerBoundary);
     return {
       mesh: colorIndex === sideColorIndex ? mergeMeshes([structure, top]) : top,
       color,
@@ -822,6 +850,7 @@ function buildPreviewSurface(
 export const reliefInternals = {
   buildCellMask, buildSubjectPixelMask, cleanSubjectPixelMask, applyBoundaryRim,
   buildVectorLevels, buildSmoothedBoundaryPositions, buildColorCellAssignments, buildColoredMeshes, mergeMeshes,
+  enforceUniformEdgeColor,
   buildWatertightHeightMesh, buildPreviewSurface, encodeBinaryStl, encodeThreeMf,
   smoothHeightField, analysePrintability, profileSettings
 };

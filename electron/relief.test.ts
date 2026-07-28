@@ -138,12 +138,31 @@ describe("relief mesh", () => {
   it("uses one filament for all side walls and thin color skins on top", () => {
     const colored = reliefInternals.buildColoredMeshes(
       3, 3, 20, 20, Array(9).fill(5), Array(4).fill(true),
-      [0, 1, 0, 1], ["#000000", "#FF0000"], 1.6, 0
+      [0, 1, 0, 1], ["#000000", "#FF0000"], 0
     );
     const sideBody = colored.find((part) => part.color === "#000000");
     const redSkin = colored.find((part) => part.color === "#FF0000");
     expect(sideBody?.mesh.vertices.some((vertex) => vertex[2] === 0)).toBe(true);
-    expect(redSkin?.mesh.vertices.every((vertex) => vertex[2] >= 4.4)).toBe(true);
+    expect(redSkin?.mesh.vertices.every((vertex) => vertex[2] >= 5)).toBe(true);
+    expect(Math.max(...(redSkin?.mesh.vertices.map((vertex) => vertex[2]) ?? []))).toBeCloseTo(5.04);
+  });
+
+  it("assigns every outer and color-transition edge to the configured side color", () => {
+    const columns = 7, rows = 7;
+    const mask = Array((columns - 1) * (rows - 1)).fill(true) as boolean[];
+    const assignments = mask.map((_, index) => {
+      const x = index % (columns - 1), y = Math.floor(index / (columns - 1));
+      return x >= 1 && x <= 4 && y >= 1 && y <= 4 ? 1 : 2;
+    });
+    const stabilized = reliefInternals.enforceUniformEdgeColor(assignments, mask, columns, rows, 0);
+    const at = (values: number[], x: number, y: number) => x < 0 || y < 0 || x >= columns - 1 || y >= rows - 1 ? -1 : values[y * (columns - 1) + x];
+    for (let y = 0; y < rows - 1; y += 1) for (let x = 0; x < columns - 1; x += 1) {
+      const original = at(assignments, x, y);
+      const transition = [at(assignments, x - 1, y), at(assignments, x + 1, y), at(assignments, x, y - 1), at(assignments, x, y + 1)].some((neighbor) => neighbor !== original);
+      if (transition) expect(at(stabilized, x, y)).toBe(0);
+    }
+    expect(stabilized.filter((color) => color === 1).length).toBeGreaterThan(0);
+    expect(stabilized.filter((color) => color === 0).length).toBeGreaterThan(0);
   });
 
   it("raises enclosed logo components above large background regions", () => {
