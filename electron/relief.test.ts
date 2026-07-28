@@ -259,7 +259,7 @@ describe("relief mesh", () => {
     const average = radii.reduce((sum, radius) => sum + radius, 0) / radii.length;
     const deviation = Math.sqrt(radii.reduce((sum, radius) => sum + (radius - average) ** 2, 0) / radii.length);
     expect(radii.length).toBeGreaterThan(40);
-    expect(deviation).toBeLessThan(0.2);
+    expect(deviation).toBeLessThan(0.1);
   });
 
   it("keeps preview boundary vertices on the base instead of creating spikes", () => {

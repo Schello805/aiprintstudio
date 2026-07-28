@@ -342,7 +342,7 @@ function buildSmoothedBoundaryPositions(
   widthMm: number,
   heightMm: number,
   cells: boolean[],
-  passes = 8
+  passes = 20
 ): Map<number, readonly [number, number]> {
   const cellAt = (x: number, y: number) => x >= 0 && y >= 0 && x < columns - 1 && y < rows - 1 && cells[y * (columns - 1) + x];
   const gridIndex = (x: number, y: number) => y * columns + x;
@@ -374,7 +374,11 @@ function buildSmoothedBoundaryPositions(
       if (!points.length) continue;
       const averageX = points.reduce((sum, point) => sum + point[0], 0) / points.length;
       const averageY = points.reduce((sum, point) => sum + point[1], 0) / points.length;
-      next.set(index, [current[0] * 0.55 + averageX * 0.45, current[1] * 0.55 + averageY * 0.45]);
+      // Viele sanfte Durchgänge entfernen die periodischen Rasterzähne einer
+      // Pixelkontur zuverlässiger als wenige aggressive Schritte. Dadurch
+      // bleiben große Formen erhalten, während gerade und runde Außenkanten
+      // im Export nicht mehr wellenförmig verlaufen.
+      next.set(index, [current[0] * 0.62 + averageX * 0.38, current[1] * 0.62 + averageY * 0.38]);
     }
     positions = next;
   }
@@ -872,7 +876,9 @@ function buildPreviewSurface(
   sideColorIndex = 0,
   preserveBoundaryHeights = false
 ): { positions: number[]; indices: number[]; colorParts: Array<{ color: string; indices: number[] }> } {
-  const stride = Math.max(1, Math.ceil(Math.max(columns, rows) / 300));
+  // Die Vorschau darf die geglättete Exportkontur nicht durch erneutes grobes
+  // Downsampling wieder gezackt darstellen.
+  const stride = Math.max(1, Math.ceil(Math.max(columns, rows) / 480));
   const xs = Array.from(new Set([...Array(Math.ceil((columns - 1) / stride) + 1)].map((_, i) => Math.min(i * stride, columns - 1))));
   const ys = Array.from(new Set([...Array(Math.ceil((rows - 1) / stride) + 1)].map((_, i) => Math.min(i * stride, rows - 1))));
   const previewColumns = xs.length;

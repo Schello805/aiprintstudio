@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.14.1
+
+- Außenkonturen durchlaufen mehr sanfte Glättungsschritte, sodass regelmäßige
+  Pixelwellen und Zähne an geraden sowie gerundeten Rändern verschwinden.
+- Die 3D-Vorschau verwendet eine deutlich höhere Konturauflösung und erzeugt
+  beim Downsampling keine neuen sichtbaren Wellen mehr.
+- Der Regressionstest für kreisförmige Konturen akzeptiert nur noch halb so
+  große Radiusabweichungen wie zuvor.
+
 ## 0.14.0
 
 - Der OpenAI-Key kann dauerhaft lokal gespeichert werden, ohne auf den
