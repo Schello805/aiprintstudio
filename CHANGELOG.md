@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.13.1
+
+- Das neue AI-Print-Studio-Logo wird als offizielles macOS-App- und Finder-Icon verwendet.
+- Die Seitenleiste verwendet das abgeleitete grün-blaue Bild-/Würfel-Signet statt des bisherigen generischen Ebenen-Symbols.
+- Das hochauflösende 1024×1024-Original wird beim macOS-Paketbau explizit als Iconquelle verwendet.
+
 ## 0.13.0
 
 - Prompt zu 3D zeigt das erzeugte CAD-Modell unmittelbar als dreh- und zoombare lokale 3D-Vorschau.

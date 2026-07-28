@@ -22,6 +22,7 @@ import {
 import { RegionEditor } from "./RegionEditor";
 import { SettingTooltip } from "./SettingTooltip";
 import { extractColorPalette } from "./domain/color-palette";
+import appLogoMark from "../build/icon-mark.png";
 type View = "studio" | "history" | "settings";
 type StudioTool = "home" | "image" | "text" | "prompt";
 type LegalPage = "imprint" | "privacy" | "cookies" | null;
@@ -230,7 +231,7 @@ export function App() {
       <div className="window-titlebar" aria-hidden="true" />
       <aside className="sidebar">
         <div className="brand">
-          <div className="brand-mark"><Layers3 size={22} /></div>
+          <div className="brand-mark"><img src={appLogoMark} alt="" /></div>
           <div><strong>AI Print</strong><span>STUDIO</span></div>
         </div>
         <nav aria-label="Hauptnavigation">
