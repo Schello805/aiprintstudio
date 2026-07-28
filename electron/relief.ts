@@ -193,11 +193,93 @@ function buildVectorLevels(rgba: Buffer, mask: boolean[], width: number, height:
   const luminances = centers.map(([r, g, b], index) => ({ index, value: 0.2126 * r + 0.7152 * g + 0.0722 * b }))
     .sort((a, b) => a.value - b.value);
   const levels = new Map(luminances.map((entry, rank) => [entry.index, rank / Math.max(1, clusterCount - 1)]));
-  return Array.from({ length: mask.length }, (_, index) => {
+  const colorLevels = Array.from({ length: mask.length }, (_, index) => {
     if (!mask[index]) return 0;
     const level = levels.get(cleaned[index]) ?? 0;
     return invert ? level : 1 - level;
   });
+  const dark = mask.map((occupied, index) => {
+    if (!occupied) return false;
+    const offset = index * 4;
+    return Math.max(rgba[offset], rgba[offset + 1], rgba[offset + 2]) < 125;
+  });
+  const visited = new Uint8Array(mask.length);
+  const components: number[][] = [];
+  for (let start = 0; start < mask.length; start += 1) {
+    if (!mask[start] || dark[start] || visited[start]) continue;
+    const component: number[] = [];
+    const queue = [start];
+    visited[start] = 1;
+    for (let cursor = 0; cursor < queue.length; cursor += 1) {
+      const index = queue[cursor], x = index % width, y = Math.floor(index / width);
+      component.push(index);
+      for (const neighbor of [
+        x > 0 ? index - 1 : -1,
+        x + 1 < width ? index + 1 : -1,
+        y > 0 ? index - width : -1,
+        y + 1 < height ? index + width : -1
+      ]) {
+        if (neighbor >= 0 && mask[neighbor] && !dark[neighbor] && !visited[neighbor]) {
+          visited[neighbor] = 1; queue.push(neighbor);
+        }
+      }
+    }
+    components.push(component);
+  }
+  if (components.length < 3) return colorLevels;
+  const subjectArea = Math.max(1, mask.filter(Boolean).length);
+  const semanticLevels: number[] = mask.map((occupied, index) => occupied && dark[index] ? 0.82 : 0);
+  for (const component of components) {
+    const ratio = component.length / subjectArea;
+    const level = ratio > 0.08 ? 0.12 : ratio > 0.006 ? 0.68 : ratio > 0.00015 ? 0.92 : 0.76;
+    for (const index of component) semanticLevels[index] = level;
+  }
+  return semanticLevels;
+}
+
+function buildSmoothedBoundaryPositions(
+  columns: number,
+  rows: number,
+  widthMm: number,
+  heightMm: number,
+  cells: boolean[],
+  passes = 4
+): Map<number, readonly [number, number]> {
+  const cellAt = (x: number, y: number) => x >= 0 && y >= 0 && x < columns - 1 && y < rows - 1 && cells[y * (columns - 1) + x];
+  const gridIndex = (x: number, y: number) => y * columns + x;
+  const neighbors = new Map<number, Set<number>>();
+  const connect = (a: number, b: number) => {
+    if (!neighbors.has(a)) neighbors.set(a, new Set());
+    if (!neighbors.has(b)) neighbors.set(b, new Set());
+    neighbors.get(a)?.add(b); neighbors.get(b)?.add(a);
+  };
+  for (let y = 0; y < rows - 1; y += 1) for (let x = 0; x < columns - 1; x += 1) {
+    if (!cellAt(x, y)) continue;
+    const a = gridIndex(x, y), b = gridIndex(x + 1, y), c = gridIndex(x, y + 1), d = gridIndex(x + 1, y + 1);
+    if (!cellAt(x, y - 1)) connect(a, b);
+    if (!cellAt(x + 1, y)) connect(b, d);
+    if (!cellAt(x, y + 1)) connect(d, c);
+    if (!cellAt(x - 1, y)) connect(c, a);
+  }
+  let positions = new Map<number, readonly [number, number]>();
+  for (const index of neighbors.keys()) {
+    const x = index % columns, y = Math.floor(index / columns);
+    positions.set(index, [x * widthMm / (columns - 1), y * heightMm / (rows - 1)]);
+  }
+  for (let pass = 0; pass < passes; pass += 1) {
+    const next = new Map(positions);
+    for (const [index, adjacent] of neighbors) {
+      const current = positions.get(index);
+      if (!current || adjacent.size < 2) continue;
+      const points = [...adjacent].map((neighbor) => positions.get(neighbor)).filter(Boolean) as Array<readonly [number, number]>;
+      if (!points.length) continue;
+      const averageX = points.reduce((sum, point) => sum + point[0], 0) / points.length;
+      const averageY = points.reduce((sum, point) => sum + point[1], 0) / points.length;
+      next.set(index, [current[0] * 0.55 + averageX * 0.45, current[1] * 0.55 + averageY * 0.45]);
+    }
+    positions = next;
+  }
+  return positions;
 }
 
 function profileSettings(profile: ReliefOptions["profile"]) {
@@ -264,6 +346,7 @@ function buildWatertightHeightMesh(
   const triangles: Triangle[] = [];
   const index = (x: number, y: number) => y * columns + x;
   const cells = cellMask ?? Array((columns - 1) * (rows - 1)).fill(true);
+  const boundaryPositions = buildSmoothedBoundaryPositions(columns, rows, widthMm, heightMm, cells);
   const isCell = (x: number, y: number) => x >= 0 && y >= 0 && x < columns - 1 && y < rows - 1 && cells[y * (columns - 1) + x];
   const topVertices = new Map<number, number>();
   const bottomVertices = new Map<number, number>();
@@ -273,9 +356,10 @@ function buildWatertightHeightMesh(
     if (existing !== undefined) return existing;
     const x = gridIndex % columns, y = Math.floor(gridIndex / columns);
     const created = vertices.length;
+    const boundary = boundaryPositions.get(gridIndex);
     vertices.push([
-      x * widthMm / (columns - 1),
-      y * heightMm / (rows - 1),
+      boundary?.[0] ?? x * widthMm / (columns - 1),
+      boundary?.[1] ?? y * heightMm / (rows - 1),
       bottom ? 0 : heights[gridIndex]
     ]);
     map.set(gridIndex, created);
@@ -459,25 +543,37 @@ function buildPreviewSurface(
   const stride = Math.max(1, Math.ceil(Math.max(columns, rows) / 110));
   const xs = Array.from(new Set([...Array(Math.ceil((columns - 1) / stride) + 1)].map((_, i) => Math.min(i * stride, columns - 1))));
   const ys = Array.from(new Set([...Array(Math.ceil((rows - 1) / stride) + 1)].map((_, i) => Math.min(i * stride, rows - 1))));
+  const previewColumns = xs.length;
+  const previewRows = ys.length;
+  const previewCells = Array.from({ length: (previewColumns - 1) * (previewRows - 1) }, (_, index) => {
+    if (!cellMask) return true;
+    const previewX = index % (previewColumns - 1), previewY = Math.floor(index / (previewColumns - 1));
+    let occupied = 0, total = 0;
+    for (let y = ys[previewY]; y < ys[previewY + 1]; y += 1) {
+      for (let x = xs[previewX]; x < xs[previewX + 1]; x += 1) {
+        occupied += Number(cellMask[y * (columns - 1) + x]);
+        total += 1;
+      }
+    }
+    return occupied >= Math.max(1, total * 0.5);
+  });
+  const boundaryPositions = buildSmoothedBoundaryPositions(previewColumns, previewRows, widthMm, heightMm, previewCells);
   const positions: number[] = [];
   const indices: number[] = [];
-  for (const y of ys) {
-    for (const x of xs) {
+  for (let previewY = 0; previewY < previewRows; previewY += 1) {
+    for (let previewX = 0; previewX < previewColumns; previewX += 1) {
+      const x = xs[previewX], y = ys[previewY];
+      const boundary = boundaryPositions.get(previewY * previewColumns + previewX);
       positions.push(
-        x * widthMm / (columns - 1) - widthMm / 2,
+        (boundary?.[0] ?? x * widthMm / (columns - 1)) - widthMm / 2,
         heights[y * columns + x],
-        y * heightMm / (rows - 1) - heightMm / 2
+        (boundary?.[1] ?? y * heightMm / (rows - 1)) - heightMm / 2
       );
     }
   }
-  const previewColumns = xs.length;
-  for (let y = 0; y < ys.length - 1; y += 1) {
-    for (let x = 0; x < xs.length - 1; x += 1) {
-      if (cellMask) {
-        const sourceX = Math.min(xs[x], columns - 2);
-        const sourceY = Math.min(ys[y], rows - 2);
-        if (!cellMask[sourceY * (columns - 1) + sourceX]) continue;
-      }
+  for (let y = 0; y < previewRows - 1; y += 1) {
+    for (let x = 0; x < previewColumns - 1; x += 1) {
+      if (!previewCells[y * (previewColumns - 1) + x]) continue;
       const a = y * previewColumns + x;
       const b = a + 1;
       const c = a + previewColumns;
@@ -490,7 +586,7 @@ function buildPreviewSurface(
 
 export const reliefInternals = {
   buildCellMask, buildSubjectPixelMask, cleanSubjectPixelMask, applyBoundaryRim,
-  buildVectorLevels,
+  buildVectorLevels, buildSmoothedBoundaryPositions,
   buildWatertightHeightMesh, buildPreviewSurface, encodeBinaryStl,
   smoothHeightField, analysePrintability, profileSettings
 };

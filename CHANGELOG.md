@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.2
+
+- Glättet die tatsächliche Außenkontur des Export- und Vorschaumeshes statt nur die Randhöhe
+- Erkennt bei Logos und Wappen getrennte Motivflächen nach ihrer Größe und hebt Objekte wie Rollen gezielt an
+- Stuft antialiaste Logos zuverlässiger als Logo statt als Foto ein
+- Gleicht die vereinfachte 3D-Vorschau an die Kontur des exportierten Modells an
+
 ## 0.6.1
 
 - Erkennt beim Start alte oder doppelte App-Kopien außerhalb von „Programme“

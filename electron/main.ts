@@ -319,7 +319,7 @@ app.whenReady().then(async () => {
     for (let offset = 0; offset < sample.length; offset += 3) {
       quantizedColors.add(`${sample[offset] >> 5}:${sample[offset + 1] >> 5}:${sample[offset + 2] >> 5}`);
     }
-    const suggestedProfile = quantizedColors.size <= 48 ? "logo" : "photo";
+    const suggestedProfile = quantizedColors.size <= 160 ? "logo" : "photo";
     const extension = path.toLowerCase().split(".").pop();
     const mime = extension === "png" ? "image/png" : extension === "webp" ? "image/webp" : "image/jpeg";
     return {

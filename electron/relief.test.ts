@@ -92,4 +92,40 @@ describe("relief mesh", () => {
     expect(new Set(levels).size).toBe(2);
     expect(levels[0]).toBeGreaterThan(levels[3]);
   });
+
+  it("raises enclosed logo components above large background regions", () => {
+    const width = 20, height = 20;
+    const rgba = Buffer.alloc(width * height * 4);
+    for (let index = 0; index < width * height; index += 1) rgba[index * 4 + 3] = 255;
+    const paintWhite = (indices: number[]) => {
+      for (const index of indices) {
+        rgba[index * 4] = 255;
+        rgba[index * 4 + 1] = 255;
+        rgba[index * 4 + 2] = 255;
+      }
+    };
+    const large = Array.from({ length: 40 }, (_, index) => 21 + Math.floor(index / 8) * width + index % 8);
+    const medium = Array.from({ length: 10 }, (_, index) => 250 + Math.floor(index / 5) * width + index % 5);
+    const tiny = [378];
+    paintWhite([...large, ...medium, ...tiny]);
+
+    const levels = reliefInternals.buildVectorLevels(rgba, Array(width * height).fill(true), width, height, false);
+    expect(levels[large[0]]).toBeCloseTo(0.12);
+    expect(levels[medium[0]]).toBeCloseTo(0.68);
+    expect(levels[tiny[0]]).toBeCloseTo(0.92);
+    expect(levels[0]).toBeCloseTo(0.82);
+  });
+
+  it("rounds staircase corners along an irregular subject boundary", () => {
+    const cells = [
+      false, true, false,
+      true, true, true,
+      false, true, false
+    ];
+    const positions = reliefInternals.buildSmoothedBoundaryPositions(4, 4, 30, 30, cells);
+    const corner = positions.get(1);
+    expect(corner).toBeDefined();
+    expect(corner?.[0]).not.toBeCloseTo(10);
+    expect(corner?.[1]).not.toBeCloseTo(0);
+  });
 });

@@ -24,7 +24,8 @@ standardmäßig auf dem eigenen Mac.
 - Konturgetreuer Export anhand von Transparenz oder erkanntem Bildhintergrund
 - Umschaltbare Relief-Richtung für helle oder dunkle erhabene Bereiche
 - Sichtbare Kostenanzeige für die lokale Verarbeitung
-- Konturmodus für Logos, Wappen und Schrift mit diskreten Farb-Höhenebenen
+- Konturmodus für Logos, Wappen und Schrift mit geglätteten Außenkanten und
+  komponentenbasierten Höhenebenen
 - Depth Anything V2 Small über Apple Core ML für lokale Foto-Tiefenschätzung
 - Mehrfoto-Rekonstruktion über Apple RealityKit Object Capture
 
@@ -48,8 +49,9 @@ Klick im Browser geöffnet; automatische Hintergrundupdates gibt es nicht.
 ## Verarbeitungsmodi
 
 - **Automatisch** wählt anhand der Bildcharakteristik Kontur oder klassische Höhenverarbeitung.
-- **Kontur-Relief** fasst gleichartige Farbflächen zusammen und erzeugt klare,
-  druckbare Höhenebenen für Logos, Wappen und Schrift.
+- **Kontur-Relief** trennt umrandete Motivflächen, ordnet große Hintergründe,
+  Objekte und kleine Details unterschiedlichen Höhen zu und glättet die
+  Außenkontur für Logos, Wappen und Schrift.
 - **KI-Tiefe** verwendet das mitgelieferte Depth Anything V2 Small lokal über
   Core ML. Bilder verlassen den Mac nicht.
 - **Höhenkarte** übernimmt die Bildhelligkeit direkt für kontrollierte 2,5D-Reliefs.
