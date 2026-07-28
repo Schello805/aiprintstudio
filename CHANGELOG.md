@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.2
+
+- Behebt „Maximum call stack size exceeded“ bei hochauflösenden Reliefvorschauen
+- Ermittelt die Grundplattenhöhe speichersicher ohne hunderttausende Funktionsargumente
+- Neuer Regressionstest deckt Vorschauen mit 384 × 442 Höhenpunkten ab
+
 ## 0.7.1
 
 - Stark vereinfachter Standardworkflow mit nur Automatisch, Logo/Wappen und Foto/3D-Tiefe

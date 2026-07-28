@@ -566,7 +566,9 @@ function buildPreviewSurface(
     return occupied >= Math.max(1, total * 0.5);
   });
   const boundaryPositions = buildSmoothedBoundaryPositions(previewColumns, previewRows, widthMm, heightMm, previewCells);
-  const baseHeight = Math.min(...heights);
+  let baseHeight = Number.POSITIVE_INFINITY;
+  for (const height of heights) if (height < baseHeight) baseHeight = height;
+  if (!Number.isFinite(baseHeight)) baseHeight = 0;
   const positions: number[] = [];
   const indices: number[] = [];
   for (let previewY = 0; previewY < previewRows; previewY += 1) {

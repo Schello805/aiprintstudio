@@ -147,6 +147,15 @@ describe("relief mesh", () => {
     for (const index of boundary.keys()) expect(preview.positions[index * 3 + 1]).toBe(1);
   });
 
+  it("builds a high-resolution preview without overflowing the call stack", () => {
+    const columns = 384, rows = 442;
+    const heights = Array(columns * rows).fill(2.5);
+    heights[0] = 1.6;
+    const preview = reliefInternals.buildPreviewSurface(columns, rows, 100, 115, heights);
+    expect(preview.positions.length).toBeGreaterThan(0);
+    expect(preview.indices.length).toBeGreaterThan(0);
+  });
+
   it("uses a manually edited heightmap without renormalizing its levels", async () => {
     const directory = await mkdtemp(join(tmpdir(), "ai-print-editor-test-"));
     try {
