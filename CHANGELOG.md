@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.13.3
+
+- Original und 3D-Vorschau bleiben nach der Modellerstellung beim Scrollen
+  sichtbar; die Vorschaufläche wurde für kleinere Displays kompakter gestaltet.
+- Druckscore, Modellmaße, Prüfungen und Finder-Aktion stehen jetzt unmittelbar
+  unter der 3D-Vorschau statt am Seitenende.
+- Prompt zu 3D zeigt transparent an, dass jede Erstellung und Folgeänderung über
+  den eigenen OpenAI-API-Account abgerechnet wird.
+- Transparente, monochrome Schrift wird als plane Extrusion erkannt.
+  Halbtransparente Antialias-Randpixel erzeugen keine welligen Höhen oder
+  abgesenkten Buchstabenkanten mehr.
+- Ein Integrationstest prüft die einheitliche Deckhöhe antialiaster Schrift.
+
 ## 0.13.2
 
 - Mehrfarbige 3MF-Dateien werden als ein gemeinsames Assembly mit mehreren

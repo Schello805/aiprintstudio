@@ -118,6 +118,28 @@ export async function createRelief(
       return Math.max(0, Math.min(1, (Math.pow(normalized, profile.gamma) - 0.5) * profile.contrast + 0.5));
     });
   }
+  let flatVectorSurface = false;
+  if (activeMode === "vector") {
+    let minimum = Number.POSITIVE_INFINITY;
+    let maximum = Number.NEGATIVE_INFINITY;
+    let maximumChroma = 0;
+    for (let index = 0; index < rawLevels.length; index += 1) {
+      if (!subjectPixels[index]) continue;
+      minimum = Math.min(minimum, rawLevels[index]);
+      maximum = Math.max(maximum, rawLevels[index]);
+      const offset = index * 4;
+      maximumChroma = Math.max(
+        maximumChroma,
+        Math.abs(rgba[offset] - rgba[offset + 1]),
+        Math.abs(rgba[offset + 1] - rgba[offset + 2]),
+        Math.abs(rgba[offset] - rgba[offset + 2])
+      );
+    }
+    // Weiße, lokal gerenderte Schrift bekommt beim Skalieren halbtransparente
+    // graue Randpixel. Diese sind Kantenglättung, keine semantischen Farbebenen.
+    flatVectorSurface = Number.isFinite(minimum)
+      && (maximum - minimum < 0.001 || (hasTransparency && maximumChroma <= 8));
+  }
   const smoothed = editorHeightmap ? rawLevels : smoothHeightField(rawLevels, gridWidth, gridHeight, activeMode === "vector" ? Math.min(1, options.smoothing) : options.smoothing);
   const detailed = editorHeightmap ? smoothed : smoothed.map((value, index) =>
     Math.max(0, Math.min(1, value + (rawLevels[index] - value) * options.detail * profile.detail))
@@ -125,8 +147,23 @@ export async function createRelief(
   const profiledLevels = !editorHeightmap && profile.steps ? detailed.map((value) => Math.round(value * profile.steps) / profile.steps) : detailed;
   // Eine flache Konturzone verhindert, dass antialiaste Randpixel als hohe,
   // sägezahnartige Außenwand im Mesh erscheinen.
-  const levels = applyBoundaryRim(profiledLevels, subjectPixels, gridWidth, gridHeight, options.profile === "logo" ? 2 : 1);
+  const levels = flatVectorSurface
+    ? profiledLevels
+    : applyBoundaryRim(profiledLevels, subjectPixels, gridWidth, gridHeight, options.profile === "logo" ? 2 : 1);
   const heights = levels.map((value) => options.baseMm + value * options.reliefMm);
+  if (flatVectorSurface) {
+    const flatHeight = options.baseMm + options.reliefMm;
+    for (let y = 0; y < gridHeight - 1; y += 1) {
+      for (let x = 0; x < gridWidth - 1; x += 1) {
+        if (!cellMask[y * (gridWidth - 1) + x]) continue;
+        const topLeft = y * gridWidth + x;
+        heights[topLeft] = flatHeight;
+        heights[topLeft + 1] = flatHeight;
+        heights[topLeft + gridWidth] = flatHeight;
+        heights[topLeft + gridWidth + 1] = flatHeight;
+      }
+    }
+  }
   const mesh = buildWatertightHeightMesh(gridWidth, gridHeight, options.widthMm, heightMm, heights, cellMask);
   let editorColorAssignments: Buffer | undefined;
   if (editorColorMapPath) {
@@ -149,7 +186,7 @@ export async function createRelief(
     : undefined;
   const preview = buildPreviewSurface(
     gridWidth, gridHeight, options.widthMm, heightMm, heights, cellMask,
-    colorAssignments, options.colors, options.sideColorIndex
+    colorAssignments, options.colors, options.sideColorIndex, flatVectorSurface
   );
   const printability = analysePrintability(mesh, heights, options, cellMask, gridWidth);
   const heightmapPng = await sharp(Buffer.from(levels.map((value) => Math.round(value * 255))), {
@@ -798,7 +835,8 @@ function buildPreviewSurface(
   cellMask?: boolean[],
   colorAssignments?: number[],
   colors: string[] = [],
-  sideColorIndex = 0
+  sideColorIndex = 0,
+  preserveBoundaryHeights = false
 ): { positions: number[]; indices: number[]; colorParts: Array<{ color: string; indices: number[] }> } {
   const stride = Math.max(1, Math.ceil(Math.max(columns, rows) / 300));
   const xs = Array.from(new Set([...Array(Math.ceil((columns - 1) / stride) + 1)].map((_, i) => Math.min(i * stride, columns - 1))));
@@ -865,7 +903,7 @@ function buildPreviewSurface(
       const boundary = boundaryPositions.get(previewY * previewColumns + previewX);
       positions.push(
         (boundary?.[0] ?? x * widthMm / (columns - 1)) - widthMm / 2,
-        boundary ? baseHeight : heights[y * columns + x],
+        boundary && !preserveBoundaryHeights ? baseHeight : heights[y * columns + x],
         (boundary?.[1] ?? y * heightMm / (rows - 1)) - heightMm / 2
       );
     }

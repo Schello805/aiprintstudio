@@ -279,6 +279,7 @@ export function App() {
             )}
             {studioTool !== "prompt" && (
               <>
+            <div className={result ? "preview-stage sticky" : "preview-stage"}>
             <div className={result ? "comparison-grid" : "comparison-grid single"}>
               <div
                 className={preview ? "upload-card has-preview" : "upload-card"}
@@ -297,6 +298,8 @@ export function App() {
             </div>
             {fileError && <div className="error-banner" role="alert"><strong>Verarbeitung fehlgeschlagen</strong><span>{fileError}</span><button onClick={() => setFileError(null)} aria-label="Fehlermeldung schließen"><X /></button></div>}
             {uploadStatus && !fileError && <div className="upload-status"><CheckCircle2 /> {uploadStatus}</div>}
+            {result && <ReliefResultCard result={result} />}
+            </div>
             {file && !editorOpen && (
               <button className={editorHeightmap ? "editor-launch has-tooltip active" : "editor-launch has-tooltip"} onClick={() => setEditorOpen(true)}>
                 <Layers3 /> {editorHeightmap ? "Flächenkorrekturen weiter bearbeiten" : "Motivbereiche manuell korrigieren"}
@@ -431,14 +434,6 @@ export function App() {
               <button className="primary-button" disabled={(processingMode !== "scan" && !file) || busy} onClick={() => void (processingMode === "scan" ? generateObjectCapture() : generateRelief())}>{busy ? "Modell wird erzeugt …" : processingMode === "scan" ? "Fotos wählen & 3D-Scan starten" : "Relief erstellen"} <ChevronRight size={18} /></button>
             </div>
             {busy && <div className="progress-card"><span /><div><strong>{processingMode === "depth" ? "Depth Anything V2 analysiert das Foto" : "Lokale 3D-Verarbeitung"}</strong><p>Höhenmodell und wasserdichtes Mesh werden berechnet …</p></div></div>}
-            {result && (
-              <div className={`result-card ${result.printability.status}`}>
-                <div className="result-check"><CheckCircle2 /></div>
-                <div><strong>Modell erfolgreich erstellt · Druckscore {result.printability.score}/100</strong><p>{result.triangleCount.toLocaleString("de-DE")} Dreiecke · {result.widthMm.toFixed(0)} × {result.heightMm.toFixed(0)} mm · ca. {result.printability.estimatedVolumeCm3.toFixed(1)} cm³{result.options.colors.length ? ` · ${result.options.colors.length} AMS-Farben` : ""}</p><p>{result.printability.issues.join(" ")}</p><div className="print-checks">{result.printability.checks.map((check) => <span className={check.status} key={check.label} title={check.detail}>{check.status === "ok" ? "✓" : "!"} {check.label}</span>)}</div></div>
-                <img className="heightmap-preview" src={result.heightmapDataUrl} alt="Berechnete Höhenkarte" title="Berechnete Höhenkarte" />
-                <button className="secondary-button" onClick={() => void window.desktop?.showItemInFolder(result.stlPath)}>Im Finder zeigen</button>
-              </div>
-            )}
             {scanResult && (
               <div className="result-card ready">
                 <div className="result-check"><CheckCircle2 /></div>
@@ -563,6 +558,22 @@ function ReliefPreview({ result }: { result: NonNullable<ReliefResult> }) {
         <gridHelper args={[modelSize * 1.6, 18, "#2e3944", "#1b222b"]} />
         <OrbitControls makeDefault target={[0, result.options.baseMm + result.options.reliefMm / 2, 0]} minDistance={modelSize * 0.65} maxDistance={modelSize * 3} enableDamping />
       </Canvas>
+    </div>
+  );
+}
+
+function ReliefResultCard({ result }: { result: NonNullable<ReliefResult> }) {
+  return (
+    <div className={`result-card preview-result ${result.printability.status}`}>
+      <div className="result-check"><CheckCircle2 /></div>
+      <div>
+        <strong>Modell erfolgreich erstellt · Druckscore {result.printability.score}/100</strong>
+        <p>{result.triangleCount.toLocaleString("de-DE")} Dreiecke · {result.widthMm.toFixed(0)} × {result.heightMm.toFixed(0)} mm · ca. {result.printability.estimatedVolumeCm3.toFixed(1)} cm³{result.options.colors.length ? ` · ${result.options.colors.length} AMS-Farben` : ""}</p>
+        <p>{result.printability.issues.join(" ")}</p>
+        <div className="print-checks">{result.printability.checks.map((check) => <span className={check.status} key={check.label} title={check.detail}>{check.status === "ok" ? "✓" : "!"} {check.label}</span>)}</div>
+      </div>
+      <img className="heightmap-preview" src={result.heightmapDataUrl} alt="Berechnete Höhenkarte" title="Berechnete Höhenkarte" />
+      <button className="secondary-button" onClick={() => void window.desktop?.showItemInFolder(result.stlPath)}>Im Finder zeigen</button>
     </div>
   );
 }
@@ -726,6 +737,10 @@ function Ai3dDialog({ close }: { close: () => void }) {
           </div>
         </div>}
         <div className="notice">{result ? "Für Änderungen werden deine Folgeanweisung und der aktuelle CAD-Bauplan an OpenAI übertragen. Vorschau, Geometrie und STL werden lokal erzeugt." : "Nur deine Beschreibung wird an OpenAI übertragen. Geometrie und STL werden anschließend lokal auf deinem Mac erzeugt."}</div>
+        <div className="api-cost-notice">
+          <strong>OpenAI-API-Kosten</strong>
+          <span>OpenAI rechnet jede Erstellung und Folgeänderung direkt über deinen eigenen API-Account ab. Der genaue Betrag hängt vom verwendeten Modell sowie von Prompt- und Bauplanlänge ab; AI Print Studio erhebt keine zusätzlichen Gebühren.</span>
+        </div>
         {busy && <div className="ai-progress"><span /><div><strong>{result ? "OpenAI überarbeitet den CAD-Bauplan …" : "OpenAI konstruiert den CAD-Bauplan …"}</strong><small>Danach aktualisiert die App Vorschau und STL lokal.</small></div></div>}
         {error && <div className="notice error">{error}</div>}
         <div className="modal-actions">

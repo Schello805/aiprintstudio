@@ -264,6 +264,24 @@ describe("relief mesh", () => {
     for (const index of boundary.keys()) expect(preview.positions[index * 3 + 1]).toBe(1);
   });
 
+  it("keeps monochrome text previews perfectly level up to their boundary", () => {
+    const columns = 4, rows = 4;
+    const preview = reliefInternals.buildPreviewSurface(
+      columns,
+      rows,
+      30,
+      30,
+      Array(columns * rows).fill(5),
+      Array((columns - 1) * (rows - 1)).fill(true),
+      undefined,
+      [],
+      0,
+      true
+    );
+    const heights = preview.positions.filter((_, index) => index % 3 === 1);
+    expect(new Set(heights)).toEqual(new Set([5]));
+  });
+
   it("builds a high-resolution preview without overflowing the call stack", () => {
     const columns = 384, rows = 442;
     const heights = Array(columns * rows).fill(2.5);
@@ -293,6 +311,29 @@ describe("relief mesh", () => {
       const rendered = await sharp(Buffer.from(result.heightmapDataUrl.split(",")[1], "base64")).raw().toBuffer();
       expect(rendered[16 * 32 + 8]).toBe(64);
       expect(rendered[16 * 32 + 24]).toBe(192);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("creates a level top surface for antialiased monochrome text", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "ai-print-flat-text-test-"));
+    try {
+      const imagePath = join(directory, "text.png");
+      const pixels = Buffer.alloc(32 * 16 * 4);
+      for (let y = 3; y < 13; y += 1) for (let x = 4; x < 28; x += 1) {
+        const offset = (y * 32 + x) * 4;
+        pixels[offset] = 255; pixels[offset + 1] = 255; pixels[offset + 2] = 255;
+        pixels[offset + 3] = x === 4 || x === 27 || y === 3 || y === 12 ? 128 : 255;
+      }
+      await writeFile(imagePath, await sharp(pixels, { raw: { width: 32, height: 16, channels: 4 } }).png().toBuffer());
+      const result = await createRelief(imagePath, directory, {
+        widthMm: 80, baseMm: 1.6, reliefMm: 4, resolution: 64, invert: false,
+        profile: "logo", smoothing: 1, detail: 1, processingMode: "vector"
+      });
+      const usedVertices = new Set(result.preview.indices);
+      const topHeights = new Set([...usedVertices].map((index) => result.preview.positions[index * 3 + 1]));
+      expect(topHeights).toEqual(new Set([5.6]));
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
