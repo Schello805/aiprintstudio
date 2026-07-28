@@ -12,6 +12,7 @@ export type ReliefOptions = {
   profile: "fast" | "balanced" | "fine" | "photo" | "logo";
   smoothing: number;
   detail: number;
+  processingMode: "auto" | "vector" | "depth" | "height";
 };
 
 export type PrintabilityReport = {
@@ -50,12 +51,14 @@ const safeDefaults: ReliefOptions = {
   profile: "balanced",
   smoothing: 2,
   detail: 1
+  ,processingMode: "auto"
 };
 
 export async function createRelief(
   imagePath: string,
   outputDirectory: string,
-  requested: Partial<ReliefOptions> = {}
+  requested: Partial<ReliefOptions> = {},
+  depthMapPath?: string
 ): Promise<ReliefResult> {
   const options = validateOptions({ ...safeDefaults, ...requested });
   const metadata = await sharp(imagePath).metadata();
@@ -73,22 +76,29 @@ export async function createRelief(
     .toBuffer({ resolveWithObject: true });
   const subjectPixels = cleanSubjectPixelMask(buildSubjectPixelMask(rgba, gridWidth, gridHeight), gridWidth, gridHeight);
   const cellMask = buildCellMask(subjectPixels, gridWidth, gridHeight);
-  const { data } = await prepared
-    .flatten({ background: "#ffffff" })
-    .grayscale()
-    .blur(profileSettings(options.profile).inputBlur)
-    .normalize({ lower: 1, upper: 99 })
-    .raw()
-    .toBuffer({ resolveWithObject: true });
-
   const heightMm = options.widthMm * gridHeight / gridWidth;
   const profile = profileSettings(options.profile);
-  const rawLevels = Array.from(data, (value) => {
-    const luminance = value / 255;
-    const normalized = options.invert ? luminance : 1 - luminance;
-    return Math.max(0, Math.min(1, (Math.pow(normalized, profile.gamma) - 0.5) * profile.contrast + 0.5));
-  });
-  const smoothed = smoothHeightField(rawLevels, gridWidth, gridHeight, options.smoothing);
+  const activeMode = options.processingMode === "auto"
+    ? (options.profile === "logo" ? "vector" : "height")
+    : options.processingMode;
+  let rawLevels: number[];
+  if (activeMode === "vector") {
+    rawLevels = buildVectorLevels(rgba, subjectPixels, gridWidth, gridHeight, options.invert);
+  } else {
+    const source = depthMapPath ? sharp(depthMapPath) : prepared.clone().flatten({ background: "#ffffff" }).grayscale();
+    const { data } = await source
+      .resize(gridWidth, gridHeight, { fit: "fill" })
+      .blur(profile.inputBlur)
+      .normalize({ lower: 1, upper: 99 })
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    rawLevels = Array.from(data, (value) => {
+      const luminance = value / 255;
+      const normalized = options.invert ? luminance : 1 - luminance;
+      return Math.max(0, Math.min(1, (Math.pow(normalized, profile.gamma) - 0.5) * profile.contrast + 0.5));
+    });
+  }
+  const smoothed = smoothHeightField(rawLevels, gridWidth, gridHeight, activeMode === "vector" ? Math.min(1, options.smoothing) : options.smoothing);
   const detailed = smoothed.map((value, index) =>
     Math.max(0, Math.min(1, value + (rawLevels[index] - value) * options.detail * profile.detail))
   );
@@ -135,7 +145,59 @@ function validateOptions(options: ReliefOptions): ReliefOptions {
   if (!["fast", "balanced", "fine", "photo", "logo"].includes(options.profile)) throw new Error("Unbekanntes Qualitätsprofil.");
   if (options.smoothing < 0 || options.smoothing > 5) throw new Error("Die Glättung muss zwischen 0 und 5 liegen.");
   if (options.detail < 0 || options.detail > 2) throw new Error("Die Detailstärke muss zwischen 0 und 2 liegen.");
+  if (!["auto", "vector", "depth", "height"].includes(options.processingMode)) throw new Error("Unbekannter Verarbeitungsmodus.");
   return options;
+}
+
+function buildVectorLevels(rgba: Buffer, mask: boolean[], width: number, height: number, invert: boolean): number[] {
+  const pixels: Array<[number, number, number]> = [];
+  const sampleStep = Math.max(1, Math.floor((width * height) / 8_000));
+  for (let index = 0; index < mask.length; index += sampleStep) {
+    if (mask[index]) pixels.push([rgba[index * 4], rgba[index * 4 + 1], rgba[index * 4 + 2]]);
+  }
+  const clusterCount = Math.max(2, Math.min(6, new Set(pixels.map(([r, g, b]) => `${r >> 5}:${g >> 5}:${b >> 5}`)).size));
+  let centers = Array.from({ length: clusterCount }, (_, index) => {
+    const source = pixels[Math.min(pixels.length - 1, Math.floor(index * pixels.length / clusterCount))] ?? [255, 255, 255];
+    return [...source] as [number, number, number];
+  });
+  const assignments = new Int16Array(mask.length);
+  for (let iteration = 0; iteration < 7; iteration += 1) {
+    const sums = Array.from({ length: clusterCount }, () => [0, 0, 0, 0]);
+    for (let index = 0; index < mask.length; index += 1) {
+      if (!mask[index]) continue;
+      const offset = index * 4, r = rgba[offset], g = rgba[offset + 1], b = rgba[offset + 2];
+      let best = 0, bestDistance = Number.POSITIVE_INFINITY;
+      centers.forEach((center, candidate) => {
+        const distance = (r - center[0]) ** 2 + (g - center[1]) ** 2 + (b - center[2]) ** 2;
+        if (distance < bestDistance) { best = candidate; bestDistance = distance; }
+      });
+      assignments[index] = best;
+      sums[best][0] += r; sums[best][1] += g; sums[best][2] += b; sums[best][3] += 1;
+    }
+    centers = centers.map((center, index) => sums[index][3]
+      ? [sums[index][0] / sums[index][3], sums[index][1] / sums[index][3], sums[index][2] / sums[index][3]]
+      : center) as Array<[number, number, number]>;
+  }
+  const cleaned = assignments.slice();
+  for (let y = 1; y < height - 1; y += 1) for (let x = 1; x < width - 1; x += 1) {
+    const index = y * width + x;
+    if (!mask[index]) continue;
+    const counts = new Map<number, number>();
+    for (let oy = -1; oy <= 1; oy += 1) for (let ox = -1; ox <= 1; ox += 1) {
+      const cluster = assignments[(y + oy) * width + x + ox];
+      counts.set(cluster, (counts.get(cluster) ?? 0) + 1);
+    }
+    const majority = [...counts].sort((a, b) => b[1] - a[1])[0];
+    if (majority[1] >= 6) cleaned[index] = majority[0];
+  }
+  const luminances = centers.map(([r, g, b], index) => ({ index, value: 0.2126 * r + 0.7152 * g + 0.0722 * b }))
+    .sort((a, b) => a.value - b.value);
+  const levels = new Map(luminances.map((entry, rank) => [entry.index, rank / Math.max(1, clusterCount - 1)]));
+  return Array.from({ length: mask.length }, (_, index) => {
+    if (!mask[index]) return 0;
+    const level = levels.get(cleaned[index]) ?? 0;
+    return invert ? level : 1 - level;
+  });
 }
 
 function profileSettings(profile: ReliefOptions["profile"]) {
@@ -428,6 +490,7 @@ function buildPreviewSurface(
 
 export const reliefInternals = {
   buildCellMask, buildSubjectPixelMask, cleanSubjectPixelMask, applyBoundaryRim,
+  buildVectorLevels,
   buildWatertightHeightMesh, buildPreviewSurface, encodeBinaryStl,
   smoothHeightField, analysePrintability, profileSettings
 };

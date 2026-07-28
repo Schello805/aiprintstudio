@@ -1,6 +1,6 @@
 {
   "name": "ai-print-studio",
-  "version": "0.5.3",
+  "version": "0.6.0",
   "description": "Lokale Bild-zu-3D-Desktop-App für Apple Silicon",
   "author": "Michael Schellenberger",
   "license": "SEE LICENSE IN LICENSE.md",
@@ -12,7 +12,8 @@
     "test": "vitest run",
     "lint": "eslint . --max-warnings 0",
     "verify": "npm run lint && npm run test && npm run build",
-    "dist": "npm run build && electron-builder --mac dmg --publish never",
+    "build:depth-worker": "zsh scripts/build-depth-worker.sh",
+    "dist": "npm run build && npm run build:depth-worker && electron-builder --mac dmg --publish never",
     "revision": "node scripts/revision.mjs"
   },
   "dependencies": {
@@ -58,6 +59,20 @@
       "dist-electron/**",
       "electron/preload.cjs",
       "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "resources/depth/DepthAnythingV2SmallF16P6.mlmodelc",
+        "to": "depth/DepthAnythingV2SmallF16P6.mlmodelc"
+      },
+      {
+        "from": "resources/depth/depth-worker",
+        "to": "depth/depth-worker"
+      },
+      {
+        "from": "resources/depth/object-capture-worker",
+        "to": "depth/object-capture-worker"
+      }
     ],
     "mac": {
       "category": "public.app-category.graphics-design",

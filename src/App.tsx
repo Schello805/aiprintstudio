@@ -22,6 +22,7 @@ type LegalPage = "imprint" | "privacy" | "cookies" | null;
 type SelectedImage = { path: string; name: string; size: number; width: number; height: number; suggestedProfile: "logo" | "photo"; dataUrl: string };
 type ReliefResult = Awaited<ReturnType<NonNullable<typeof window.desktop>["createRelief"]>>;
 type QualityProfile = "fast" | "balanced" | "fine" | "photo" | "logo";
+type ProcessingMode = "auto" | "vector" | "depth" | "height" | "scan";
 type HistoryEntry = {
   id: string; name: string; createdAt: string; stlPath: string; threeMfPath: string;
   triangleCount: number; widthMm: number; heightMm: number; profile: QualityProfile; score: number;
@@ -58,6 +59,8 @@ export function App() {
   const [reliefMm, setReliefMm] = useState(4);
   const [smoothing, setSmoothing] = useState(2);
   const [detail, setDetail] = useState(1);
+  const [processingMode, setProcessingMode] = useState<ProcessingMode>("auto");
+  const [scanResult, setScanResult] = useState<{ usdzPath: string; photoCount: number } | null>(null);
   const [history, setHistory] = useState<HistoryEntry[]>(() => {
     try { return JSON.parse(localStorage.getItem("ai-print-studio-history") ?? "[]") as HistoryEntry[]; }
     catch { return []; }
@@ -99,7 +102,8 @@ export function App() {
       const next = await window.desktop.createRelief(file.path, {
         widthMm, baseMm, reliefMm,
         resolution: profileOptions.find((option) => option.id === profile)?.resolution ?? 256,
-        invert: raiseLightAreas, profile, smoothing, detail
+        invert: raiseLightAreas, profile, smoothing, detail,
+        processingMode: processingMode === "scan" ? "auto" : processingMode
       });
       if (next) {
         setResult(next);
@@ -116,6 +120,17 @@ export function App() {
       }
     } catch (error) {
       setFileError(error instanceof Error ? error.message : "Das Modell konnte nicht erstellt werden.");
+    } finally { setBusy(false); }
+  }
+
+  async function generateObjectCapture() {
+    setBusy(true); setFileError(null); setScanResult(null);
+    try {
+      if (!window.desktop) throw new Error("Object Capture ist nur in der installierten Desktop-App verfügbar.");
+      const next = await window.desktop.createObjectCapture();
+      if (next) setScanResult(next);
+    } catch (error) {
+      setFileError(error instanceof Error ? error.message : "Der Mehrfoto-Scan konnte nicht erstellt werden.");
     } finally { setBusy(false); }
   }
 
@@ -171,7 +186,7 @@ export function App() {
               </div>
               {result && <ReliefPreview result={result} />}
             </div>
-            {fileError && <div className="error-banner" role="alert"><strong>Bild konnte nicht geladen werden</strong><span>{fileError}</span><button onClick={() => setFileError(null)} aria-label="Fehlermeldung schließen"><X /></button></div>}
+            {fileError && <div className="error-banner" role="alert"><strong>Verarbeitung fehlgeschlagen</strong><span>{fileError}</span><button onClick={() => setFileError(null)} aria-label="Fehlermeldung schließen"><X /></button></div>}
             {uploadStatus && !fileError && <div className="upload-status"><CheckCircle2 /> {uploadStatus}</div>}
             <div className="workflow-row" aria-label="Verarbeitungsschritte">
               {["Bild analysieren", "3D rekonstruieren", "Mesh reparieren", "Exportieren"].map((step, index) => (
@@ -180,47 +195,83 @@ export function App() {
             </div>
             <div className="conversion-options">
               <div className="option-group">
-                <span className="option-label">QUALITÄTSPROFIL</span>
-                <div className="profile-grid">
-                  {profileOptions.map((option) => (
-                    <button key={option.id} className={profile === option.id ? "profile-option selected" : "profile-option"} onClick={() => setProfile(option.id)}>
-                      <strong>{option.label}</strong><span>{option.description}</span>
-                    </button>
-                  ))}
+                <span className="option-label">VERARBEITUNG</span>
+                <div className="mode-grid">
+                  <button className={processingMode === "auto" ? "mode-option selected" : "mode-option"} onClick={() => setProcessingMode("auto")}>
+                    <Sparkles /><div><strong>Automatisch</strong><span>Wählt passend zu deinem Bild</span></div>
+                  </button>
+                  <button className={processingMode === "vector" ? "mode-option selected" : "mode-option"} onClick={() => { setProcessingMode("vector"); setProfile("logo"); }}>
+                    <Layers3 /><div><strong>Kontur-Relief</strong><span>Logos, Wappen und Schrift</span></div>
+                  </button>
+                  <button className={processingMode === "depth" ? "mode-option selected" : "mode-option"} onClick={() => { setProcessingMode("depth"); setProfile("photo"); }}>
+                    <Box /><div><strong>KI-Tiefe</strong><span>Depth Anything V2 · lokal</span></div>
+                  </button>
+                  <button className={processingMode === "height" ? "mode-option selected" : "mode-option"} onClick={() => setProcessingMode("height")}>
+                    <ImagePlus /><div><strong>Höhenkarte</strong><span>Helligkeit direkt übernehmen</span></div>
+                  </button>
+                  <button className={processingMode === "scan" ? "mode-option selected" : "mode-option"} onClick={() => setProcessingMode("scan")}>
+                    <Layers3 /><div><strong>Mehrfoto-Scan</strong><span>Apple Object Capture · 12–300 Fotos</span></div>
+                  </button>
                 </div>
               </div>
-              <div className="parameter-grid">
-                <NumberField label="BREITE" value={widthMm} unit="mm" min={20} max={300} step={5} setValue={setWidthMm} />
-                <NumberField label="GRUNDPLATTE" value={baseMm} unit="mm" min={0.8} max={10} step={0.2} setValue={setBaseMm} />
-                <NumberField label="RELIEF" value={reliefMm} unit="mm" min={0.5} max={20} step={0.5} setValue={setReliefMm} />
-                <NumberField label="GLÄTTUNG" value={smoothing} min={0} max={5} step={1} setValue={setSmoothing} />
-                <NumberField label="DETAIL" value={detail} min={0} max={2} step={0.25} setValue={setDetail} />
-              </div>
-              <div className="option-footer">
-                <div>
-                  <span className="option-label">RELIEF-RICHTUNG</span>
-                  <div className="segmented-control">
-                    <button className={!raiseLightAreas ? "selected" : ""} onClick={() => setRaiseLightAreas(false)}>Dunkles anheben</button>
-                    <button className={raiseLightAreas ? "selected" : ""} onClick={() => setRaiseLightAreas(true)}>Helles anheben</button>
+              {processingMode === "scan" ? (
+                <div className="scan-guidance">
+                  <strong>So gelingt der vollständige 3D-Scan</strong>
+                  <span>Fotografiere das unbewegte Objekt rundherum in 2–3 Höhen. Benachbarte Fotos sollten sich mindestens 70 % überlappen; vermeide harte Schatten und Spiegelungen.</span>
+                </div>
+              ) : (
+                <>
+                  <div className="option-group">
+                    <span className="option-label">QUALITÄTSPROFIL</span>
+                    <div className="profile-grid">
+                      {profileOptions.map((option) => (
+                        <button key={option.id} className={profile === option.id ? "profile-option selected" : "profile-option"} onClick={() => setProfile(option.id)}>
+                          <strong>{option.label}</strong><span>{option.description}</span>
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                </div>
-                <div className="cost-estimate">
-                  <span className="option-label">KOSTEN PRO UMWANDLUNG</span>
-                  <strong>0,00 €</strong><small>Lokale Verarbeitung · keine API-Nutzung</small>
-                </div>
-              </div>
+                  <div className="parameter-grid">
+                    <NumberField label="BREITE" value={widthMm} unit="mm" min={20} max={300} step={5} setValue={setWidthMm} />
+                    <NumberField label="GRUNDPLATTE" value={baseMm} unit="mm" min={0.8} max={10} step={0.2} setValue={setBaseMm} />
+                    <NumberField label="RELIEF" value={reliefMm} unit="mm" min={0.5} max={20} step={0.5} setValue={setReliefMm} />
+                    <NumberField label="GLÄTTUNG" value={smoothing} min={0} max={5} step={1} setValue={setSmoothing} />
+                    <NumberField label="DETAIL" value={detail} min={0} max={2} step={0.25} setValue={setDetail} />
+                  </div>
+                  <div className="option-footer">
+                    <div>
+                      <span className="option-label">RELIEF-RICHTUNG</span>
+                      <div className="segmented-control">
+                        <button className={!raiseLightAreas ? "selected" : ""} onClick={() => setRaiseLightAreas(false)}>Dunkles anheben</button>
+                        <button className={raiseLightAreas ? "selected" : ""} onClick={() => setRaiseLightAreas(true)}>Helles anheben</button>
+                      </div>
+                    </div>
+                    <div className="cost-estimate">
+                      <span className="option-label">KOSTEN PRO UMWANDLUNG</span>
+                      <strong>0,00 €</strong><small>Lokale Verarbeitung · keine API-Nutzung</small>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
             <div className="action-bar">
-              <div><Box size={20} /><div><strong>{file ? file.name : "Noch kein Bild gewählt"}</strong><span>{file ? `${(file.size / 1_048_576).toFixed(1)} MB · ${file.width} × ${file.height} px · bereit` : "Wähle zuerst eine geeignete Aufnahme aus."}</span></div></div>
-              <button className="primary-button" disabled={!file || busy} onClick={() => void generateRelief()}>{busy ? "Mesh wird erzeugt …" : "Relief erstellen"} <ChevronRight size={18} /></button>
+              <div><Box size={20} /><div><strong>{processingMode === "scan" ? "Mehrfoto-Rekonstruktion" : file ? file.name : "Noch kein Bild gewählt"}</strong><span>{processingMode === "scan" ? "Wähle 12–300 überlappende Fotos aus verschiedenen Blickwinkeln." : file ? `${(file.size / 1_048_576).toFixed(1)} MB · ${file.width} × ${file.height} px · bereit` : "Wähle zuerst eine geeignete Aufnahme aus."}</span></div></div>
+              <button className="primary-button" disabled={(processingMode !== "scan" && !file) || busy} onClick={() => void (processingMode === "scan" ? generateObjectCapture() : generateRelief())}>{busy ? "Modell wird erzeugt …" : processingMode === "scan" ? "Fotos wählen & 3D-Scan starten" : "Relief erstellen"} <ChevronRight size={18} /></button>
             </div>
-            {busy && <div className="progress-card"><span /><div><strong>Lokale 3D-Verarbeitung</strong><p>Höhenmodell und wasserdichtes Mesh werden berechnet …</p></div></div>}
+            {busy && <div className="progress-card"><span /><div><strong>{processingMode === "depth" ? "Depth Anything V2 analysiert das Foto" : "Lokale 3D-Verarbeitung"}</strong><p>Höhenmodell und wasserdichtes Mesh werden berechnet …</p></div></div>}
             {result && (
               <div className={`result-card ${result.printability.status}`}>
                 <div className="result-check"><CheckCircle2 /></div>
                 <div><strong>Modell erfolgreich erstellt · Druckscore {result.printability.score}/100</strong><p>{result.triangleCount.toLocaleString("de-DE")} Dreiecke · {result.widthMm.toFixed(0)} × {result.heightMm.toFixed(0)} mm · ca. {result.printability.estimatedVolumeCm3.toFixed(1)} cm³</p><p>{result.printability.issues.join(" ")}</p></div>
                 <img className="heightmap-preview" src={result.heightmapDataUrl} alt="Berechnete Höhenkarte" title="Berechnete Höhenkarte" />
                 <button className="secondary-button" onClick={() => void window.desktop?.showItemInFolder(result.stlPath)}>Im Finder zeigen</button>
+              </div>
+            )}
+            {scanResult && (
+              <div className="result-card ready">
+                <div className="result-check"><CheckCircle2 /></div>
+                <div><strong>Vollständiger 3D-Scan erstellt</strong><p>{scanResult.photoCount} Fotos · Apple Object Capture · USDZ</p></div>
+                <button className="secondary-button" onClick={() => void window.desktop?.showItemInFolder(scanResult.usdzPath)}>Im Finder zeigen</button>
               </div>
             )}
           </section>
@@ -304,6 +355,7 @@ type SettingsStatus = {
   modelSetupAccepted: boolean;
   encryptionAvailable: boolean;
   storageVersion: number;
+  depthModelAvailable: boolean;
 };
 
 function Settings() {
@@ -313,6 +365,7 @@ function Settings() {
     modelSetupAccepted: false,
     encryptionAvailable: true,
     storageVersion: 0
+    ,depthModelAvailable: false
   });
 
   async function refreshStatus() {
@@ -328,6 +381,7 @@ function Settings() {
       <section className="settings-grid">
         <article><div className="setting-icon"><Sparkles /></div><div><h3>OpenAI-Analyse</h3><p>{status.openAiConfigured ? "API-Key ist verschlüsselt gespeichert und lesbar." : "Optional: Erkennt das Motiv und schlägt passende Druckparameter vor."}</p></div><div className="setting-action">{status.openAiConfigured ? <span className="tag"><CheckCircle2 /> Eingerichtet</span> : <span className="tag neutral">Nicht eingerichtet</span>}<button onClick={() => setDialog("openai")}>{status.openAiConfigured ? "Verwalten" : "Einrichten"}</button></div></article>
         <article><div className="setting-icon"><Layers3 /></div><div><h3>Lokale Relief-Engine</h3><p>Integriert · erzeugt wasserdichte STL- und 3MF-Dateien vollständig offline.</p></div><button onClick={() => setDialog("model")}>Details</button></article>
+        <article><div className="setting-icon"><Box /></div><div><h3>Depth Anything V2</h3><p>Lokale KI-Tiefenschätzung für Fotos · Apple Core ML · keine Cloud.</p></div><span className={status.depthModelAvailable ? "tag" : "tag neutral"}>{status.depthModelAvailable ? "Bereit" : "Nur im Release"}</span></article>
         <article><div className="setting-icon"><CheckCircle2 /></div><div><h3>Hardwareprofil</h3><p>Apple M3 · 16 GB · automatische CPU-/Metal-Auswahl</p></div><span className="tag">Erkannt</span></article>
         <UpdateSettings />
       </section>

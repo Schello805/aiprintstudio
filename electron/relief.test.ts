@@ -58,7 +58,7 @@ describe("relief mesh", () => {
     const report = reliefInternals.analysePrintability(
       mesh,
       Array(9).fill(1),
-      { widthMm: 20, baseMm: 0.8, reliefMm: 2, resolution: 32, invert: false, profile: "balanced", smoothing: 2, detail: 1 },
+      { widthMm: 20, baseMm: 0.8, reliefMm: 2, resolution: 32, invert: false, profile: "balanced", smoothing: 2, detail: 1, processingMode: "height" },
       Array(4).fill(true),
       3
     );
@@ -81,5 +81,15 @@ describe("relief mesh", () => {
     const rimmed = reliefInternals.applyBoundaryRim(Array(49).fill(1), cleaned, 7, 7, 1);
     expect(rimmed[24]).toBe(1);
     expect(rimmed[8]).toBe(0);
+  });
+
+  it("turns flat logo colors into stable discrete height levels", () => {
+    const rgba = Buffer.from([
+      0, 0, 0, 255, 0, 0, 0, 255,
+      255, 255, 255, 255, 255, 255, 255, 255
+    ]);
+    const levels = reliefInternals.buildVectorLevels(rgba, Array(4).fill(true), 2, 2, false);
+    expect(new Set(levels).size).toBe(2);
+    expect(levels[0]).toBeGreaterThan(levels[3]);
   });
 });

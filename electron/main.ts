@@ -1,12 +1,17 @@
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, safeStorage, shell } from "electron";
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { execFile } from "node:child_process";
+import { existsSync } from "node:fs";
+import { copyFile, mkdir, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 import sharp, { type Metadata } from "sharp";
 import { createRelief, type ReliefOptions } from "./relief.js";
 
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
 const developmentUrl = process.env.VITE_DEV_SERVER_URL ?? "http://localhost:5173";
+const execFileAsync = promisify(execFile);
 
 type StoredSettings = {
   schemaVersion?: number;
@@ -36,6 +41,31 @@ function settingsRoot(): string {
 
 function settingsFile(): string {
   return join(settingsRoot(), settingsDirectoryName, "settings.json");
+}
+
+function depthResources() {
+  const root = app.isPackaged ? process.resourcesPath : join(currentDirectory, "../resources");
+  return {
+    worker: join(root, "depth", "depth-worker"),
+    model: join(root, "depth", "DepthAnythingV2SmallF16P6.mlmodelc"),
+    objectCaptureWorker: join(root, "depth", "object-capture-worker")
+  };
+}
+
+function depthModelAvailable(): boolean {
+  const resources = depthResources();
+  return existsSync(resources.worker) && existsSync(resources.model);
+}
+
+async function createDepthMap(imagePath: string): Promise<{ path: string; cleanup: () => Promise<void> }> {
+  if (!depthModelAvailable()) {
+    throw new Error("Depth Anything V2 ist in diesem Build nicht enthalten. Bitte installiere die aktuelle Release-Version.");
+  }
+  const directory = await mkdtemp(join(tmpdir(), "ai-print-depth-"));
+  const output = join(directory, "depth.png");
+  const resources = depthResources();
+  await execFileAsync(resources.worker, [resources.model, imagePath, output], { timeout: 120_000, maxBuffer: 1024 * 1024 });
+  return { path: output, cleanup: () => rm(directory, { recursive: true, force: true }) };
 }
 
 async function readSettings(): Promise<StoredSettings> {
@@ -164,6 +194,7 @@ app.whenReady().then(() => {
       modelSetupAccepted: Boolean(settings.modelSetupAccepted),
       encryptionAvailable: safeStorage.isEncryptionAvailable(),
       storageVersion: settings.schemaVersion ?? 0
+      ,depthModelAvailable: depthModelAvailable()
     };
   });
   ipcMain.handle("settings:saveOpenAiKey", async (_event, apiKey: string) => {
@@ -246,13 +277,44 @@ app.whenReady().then(() => {
       dataUrl: `data:${mime};base64,${bytes.toString("base64")}`
     };
   });
+  ipcMain.handle("objectCapture:create", async () => {
+    const selection = await dialog.showOpenDialog({
+      title: "Fotoserie für den 3D-Scan auswählen",
+      properties: ["openFile", "multiSelections"],
+      filters: [{ name: "Fotos", extensions: ["png", "jpg", "jpeg", "heic", "webp"] }]
+    });
+    if (selection.canceled) return null;
+    if (selection.filePaths.length < 12) throw new Error("Für einen stabilen 3D-Scan werden mindestens 12 Fotos benötigt.");
+    if (selection.filePaths.length > 300) throw new Error("Bitte verwende höchstens 300 Fotos pro Scan.");
+    const resources = depthResources();
+    if (!existsSync(resources.objectCaptureWorker)) throw new Error("Object Capture ist in diesem Build nicht enthalten.");
+    const workspace = await mkdtemp(join(tmpdir(), "ai-print-capture-"));
+    const images = join(workspace, "images");
+    await mkdir(images);
+    try {
+      await Promise.all(selection.filePaths.map((source, index) =>
+        copyFile(source, join(images, `${String(index).padStart(4, "0")}-${basename(source)}`))
+      ));
+      const outputDirectory = join(app.getPath("downloads"), "AI Print Studio");
+      await mkdir(outputDirectory, { recursive: true });
+      const output = join(outputDirectory, `object-capture-${Date.now()}.usdz`);
+      await execFileAsync(resources.objectCaptureWorker, [images, output], { timeout: 30 * 60_000, maxBuffer: 4 * 1024 * 1024 });
+      return { usdzPath: output, photoCount: selection.filePaths.length };
+    } finally {
+      await rm(workspace, { recursive: true, force: true });
+    }
+  });
   ipcMain.handle("relief:create", async (_event, imagePath: string, options: Partial<ReliefOptions>) => {
     const outputDirectory = join(app.getPath("downloads"), "AI Print Studio");
+    let depthMap: Awaited<ReturnType<typeof createDepthMap>> | undefined;
     try {
-      return await createRelief(imagePath, outputDirectory, options);
+      if (options.processingMode === "depth") depthMap = await createDepthMap(imagePath);
+      return await createRelief(imagePath, outputDirectory, options, depthMap?.path);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unbekannter Exportfehler";
       throw new Error(`Das Relief konnte nicht unter „${outputDirectory}“ gespeichert werden: ${message}`);
+    } finally {
+      await depthMap?.cleanup();
     }
   });
   ipcMain.handle("shell:showItem", (_event, path: string) => shell.showItemInFolder(path));

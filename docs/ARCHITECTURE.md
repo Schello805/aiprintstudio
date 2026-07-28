@@ -19,7 +19,12 @@ Electron Main Process
   └── Worker Supervisor
         │ JSON Lines über stdin/stdout
         ▼
-Python 3D Worker
+Native Apple Worker
+  ├── Depth Anything V2 / Core ML
+  └── RealityKit Object Capture
+        │
+        ▼
+3D Pipeline
   ├── Image Preprocessing
   ├── Reconstruction Provider
   ├── Mesh Repair Pipeline

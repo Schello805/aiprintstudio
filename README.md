@@ -24,6 +24,9 @@ standardmäßig auf dem eigenen Mac.
 - Konturgetreuer Export anhand von Transparenz oder erkanntem Bildhintergrund
 - Umschaltbare Relief-Richtung für helle oder dunkle erhabene Bereiche
 - Sichtbare Kostenanzeige für die lokale Verarbeitung
+- Konturmodus für Logos, Wappen und Schrift mit diskreten Farb-Höhenebenen
+- Depth Anything V2 Small über Apple Core ML für lokale Foto-Tiefenschätzung
+- Mehrfoto-Rekonstruktion über Apple RealityKit Object Capture
 
 ## Bereits testbar
 
@@ -41,6 +44,17 @@ eine Materialschätzung und wird im lokalen Verlauf gespeichert.
 Unter **Einstellungen → App-Updates** kann die App manuell nach einer neuen
 GitHub-Version suchen. Ein verfügbarer Download wird erst nach ausdrücklichem
 Klick im Browser geöffnet; automatische Hintergrundupdates gibt es nicht.
+
+## Verarbeitungsmodi
+
+- **Automatisch** wählt anhand der Bildcharakteristik Kontur oder klassische Höhenverarbeitung.
+- **Kontur-Relief** fasst gleichartige Farbflächen zusammen und erzeugt klare,
+  druckbare Höhenebenen für Logos, Wappen und Schrift.
+- **KI-Tiefe** verwendet das mitgelieferte Depth Anything V2 Small lokal über
+  Core ML. Bilder verlassen den Mac nicht.
+- **Höhenkarte** übernimmt die Bildhelligkeit direkt für kontrollierte 2,5D-Reliefs.
+- **Mehrfoto-Scan** verarbeitet 12–300 überlappende Fotos mit Apple Object
+  Capture zu einem vollständigen USDZ-Modell.
 
 ## Technischer Aufbau
 

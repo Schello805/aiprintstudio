@@ -9,6 +9,7 @@ interface Window {
       modelSetupAccepted: boolean;
       encryptionAvailable: boolean;
       storageVersion: number;
+      depthModelAvailable: boolean;
     }>;
     saveOpenAiKey: (apiKey: string) => Promise<void>;
     removeOpenAiKey: () => Promise<void>;
@@ -22,6 +23,7 @@ interface Window {
       suggestedProfile: "logo" | "photo";
       dataUrl: string;
     } | null>;
+    createObjectCapture: () => Promise<{ usdzPath: string; photoCount: number } | null>;
     createRelief: (imagePath: string, options: {
       widthMm: number;
       baseMm: number;
@@ -31,6 +33,7 @@ interface Window {
       profile: "fast" | "balanced" | "fine" | "photo" | "logo";
       smoothing: number;
       detail: number;
+      processingMode: "auto" | "vector" | "depth" | "height";
     }) => Promise<{
       stlPath: string;
       threeMfPath: string;
@@ -41,6 +44,7 @@ interface Window {
       options: {
         widthMm: number; baseMm: number; reliefMm: number; resolution: number; invert: boolean;
         profile: "fast" | "balanced" | "fine" | "photo" | "logo"; smoothing: number; detail: number;
+        processingMode: "auto" | "vector" | "depth" | "height";
       };
       printability: { score: number; status: "ready" | "warning" | "critical"; issues: string[]; estimatedVolumeCm3: number };
       heightmapDataUrl: string;

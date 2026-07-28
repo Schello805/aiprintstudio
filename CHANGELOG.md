@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.0
+
+- Neuer Konturmodus clustert Logo- und Wappenfarben zu stabilen Höhenebenen
+- Depth Anything V2 Small läuft als gebündeltes Core-ML-Modell vollständig lokal
+- Automatische Verarbeitung wählt für flächige Grafiken den Konturmodus
+- Apple Object Capture rekonstruiert vollständige USDZ-Modelle aus 12–300 Fotos
+- Neue Modusauswahl und geführter Mehrfoto-Workflow im Studio
+
 ## 0.5.3
 
 - Erkennt veröffentlichte Updates zuverlässig über GitHub Releases
