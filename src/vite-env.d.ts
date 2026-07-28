@@ -3,7 +3,7 @@
 interface Window {
   desktop?: {
     getVersion: () => Promise<string>;
-    checkForUpdate: () => Promise<{ currentVersion: string; latestVersion: string; available: boolean; url: string }>;
+    checkForUpdate: () => Promise<{ currentVersion: string; latestVersion: string; available: boolean; url: string; directDownload: boolean }>;
     getSettingsStatus: () => Promise<{
       openAiConfigured: boolean;
       modelSetupAccepted: boolean;

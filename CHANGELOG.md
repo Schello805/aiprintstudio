@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.3
+
+- Erkennt veröffentlichte Updates zuverlässig über GitHub Releases
+- Öffnet verfügbare DMG-Dateien direkt aus den App-Einstellungen
+- Veröffentlicht erfolgreiche Release-Builds automatisch statt als Entwurf
+
 ## 0.5.2
 
 - Glättet transparente Motivkonturen und entfernt gezackte Außenwände

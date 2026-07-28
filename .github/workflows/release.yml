@@ -29,4 +29,4 @@ jobs:
             release/*.dmg
             release/*.dmg.blockmap
           generate_release_notes: true
-          draft: true
+          draft: false

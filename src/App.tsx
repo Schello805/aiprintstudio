@@ -340,14 +340,15 @@ function Settings() {
 function UpdateSettings() {
   const [message, setMessage] = useState("Prüft GitHub Releases nur auf Wunsch.");
   const [url, setUrl] = useState<string | null>(null);
+  const [directDownload, setDirectDownload] = useState(false);
   const [busy, setBusy] = useState(false);
   async function check() {
-    setBusy(true); setUrl(null);
+    setBusy(true); setUrl(null); setDirectDownload(false);
     try {
       if (!window.desktop) throw new Error("Update-Prüfung ist nur in der Desktop-App verfügbar.");
       const update = await window.desktop.checkForUpdate();
       setMessage(update.available ? `Version ${update.latestVersion} ist verfügbar.` : `Version ${update.currentVersion} ist aktuell.`);
-      if (update.available) setUrl(update.url);
+      if (update.available) { setUrl(update.url); setDirectDownload(update.directDownload); }
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Update-Prüfung fehlgeschlagen.");
     } finally { setBusy(false); }
@@ -357,7 +358,7 @@ function UpdateSettings() {
       <div className="setting-icon"><UploadCloud /></div>
       <div><h3>App-Updates</h3><p>{message}</p></div>
       <div className="setting-action">
-        {url && <button onClick={() => void window.desktop?.openExternal(url)}>Download</button>}
+        {url && <button onClick={() => void window.desktop?.openExternal(url)}>{directDownload ? "DMG herunterladen" : "Release öffnen"}</button>}
         <button onClick={() => void check()} disabled={busy}>{busy ? "Prüft …" : "Jetzt prüfen"}</button>
       </div>
     </article>

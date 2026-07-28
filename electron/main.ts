@@ -142,9 +142,20 @@ app.whenReady().then(() => {
       headers: { Accept: "application/vnd.github+json", "User-Agent": "AI-Print-Studio" }
     });
     if (!response.ok) throw new Error("Die Update-Informationen konnten nicht geladen werden.");
-    const release = await response.json() as { tag_name?: string; html_url?: string };
+    const release = await response.json() as {
+      tag_name?: string;
+      html_url?: string;
+      assets?: Array<{ name?: string; browser_download_url?: string }>;
+    };
     const latestVersion = (release.tag_name ?? "").replace(/^v/, "");
-    return { currentVersion: app.getVersion(), latestVersion, available: Boolean(latestVersion && isNewerVersion(latestVersion, app.getVersion())), url: release.html_url ?? "https://github.com/Schello805/aiprintstudio/releases" };
+    const dmg = release.assets?.find((asset) => asset.name?.endsWith(".dmg"));
+    return {
+      currentVersion: app.getVersion(),
+      latestVersion,
+      available: Boolean(latestVersion && isNewerVersion(latestVersion, app.getVersion())),
+      url: dmg?.browser_download_url ?? release.html_url ?? "https://github.com/Schello805/aiprintstudio/releases",
+      directDownload: Boolean(dmg?.browser_download_url)
+    };
   });
   ipcMain.handle("settings:status", async () => {
     const settings = await readSettings();
