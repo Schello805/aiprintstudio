@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.14.3
+
+- Beim Wechsel zwischen Studio, Verlauf und Einstellungen bleiben Bild,
+  Parameter, Farbauswahl, Editoränderungen und Ergebnis erhalten.
+- Ein erneuter Klick auf Studio kehrt zum zuletzt geöffneten Werkzeug zurück,
+  statt ungefragt die Werkzeugübersicht zu öffnen.
+- Vor **Alle Werkzeuge** warnt die App, wenn dadurch ein aktueller Studio-Stand
+  verworfen würde.
+
 ## 0.14.2
 
 - Die native macOS-Farbpalette bleibt beim Verschieben und Anklicken geöffnet.

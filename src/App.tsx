@@ -222,6 +222,19 @@ export function App() {
     setResult(null);
   }, []);
 
+  function returnToToolSelection() {
+    const hasProgress = Boolean(file || result || editorHeightmap || editorColorMap || scanResult);
+    if (hasProgress && !window.confirm("Aktuellen Studio-Stand verwerfen?\n\nBild, Einstellungen, Farbauswahl und noch nicht exportierte Änderungen gehen dabei verloren.")) return;
+    setStudioTool("home");
+    setFile(null);
+    setPreview(null);
+    setResult(null);
+    setEditorOpen(false);
+    setEditorHeightmap(null);
+    setEditorColorMap(null);
+    setScanResult(null);
+  }
+
   if (legalPage) {
     return <LegalView page={legalPage} onClose={() => setLegalPage(null)} version={version} />;
   }
@@ -236,7 +249,7 @@ export function App() {
         </div>
         <nav aria-label="Hauptnavigation">
           {navigation.map(({ id, label, icon: Icon }) => (
-            <button key={id} className={view === id ? "nav-item active" : "nav-item"} onClick={() => { setView(id); if (id === "studio") setStudioTool("home"); }}>
+            <button key={id} className={view === id ? "nav-item active" : "nav-item"} onClick={() => setView(id)}>
               <Icon size={19} /><span>{label}</span>
             </button>
           ))}
@@ -264,7 +277,7 @@ export function App() {
         {view === "studio" && studioTool !== "home" && (
           <section className="workspace">
             <div className="tool-context">
-              <button onClick={() => { setStudioTool("home"); setFile(null); setPreview(null); setResult(null); }}>← Alle Werkzeuge</button>
+              <button onClick={returnToToolSelection}>← Alle Werkzeuge</button>
               <span>{studioTool === "image" ? <ImagePlus /> : studioTool === "text" ? <Type /> : <Sparkles />}{studioTool === "image" ? "Bild zu 3D" : studioTool === "text" ? "Schrift zu 3D" : "Prompt zu 3D"}</span>
             </div>
             <div className="intro">
