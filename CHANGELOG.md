@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.7.3
+
+- Tooltips öffnen jetzt ausschließlich über gut sichtbare Info-Symbole statt beim Überfahren kompletter Felder.
+- Der Flächeneditor arbeitet mit höherer Auflösung, kräftiger Auswahlmarkierung und einer direkten Millimeter-Eingabe.
+- Höhenregler und Flächenauswahl reagieren zuverlässig per Pointer; eine klare Statuszeile erklärt die Übernahme ins neue Relief.
+- Die Hauptvorschau wird nach einer Flächenänderung bewusst verworfen, damit kein veraltetes Ergebnis angezeigt wird.
+- Die 3D-Vorschau verwendet eine feinere Konturabtastung für sichtbar ruhigere Logo- und Wappenkanten.
+- Der macOS-Build wird nach dem Paketieren erneut geprüft und gültig lokal signiert.
+
 ## 0.7.2
 
 - Behebt „Maximum call stack size exceeded“ bei hochauflösenden Reliefvorschauen

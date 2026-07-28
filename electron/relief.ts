@@ -548,7 +548,7 @@ function buildPreviewSurface(
   heights: number[],
   cellMask?: boolean[]
 ): { positions: number[]; indices: number[] } {
-  const stride = Math.max(1, Math.ceil(Math.max(columns, rows) / 110));
+  const stride = Math.max(1, Math.ceil(Math.max(columns, rows) / 180));
   const xs = Array.from(new Set([...Array(Math.ceil((columns - 1) / stride) + 1)].map((_, i) => Math.min(i * stride, columns - 1))));
   const ys = Array.from(new Set([...Array(Math.ceil((rows - 1) / stride) + 1)].map((_, i) => Math.min(i * stride, rows - 1))));
   const previewColumns = xs.length;

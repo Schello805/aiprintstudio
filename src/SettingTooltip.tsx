@@ -1,9 +1,19 @@
+import { Info } from "lucide-react";
+
 export function SettingTooltip({ text }: { text: string }) {
   const [explanation, example] = text.split("\n");
   return (
-    <span className="setting-tooltip" role="tooltip" aria-hidden="true">
-      <span>{explanation}</span>
-      {example && <em>{example}</em>}
+    <span
+      className="tooltip-trigger"
+      tabIndex={0}
+      aria-label={`${explanation}${example ? ` ${example}` : ""}`}
+      onClick={(event) => event.stopPropagation()}
+    >
+      <Info aria-hidden="true" />
+      <span className="setting-tooltip" role="tooltip">
+        <span>{explanation}</span>
+        {example && <em>{example}</em>}
+      </span>
     </span>
   );
 }

@@ -59,7 +59,7 @@ export function RegionEditor({
     const image = new Image();
     image.onload = () => {
       if (!active) return;
-      const scale = Math.min(1, 220 / Math.max(image.naturalWidth, image.naturalHeight));
+      const scale = Math.min(1, 480 / Math.max(image.naturalWidth, image.naturalHeight));
       const width = Math.max(16, Math.round(image.naturalWidth * scale));
       const height = Math.max(16, Math.round(image.naturalHeight * scale));
       const canvas = document.createElement("canvas");
@@ -108,9 +108,9 @@ export function RegionEditor({
     for (let index = 0; index < data.segmentation.regionIds.length; index += 1) {
       if (!selection.has(data.segmentation.regionIds[index])) continue;
       const offset = index * 4;
-      display[offset] = Math.round(display[offset] * 0.35 + 165 * 0.65);
-      display[offset + 1] = Math.round(display[offset + 1] * 0.35 + 243 * 0.65);
-      display[offset + 2] = Math.round(display[offset + 2] * 0.35 + 109 * 0.65);
+      display[offset] = Math.round(display[offset] * 0.2 + 165 * 0.8);
+      display[offset + 1] = Math.round(display[offset + 1] * 0.2 + 243 * 0.8);
+      display[offset + 2] = Math.round(display[offset + 2] * 0.2 + 109 * 0.8);
       display[offset + 3] = 255;
     }
     context.putImageData(new ImageData(display, canvas.width, canvas.height), 0, 0);
@@ -145,7 +145,7 @@ export function RegionEditor({
     setUndoStack((current) => [...current, levels.slice()]);
     setLevels(next);
   };
-  const clickCanvas = (event: React.MouseEvent<HTMLCanvasElement>) => {
+  const selectCanvasRegion = (event: React.PointerEvent<HTMLCanvasElement>) => {
     if (!data || !canvasRef.current) return;
     const bounds = canvasRef.current.getBoundingClientRect();
     const x = Math.min(data.segmentation.width - 1, Math.max(0, Math.floor((event.clientX - bounds.left) / bounds.width * data.segmentation.width)));
@@ -172,7 +172,7 @@ export function RegionEditor({
       <div className="region-editor-grid">
         <div className="region-canvas-panel">
           <span className="panel-label">2D-AUSWAHL · GRÜN MARKIERT</span>
-          {data ? <canvas ref={canvasRef} onClick={clickCanvas} /> : <div className="editor-loading">Flächen werden erkannt …</div>}
+          {data ? <canvas ref={canvasRef} onPointerDown={selectCanvasRegion} /> : <div className="editor-loading">Flächen werden erkannt …</div>}
         </div>
         <EditorReliefPreview segmentation={data?.segmentation ?? null} levels={levels} />
       </div>
@@ -186,8 +186,29 @@ export function RegionEditor({
       <div className="height-toolbar">
         <label className="has-tooltip">
           <span>HÖHE DER AUSWAHL</span>
-          <input type="range" min={0} max={255} value={currentLevel} disabled={!selection.size} onChange={(event) => setLevel(Number(event.target.value))} />
-          <strong>{(currentLevel / 255 * reliefMm).toFixed(1)} mm</strong>
+          <input
+            type="range"
+            min={0}
+            max={255}
+            step={1}
+            value={currentLevel}
+            disabled={!selection.size}
+            onInput={(event) => setLevel(Number(event.currentTarget.value))}
+            aria-label="Höhe der ausgewählten Fläche"
+          />
+          <span className="height-value">
+            <input
+              type="number"
+              min={0}
+              max={reliefMm}
+              step={0.1}
+              value={(currentLevel / 255 * reliefMm).toFixed(1)}
+              disabled={!selection.size}
+              onChange={(event) => setLevel(Number(event.target.value) / reliefMm * 255)}
+              aria-label="Höhe in Millimetern"
+            />
+            mm
+          </span>
           <SettingTooltip text={editorTooltips.height} />
         </label>
         <button className="has-tooltip" disabled={!selection.size} onClick={() => setLevel(currentLevel + 20)}><ChevronUp /> Höher<SettingTooltip text={editorTooltips.higher} /></button>
@@ -201,8 +222,8 @@ export function RegionEditor({
         }}>Kanten abrunden<SettingTooltip text={editorTooltips.round} /></button>
       </div>
       <div className="editor-status">
-        <span>{selection.size ? selection.size <= 20 ? `${selection.size} Fläche${selection.size === 1 ? "" : "n"} ausgewählt` : "Mehrere angrenzende Teilflächen ausgewählt" : "Klicke im Bild auf eine Fläche."}</span>
-        <strong>Änderungen werden direkt für Vorschau und Export übernommen.</strong>
+        <span>{selection.size ? selection.size <= 20 ? `✓ ${selection.size} Fläche${selection.size === 1 ? "" : "n"} grün ausgewählt` : "✓ Mehrere angrenzende Teilflächen grün ausgewählt" : "Klicke links im Bild auf eine Fläche – sie wird deutlich grün markiert."}</span>
+        <strong>Danach unten „Relief erstellen“ klicken, um das Modell neu zu berechnen.</strong>
       </div>
     </section>
   );

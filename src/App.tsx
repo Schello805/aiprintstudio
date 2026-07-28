@@ -160,7 +160,10 @@ export function App() {
     } finally { setBusy(false); }
   }
 
-  const updateEditorHeightmap = useCallback((dataUrl: string | null) => setEditorHeightmap(dataUrl), []);
+  const updateEditorHeightmap = useCallback((dataUrl: string | null) => {
+    setEditorHeightmap(dataUrl);
+    setResult(null);
+  }, []);
 
   if (legalPage) {
     return <LegalView page={legalPage} onClose={() => setLegalPage(null)} version={version} />;
