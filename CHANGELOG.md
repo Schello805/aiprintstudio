@@ -8,6 +8,7 @@
 - Sichtbare rot-weiß-schwarze Streifen und überlappende Farbflächen an senkrechten Kanten werden vermieden.
 - Die 3D-Vorschau verwendet dieselbe stabilisierte Farbzuordnung wie der 3MF-Export.
 - Ein neuer Regressionstest schützt einfarbige Außen- und Motivkanten.
+- README, Architektur-, Entwicklungs-, Sicherheits- und Roadmap-Dokumentation wurden auf den aktuellen Studio-, OpenAI-, AMS- und Release-Stand gebracht.
 
 ## 0.12.1
 

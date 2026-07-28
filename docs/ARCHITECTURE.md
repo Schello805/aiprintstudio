@@ -2,10 +2,11 @@
 
 ## Kontext
 
-Ein einzelnes Foto enthält keine vollständige Rückseiten- oder Tiefeninformation.
-Die Rekonstruktion ist daher eine plausible Schätzung. AI Print Studio trennt
-diese probabilistische KI-Stufe strikt von der deterministischen Prüfung und
-Reparatur des Meshes.
+Ein einzelnes Bild enthält keine vollständige Rückseiten- oder
+Tiefeninformation. **Bild zu 3D** erzeugt deshalb heute vor allem kontrollierte
+2,5D-Reliefs. Für vollständige Objekte stehen ein Mehrfoto-Scan sowie ein
+konstruktiver **Prompt zu 3D**-Workflow zur Verfügung. Externe KI-Planung wird
+strikt von lokaler, deterministischer Geometrieerzeugung und Prüfung getrennt.
 
 ## Komponenten
 
@@ -13,55 +14,76 @@ Reparatur des Meshes.
 React Renderer
   │ sichere, typisierte IPC-Aufrufe
 Electron Main Process
-  ├── Settings / Keychain
-  ├── Job Repository
-  ├── File Validation
-  └── Worker Supervisor
-        │ JSON Lines über stdin/stdout
-        ▼
-Native Apple Worker
-  ├── Depth Anything V2 / Core ML
-  └── RealityKit Object Capture
-        │
-        ▼
-3D Pipeline
-  ├── Image Preprocessing
-  ├── Reconstruction Provider
-  ├── Mesh Repair Pipeline
-  ├── Printability Analysis
-  └── STL / 3MF Export
+  ├── Einstellungen / safeStorage
+  ├── Verlauf / Updateprüfung
+  ├── Dateivalidierung
+  ├── OpenAI CAD-Planung (optional)
+  ├── Native Apple Worker
+  │     ├── Depth Anything V2 / Core ML
+  │     └── RealityKit Object Capture
+  └── lokale 3D-Pipelines
+        ├── Relief / Kontur / Höhenkarte
+        ├── Flächen- und Farbeditor
+        ├── CAD-Körpergenerator
+        ├── Druckbarkeitsanalyse
+        └── STL / 3MF / USDZ
 ```
 
 Der Renderer erhält keinen direkten Node.js-, Dateisystem- oder Shell-Zugriff.
 Nur explizit freigegebene IPC-Kommandos werden im Preload-Skript veröffentlicht.
+Netzwerkzugriffe erfolgen ausschließlich im Electron-Hauptprozess.
 
-## Kernverträge
+## Bild-, Schrift- und Reliefpipeline
 
-`ReconstructionProvider` nimmt ein normalisiertes Bild und ein Qualitätsprofil
-entgegen und erzeugt ein neutrales Mesh-Artefakt. Die lokale Implementierung
-kann dadurch später ausgetauscht werden, ohne UI, Historie oder Export zu ändern.
+Die Reliefpipeline nimmt ein validiertes Bild, ein Qualitätsprofil und optional
+manuelle Höhen- und Farbkarten entgegen:
 
-`MeshProcessor` führt unabhängig vom Provider folgende Schritte durch:
+1. Eingabe und Abmessungen validieren
+2. Motivmaske und Verarbeitungsprofil bestimmen
+3. Konturen oder Tiefenwerte glätten und Höhen rekonstruieren
+4. manuelle Flächen-, Höhen- und Farbkorrekturen anwenden
+5. geschlossenes Reliefmesh mit Grund- und Seitenflächen erzeugen
+6. Druckbarkeit, Mindestdimensionen und Volumen bewerten
+7. STL und/oder materialisiertes 3MF exportieren
 
-1. Szenen auf ein einzelnes Mesh reduzieren
-2. ungültige und doppelte Flächen entfernen
-3. Vertices verschmelzen
-4. Normalen korrigieren
-5. Löcher schließen
-6. Komponenten prüfen und kleine Artefakte entfernen
-7. auf Millimeter skalieren und auf der Druckplatte ausrichten
-8. Wasserdichtigkeit und Mindestdimensionen bewerten
-9. STL und/oder 3MF exportieren
+Schrift wird zunächst lokal als eng zugeschnittene transparente Vorlage
+gerendert und anschließend durch dieselbe Reliefpipeline verarbeitet. SVG wird
+beim Import sicher gerastert, bevor die Verarbeitung beginnt.
 
-## Jobzustände
+## AMS- und 3MF-Aufbau
 
-`queued → validating → analysing → reconstructing → repairing → exporting → completed`
+Die lokal erkannte Palette wird auf zwei bis acht frei definierbare
+Filamentfarben abgebildet. Für AMS-Modelle reicht der einfarbige Tragkörper bis
+zur vollständigen Reliefhöhe. Motivfarben werden als separate, 0,04 mm dünne
+Deckkörper erzeugt.
 
-Jeder Zustand wird persistiert. Abbruch, App-Neustart und Worker-Fehler dürfen
-keinen unklaren Zustand oder halbfertigen Download erzeugen.
+Außenränder und Farbübergänge werden vor dem Meshaufbau der gewählten Farbe
+**Seiten & Tragkörper** zugewiesen. Dadurch bleiben senkrechte Wände einfarbig.
+Vorschau und 3MF verwenden dieselbe stabilisierte Farbkarte. STL bleibt ein
+einfarbiges Fallback.
+
+## Prompt zu 3D
+
+OpenAI erzeugt ausschließlich einen strukturierten Plan aus erlaubten
+Grundkörpern. `electron/cad.ts` validiert Bauteilzahl, Koordinaten, Gesamtgröße
+und Mindestmaterialstärke und erzeugt die Binär-STL lokal. Beliebiger Modellcode
+wird nicht ausgeführt und fremde Mesh-Dateien werden nicht heruntergeladen.
+
+Der Workflow ist für einfache konstruktive Modelle gedacht. Organische
+Text-zu-3D-Rekonstruktion ist nicht Teil der aktuellen Architektur.
+
+## Jobzustände und Verlauf
+
+`validating → analysing → reconstructing → repairing → exporting → completed`
+
+Der Renderer zeigt den aktuellen Zustand. Abgeschlossene Exporte werden mit
+Metadaten im lokalen Verlauf erfasst; temporäre Zwischenstände werden nicht als
+fertige Modelle angeboten.
 
 ## Erweiterbarkeit
 
-Lithophane, Relief und Text-to-3D werden als neue Workflows implementiert, nicht
-als Sonderfälle in der Image-to-3D-Pipeline. Benutzerverwaltung und Serverbetrieb
-gehören bewusst nicht zur ersten Desktop-Version.
+Die Studio-Werkzeuge **Bild zu 3D**, **Schrift zu 3D** und **Prompt zu 3D** sind
+getrennte Einstiege mit gemeinsam genutzter Vorschau-, Parameter-, Prüf- und
+Exportlogik. Neue Workflows sollen diesen Aufbau beibehalten.
+Benutzerverwaltung, Telemetrie und Serverbetrieb gehören bewusst nicht zur
+lokalen Desktop-Anwendung.
