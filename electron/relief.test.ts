@@ -3,6 +3,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import sharp from "sharp";
+import JSZip from "jszip";
 import { createRelief } from "./relief";
 import { reliefInternals } from "./relief";
 
@@ -63,7 +64,7 @@ describe("relief mesh", () => {
     const report = reliefInternals.analysePrintability(
       mesh,
       Array(9).fill(1),
-      { widthMm: 20, baseMm: 0.8, reliefMm: 2, resolution: 32, invert: false, profile: "balanced", smoothing: 2, detail: 1, processingMode: "height" },
+      { widthMm: 20, baseMm: 0.8, reliefMm: 2, resolution: 32, invert: false, profile: "balanced", smoothing: 2, detail: 1, processingMode: "height", sourceColors: [], colors: [] },
       Array(4).fill(true),
       3
     );
@@ -96,6 +97,42 @@ describe("relief mesh", () => {
     const levels = reliefInternals.buildVectorLevels(rgba, Array(4).fill(true), 2, 2, false);
     expect(new Set(levels).size).toBe(2);
     expect(levels[0]).toBeGreaterThan(levels[3]);
+  });
+
+  it("assigns subject cells to the nearest configured filament color", () => {
+    const rgba = Buffer.from([
+      250, 5, 5, 255, 250, 5, 5, 255,
+      5, 5, 250, 255, 5, 5, 250, 255
+    ]);
+    const assignments = reliefInternals.buildColorCellAssignments(rgba, [true], 2, 2, ["#FF0000", "#0000FF"]);
+    expect(assignments).toEqual([0]);
+  });
+
+  it("writes separate colored objects and materials into a 3MF", async () => {
+    const first = reliefInternals.buildWatertightHeightMesh(2, 2, 10, 10, [2, 2, 2, 2]);
+    const second = reliefInternals.buildWatertightHeightMesh(2, 2, 10, 10, [3, 3, 3, 3]);
+    const archive = await reliefInternals.encodeThreeMf(first, [
+      { mesh: first, color: "#FF0000", name: "AMS 1" },
+      { mesh: second, color: "#0000FF", name: "AMS 2" }
+    ]);
+    const zip = await JSZip.loadAsync(archive);
+    const model = await zip.file("3D/3dmodel.model")?.async("string");
+    expect(model).toContain('displaycolor="#FF0000FF"');
+    expect(model).toContain('displaycolor="#0000FFFF"');
+    expect(model?.match(/<object /g)).toHaveLength(2);
+    expect(model?.match(/<item /g)).toHaveLength(2);
+  });
+
+  it("merges high-resolution color meshes without overflowing the call stack", () => {
+    const vertexCount = 180_000;
+    const first = {
+      vertices: Array.from({ length: vertexCount }, (_, index) => [index, 0, 0] as const),
+      triangles: Array.from({ length: vertexCount - 2 }, (_, index) => [index, index + 1, index + 2] as const)
+    };
+    const merged = reliefInternals.mergeMeshes([first, first]);
+    expect(merged.vertices).toHaveLength(vertexCount * 2);
+    expect(merged.triangles).toHaveLength((vertexCount - 2) * 2);
+    expect(merged.triangles[vertexCount - 2][0]).toBe(vertexCount);
   });
 
   it("raises enclosed logo components above large background regions", () => {

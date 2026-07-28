@@ -13,6 +13,8 @@ export type ReliefOptions = {
   smoothing: number;
   detail: number;
   processingMode: "auto" | "vector" | "depth" | "height";
+  sourceColors: string[];
+  colors: string[];
 };
 
 export type PrintabilityReport = {
@@ -35,12 +37,14 @@ export type ReliefResult = {
   preview: {
     positions: number[];
     indices: number[];
+    colorParts: Array<{ color: string; indices: number[] }>;
   };
 };
 
 type Vec3 = readonly [number, number, number];
 type Triangle = readonly [number, number, number];
 type Mesh = { vertices: Vec3[]; triangles: Triangle[] };
+type ColoredMesh = { mesh: Mesh; color: string; name: string };
 
 const safeDefaults: ReliefOptions = {
   widthMm: 100,
@@ -51,7 +55,9 @@ const safeDefaults: ReliefOptions = {
   profile: "balanced",
   smoothing: 2,
   detail: 1
-  ,processingMode: "auto"
+  ,processingMode: "auto",
+  sourceColors: [],
+  colors: []
 };
 
 export async function createRelief(
@@ -116,7 +122,15 @@ export async function createRelief(
   const levels = applyBoundaryRim(profiledLevels, subjectPixels, gridWidth, gridHeight, options.profile === "logo" ? 2 : 1);
   const heights = levels.map((value) => options.baseMm + value * options.reliefMm);
   const mesh = buildWatertightHeightMesh(gridWidth, gridHeight, options.widthMm, heightMm, heights, cellMask);
-  const preview = buildPreviewSurface(gridWidth, gridHeight, options.widthMm, heightMm, heights, cellMask);
+  const colorAssignments = options.colors.length
+    ? buildColorCellAssignments(
+      rgba, cellMask, gridWidth, gridHeight,
+      options.sourceColors.length === options.colors.length ? options.sourceColors : options.colors
+    )
+    : undefined;
+  const preview = buildPreviewSurface(
+    gridWidth, gridHeight, options.widthMm, heightMm, heights, cellMask, colorAssignments, options.colors
+  );
   const printability = analysePrintability(mesh, heights, options, cellMask, gridWidth);
   const heightmapPng = await sharp(Buffer.from(levels.map((value) => Math.round(value * 255))), {
     raw: { width: gridWidth, height: gridHeight, channels: 1 }
@@ -126,9 +140,12 @@ export async function createRelief(
   const stem = sanitizeStem(basename(imagePath, extname(imagePath)));
   const stlPath = join(outputDirectory, `${stem}-relief.stl`);
   const threeMfPath = join(outputDirectory, `${stem}-relief.3mf`);
+  const coloredMeshes = colorAssignments
+    ? buildColoredMeshes(gridWidth, gridHeight, options.widthMm, heightMm, heights, cellMask, colorAssignments, options.colors, options.baseMm)
+    : undefined;
   await Promise.all([
     writeFile(stlPath, encodeBinaryStl(mesh, "AI Print Studio Relief")),
-    writeFile(threeMfPath, await encodeThreeMf(mesh))
+    writeFile(threeMfPath, await encodeThreeMf(mesh, coloredMeshes))
   ]);
 
   return {
@@ -154,6 +171,12 @@ function validateOptions(options: ReliefOptions): ReliefOptions {
   if (options.smoothing < 0 || options.smoothing > 5) throw new Error("Die Glättung muss zwischen 0 und 5 liegen.");
   if (options.detail < 0 || options.detail > 2) throw new Error("Die Detailstärke muss zwischen 0 und 2 liegen.");
   if (!["auto", "vector", "depth", "height"].includes(options.processingMode)) throw new Error("Unbekannter Verarbeitungsmodus.");
+  if (!Array.isArray(options.colors) || options.colors.length > 16 || options.colors.some((color) => !/^#[0-9a-fA-F]{6}$/.test(color))) {
+    throw new Error("Die Farbpalette enthält ungültige Farben.");
+  }
+  if (!Array.isArray(options.sourceColors) || options.sourceColors.length > 16 || options.sourceColors.some((color) => !/^#[0-9a-fA-F]{6}$/.test(color))) {
+    throw new Error("Die erkannte Bildpalette enthält ungültige Farben.");
+  }
   return options;
 }
 
@@ -348,13 +371,15 @@ function buildWatertightHeightMesh(
   widthMm: number,
   heightMm: number,
   heights: number[],
-  cellMask?: boolean[]
+  cellMask?: boolean[],
+  bottomHeight = 0,
+  boundaryPositionsOverride?: Map<number, readonly [number, number]>
 ): Mesh {
   const vertices: Vec3[] = [];
   const triangles: Triangle[] = [];
   const index = (x: number, y: number) => y * columns + x;
   const cells = cellMask ?? Array((columns - 1) * (rows - 1)).fill(true);
-  const boundaryPositions = buildSmoothedBoundaryPositions(columns, rows, widthMm, heightMm, cells);
+  const boundaryPositions = boundaryPositionsOverride ?? buildSmoothedBoundaryPositions(columns, rows, widthMm, heightMm, cells);
   const isCell = (x: number, y: number) => x >= 0 && y >= 0 && x < columns - 1 && y < rows - 1 && cells[y * (columns - 1) + x];
   const topVertices = new Map<number, number>();
   const bottomVertices = new Map<number, number>();
@@ -368,7 +393,7 @@ function buildWatertightHeightMesh(
     vertices.push([
       boundary?.[0] ?? x * widthMm / (columns - 1),
       boundary?.[1] ?? y * heightMm / (rows - 1),
-      bottom ? 0 : heights[gridIndex]
+      bottom ? bottomHeight : heights[gridIndex]
     ]);
     map.set(gridIndex, created);
     return created;
@@ -393,6 +418,81 @@ function buildWatertightHeightMesh(
     }
   }
   return { vertices, triangles };
+}
+
+function parseHexColor(color: string): readonly [number, number, number] {
+  return [
+    Number.parseInt(color.slice(1, 3), 16),
+    Number.parseInt(color.slice(3, 5), 16),
+    Number.parseInt(color.slice(5, 7), 16)
+  ];
+}
+
+function buildColorCellAssignments(
+  rgba: Buffer,
+  cellMask: boolean[],
+  width: number,
+  height: number,
+  colors: string[]
+): number[] {
+  const palette = colors.map(parseHexColor);
+  return Array.from({ length: (width - 1) * (height - 1) }, (_, cell) => {
+    if (!cellMask[cell]) return -1;
+    const x = cell % (width - 1), y = Math.floor(cell / (width - 1));
+    const pixel = y * width + x;
+    let red = 0, green = 0, blue = 0, weight = 0;
+    for (const sample of [pixel, pixel + 1, pixel + width, pixel + width + 1]) {
+      const alpha = rgba[sample * 4 + 3] / 255;
+      red += rgba[sample * 4] * alpha;
+      green += rgba[sample * 4 + 1] * alpha;
+      blue += rgba[sample * 4 + 2] * alpha;
+      weight += alpha;
+    }
+    if (weight > 0) { red /= weight; green /= weight; blue /= weight; }
+    let best = 0, bestDistance = Number.POSITIVE_INFINITY;
+    palette.forEach(([r, g, b], index) => {
+      const distance = (red - r) ** 2 + (green - g) ** 2 + (blue - b) ** 2;
+      if (distance < bestDistance) { best = index; bestDistance = distance; }
+    });
+    return best;
+  });
+}
+
+function mergeMeshes(meshes: Mesh[]): Mesh {
+  const vertices: Vec3[] = [];
+  const triangles: Triangle[] = [];
+  for (const mesh of meshes) {
+    const offset = vertices.length;
+    for (const vertex of mesh.vertices) vertices.push(vertex);
+    for (const [a, b, c] of mesh.triangles) triangles.push([a + offset, b + offset, c + offset]);
+  }
+  return { vertices, triangles };
+}
+
+function buildColoredMeshes(
+  columns: number,
+  rows: number,
+  widthMm: number,
+  heightMm: number,
+  heights: number[],
+  cellMask: boolean[],
+  assignments: number[],
+  colors: string[],
+  baseMm: number
+): ColoredMesh[] {
+  const outerBoundary = buildSmoothedBoundaryPositions(columns, rows, widthMm, heightMm, cellMask);
+  const base = buildWatertightHeightMesh(
+    columns, rows, widthMm, heightMm, Array(columns * rows).fill(baseMm), cellMask, 0, outerBoundary
+  );
+  return colors.map((color, colorIndex) => {
+    const mask = assignments.map((assignment) => assignment === colorIndex);
+    const top = buildWatertightHeightMesh(columns, rows, widthMm, heightMm, heights, mask, baseMm, outerBoundary);
+    return {
+      mesh: colorIndex === 0 ? mergeMeshes([base, top]) : top,
+      color,
+      name: `AMS ${colorIndex + 1}`
+    };
+  }).filter(({ mesh }) => mesh.triangles.length > 0);
 }
 
 function buildSubjectPixelMask(rgba: Buffer, width: number, height: number): boolean[] {
@@ -507,7 +607,7 @@ function encodeBinaryStl(mesh: Mesh, title: string): Buffer {
   return buffer;
 }
 
-async function encodeThreeMf(mesh: Mesh): Promise<Buffer> {
+async function encodeThreeMf(mesh: Mesh, coloredMeshes?: ColoredMesh[]): Promise<Buffer> {
   const zip = new JSZip();
   zip.file("[Content_Types].xml", `<?xml version="1.0" encoding="UTF-8"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
@@ -518,14 +618,28 @@ async function encodeThreeMf(mesh: Mesh): Promise<Buffer> {
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
 <Relationship Target="/3D/3dmodel.model" Id="rel0" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/>
 </Relationships>`);
-  const vertexXml = mesh.vertices.map(([x, y, z]) => `<vertex x="${x.toFixed(5)}" y="${y.toFixed(5)}" z="${z.toFixed(5)}"/>`).join("");
-  const triangleXml = mesh.triangles.map(([v1, v2, v3]) => `<triangle v1="${v1}" v2="${v2}" v3="${v3}"/>`).join("");
+  const parts = coloredMeshes?.length ? coloredMeshes : [{ mesh, color: "#B7F58A", name: "Relief" }];
+  const materialXml = parts.map(({ color, name }) =>
+    `<base name="${escapeXml(name)}" displaycolor="${color.toUpperCase()}FF"/>`
+  ).join("");
+  const objectsXml = parts.map(({ mesh: part, name }, index) => {
+    const vertexXml = part.vertices.map(([x, y, z]) => `<vertex x="${x.toFixed(5)}" y="${y.toFixed(5)}" z="${z.toFixed(5)}"/>`).join("");
+    const triangleXml = part.triangles.map(([v1, v2, v3]) => `<triangle v1="${v1}" v2="${v2}" v3="${v3}"/>`).join("");
+    return `<object id="${index + 3}" type="model" name="${escapeXml(name)}" pid="2" pindex="${index}"><mesh><vertices>${vertexXml}</vertices><triangles>${triangleXml}</triangles></mesh></object>`;
+  }).join("");
+  const buildXml = parts.map((_, index) => `<item objectid="${index + 3}"/>`).join("");
   zip.folder("3D")?.file("3dmodel.model", `<?xml version="1.0" encoding="UTF-8"?>
 <model unit="millimeter" xml:lang="de-DE" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
 <metadata name="Title">AI Print Studio Relief</metadata>
-<resources><object id="1" type="model"><mesh><vertices>${vertexXml}</vertices><triangles>${triangleXml}</triangles></mesh></object></resources>
-<build><item objectid="1"/></build></model>`);
+<resources><basematerials id="2">${materialXml}</basematerials>${objectsXml}</resources>
+<build>${buildXml}</build></model>`);
   return zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE", compressionOptions: { level: 6 } });
+}
+
+function escapeXml(value: string): string {
+  return value.replace(/[&<>"']/g, (character) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;"
+  })[character] ?? character);
 }
 
 function normalOf(a: Vec3, b: Vec3, c: Vec3): Vec3 {
@@ -546,8 +660,10 @@ function buildPreviewSurface(
   widthMm: number,
   heightMm: number,
   heights: number[],
-  cellMask?: boolean[]
-): { positions: number[]; indices: number[] } {
+  cellMask?: boolean[],
+  colorAssignments?: number[],
+  colors: string[] = []
+): { positions: number[]; indices: number[]; colorParts: Array<{ color: string; indices: number[] }> } {
   const stride = Math.max(1, Math.ceil(Math.max(columns, rows) / 300));
   const xs = Array.from(new Set([...Array(Math.ceil((columns - 1) / stride) + 1)].map((_, i) => Math.min(i * stride, columns - 1))));
   const ys = Array.from(new Set([...Array(Math.ceil((rows - 1) / stride) + 1)].map((_, i) => Math.min(i * stride, rows - 1))));
@@ -571,6 +687,7 @@ function buildPreviewSurface(
   if (!Number.isFinite(baseHeight)) baseHeight = 0;
   const positions: number[] = [];
   const indices: number[] = [];
+  const colorPartIndices = colors.map(() => [] as number[]);
   for (let previewY = 0; previewY < previewRows; previewY += 1) {
     for (let previewX = 0; previewX < previewColumns; previewX += 1) {
       const x = xs[previewX], y = ys[previewY];
@@ -589,15 +706,31 @@ function buildPreviewSurface(
       const b = a + 1;
       const c = a + previewColumns;
       const d = c + 1;
-      indices.push(a, d, b, a, c, d);
+      const triangles = [a, d, b, a, c, d];
+      indices.push(...triangles);
+      if (colorAssignments && colors.length) {
+        const votes = new Map<number, number>();
+        for (let sourceY = ys[y]; sourceY < ys[y + 1]; sourceY += 1) {
+          for (let sourceX = xs[x]; sourceX < xs[x + 1]; sourceX += 1) {
+            const assignment = colorAssignments[sourceY * (columns - 1) + sourceX];
+            if (assignment >= 0) votes.set(assignment, (votes.get(assignment) ?? 0) + 1);
+          }
+        }
+        const colorIndex = [...votes].sort((a, b) => b[1] - a[1])[0]?.[0] ?? 0;
+        colorPartIndices[colorIndex]?.push(...triangles);
+      }
     }
   }
-  return { positions, indices };
+  return {
+    positions,
+    indices,
+    colorParts: colors.map((color, index) => ({ color, indices: colorPartIndices[index] })).filter((part) => part.indices.length)
+  };
 }
 
 export const reliefInternals = {
   buildCellMask, buildSubjectPixelMask, cleanSubjectPixelMask, applyBoundaryRim,
-  buildVectorLevels, buildSmoothedBoundaryPositions,
-  buildWatertightHeightMesh, buildPreviewSurface, encodeBinaryStl,
+  buildVectorLevels, buildSmoothedBoundaryPositions, buildColorCellAssignments, buildColoredMeshes, mergeMeshes,
+  buildWatertightHeightMesh, buildPreviewSurface, encodeBinaryStl, encodeThreeMf,
   smoothHeightField, analysePrintability, profileSettings
 };

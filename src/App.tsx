@@ -11,6 +11,7 @@ import {
   History,
   ImagePlus,
   Layers3,
+  Palette,
   Settings2,
   ShieldCheck,
   Sparkles,
@@ -19,6 +20,7 @@ import {
 } from "lucide-react";
 import { RegionEditor } from "./RegionEditor";
 import { SettingTooltip } from "./SettingTooltip";
+import { extractColorPalette } from "./domain/color-palette";
 type View = "studio" | "history" | "settings";
 type LegalPage = "imprint" | "privacy" | "cookies" | null;
 type SelectedImage = { path: string; name: string; size: number; width: number; height: number; suggestedProfile: "logo" | "photo"; dataUrl: string };
@@ -83,6 +85,10 @@ export function App() {
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editorHeightmap, setEditorHeightmap] = useState<string | null>(null);
+  const [multicolorEnabled, setMulticolorEnabled] = useState(false);
+  const [colorCount, setColorCount] = useState(4);
+  const [sourceColors, setSourceColors] = useState(["#111827", "#F5F5F4", "#22C55E", "#F59E0B"]);
+  const [colors, setColors] = useState(["#111827", "#F5F5F4", "#22C55E", "#F59E0B"]);
   const [scanResult, setScanResult] = useState<{ usdzPath: string; photoCount: number } | null>(null);
   const [history, setHistory] = useState<HistoryEntry[]>(() => {
     try { return JSON.parse(localStorage.getItem("ai-print-studio-history") ?? "[]") as HistoryEntry[]; }
@@ -92,6 +98,23 @@ export function App() {
   useEffect(() => {
     void window.desktop?.getVersion().then(setVersion);
   }, []);
+
+  useEffect(() => {
+    if (!preview) return;
+    let active = true;
+    void detectPalette(preview, colorCount)
+      .then((palette) => {
+        if (!active) return;
+        setSourceColors(palette);
+        setColors(palette);
+      })
+      .catch(() => {
+        if (!active) return;
+        setSourceColors((current) => resizePalette(current, colorCount));
+        setColors((current) => resizePalette(current, colorCount));
+      });
+    return () => { active = false; };
+  }, [preview, colorCount]);
 
   async function selectFile() {
     setFileError(null);
@@ -129,7 +152,9 @@ export function App() {
         widthMm, baseMm, reliefMm,
         resolution: optimalResolution[profile],
         invert: raiseLightAreas, profile, smoothing, detail,
-        processingMode: effectiveMode === "scan" ? "auto" : effectiveMode
+        processingMode: effectiveMode === "scan" ? "auto" : effectiveMode,
+        sourceColors: multicolorEnabled ? sourceColors : [],
+        colors: multicolorEnabled ? colors : []
       }, editorHeightmap ?? undefined);
       if (next) {
         setResult(next);
@@ -262,6 +287,41 @@ export function App() {
                     <NumberField label="GRUNDPLATTE" tooltip={parameterTooltips.base} value={baseMm} unit="mm" min={0.8} max={10} step={0.2} setValue={setBaseMm} />
                     <NumberField label="RELIEF" tooltip={parameterTooltips.relief} value={reliefMm} unit="mm" min={0.5} max={20} step={0.5} setValue={setReliefMm} />
                   </div>
+                  <div className={multicolorEnabled ? "multicolor-panel active" : "multicolor-panel"}>
+                    <button className="multicolor-toggle" onClick={() => setMulticolorEnabled((current) => !current)} aria-pressed={multicolorEnabled}>
+                      <Palette />
+                      <div><strong>AMS-Farbdruck</strong><span>{multicolorEnabled ? `${colors.length} Farben werden als getrennte 3MF-Objekte exportiert` : "Mehrfarbige 3MF für Bambu Studio aktivieren"}</span></div>
+                      <span className="toggle-track"><span /></span>
+                    </button>
+                    {multicolorEnabled && (
+                      <div className="color-setup">
+                        <label>
+                          <span>ANZAHL FARBEN</span>
+                          <select value={colorCount} onChange={(event) => {
+                            const count = Number(event.target.value);
+                            setColorCount(count);
+                            setSourceColors((current) => resizePalette(current, count));
+                            setColors((current) => resizePalette(current, count));
+                          }}>
+                            {Array.from({ length: 7 }, (_, index) => index + 2).map((count) => <option key={count} value={count}>{count} Farben</option>)}
+                          </select>
+                        </label>
+                        <div className="color-swatches">
+                          {colors.map((color, index) => (
+                            <label className="color-swatch" key={`${index}-${color}`}>
+                              <input
+                                type="color"
+                                value={color}
+                                onChange={(event) => setColors((current) => current.map((entry, colorIndex) => colorIndex === index ? event.target.value.toUpperCase() : entry))}
+                              />
+                              <span><strong>AMS {index + 1}</strong><small>{sourceColors[index]} → {color}</small></span>
+                            </label>
+                          ))}
+                        </div>
+                        <p>Die erkannten Bildfarben kannst du hier an deine tatsächlich eingelegten Filamente anpassen.</p>
+                      </div>
+                    )}
+                  </div>
                   <button className="advanced-toggle has-tooltip" onClick={() => setAdvancedOpen((current) => !current)} aria-expanded={advancedOpen}>
                     <Settings2 /> {advancedOpen ? "Erweiterte Einstellungen schließen" : "Erweiterte Einstellungen"}
                     <SettingTooltip text={"Optionale Feineinstellungen für Sonderfälle. Die Automatik ist normalerweise die beste Wahl.\nBeispiel: Nur öffnen, wenn Helligkeitsrichtung oder Glättung bewusst geändert werden soll."} />
@@ -301,7 +361,7 @@ export function App() {
             {result && (
               <div className={`result-card ${result.printability.status}`}>
                 <div className="result-check"><CheckCircle2 /></div>
-                <div><strong>Modell erfolgreich erstellt · Druckscore {result.printability.score}/100</strong><p>{result.triangleCount.toLocaleString("de-DE")} Dreiecke · {result.widthMm.toFixed(0)} × {result.heightMm.toFixed(0)} mm · ca. {result.printability.estimatedVolumeCm3.toFixed(1)} cm³</p><p>{result.printability.issues.join(" ")}</p></div>
+                <div><strong>Modell erfolgreich erstellt · Druckscore {result.printability.score}/100</strong><p>{result.triangleCount.toLocaleString("de-DE")} Dreiecke · {result.widthMm.toFixed(0)} × {result.heightMm.toFixed(0)} mm · ca. {result.printability.estimatedVolumeCm3.toFixed(1)} cm³{result.options.colors.length ? ` · ${result.options.colors.length} AMS-Farben` : ""}</p><p>{result.printability.issues.join(" ")}</p></div>
                 <img className="heightmap-preview" src={result.heightmapDataUrl} alt="Berechnete Höhenkarte" title="Berechnete Höhenkarte" />
                 <button className="secondary-button" onClick={() => void window.desktop?.showItemInFolder(result.stlPath)}>Im Finder zeigen</button>
               </div>
@@ -327,16 +387,21 @@ export function App() {
 
 function ReliefPreview({ result }: { result: NonNullable<ReliefResult> }) {
   const modelSize = Math.max(result.widthMm, result.heightMm);
-  const geometry = useMemo(() => {
-    const next = new THREE.BufferGeometry();
-    next.setAttribute("position", new THREE.Float32BufferAttribute(result.preview.positions, 3));
-    next.setIndex(result.preview.indices);
-    next.computeVertexNormals();
-    next.computeBoundingSphere();
-    return next;
+  const geometries = useMemo(() => {
+    const parts = result.preview.colorParts.length
+      ? result.preview.colorParts
+      : [{ color: "#B7F58A", indices: result.preview.indices }];
+    return parts.map((part) => {
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute("position", new THREE.Float32BufferAttribute(result.preview.positions, 3));
+      geometry.setIndex(part.indices);
+      geometry.computeVertexNormals();
+      geometry.computeBoundingSphere();
+      return { geometry, color: part.color };
+    });
   }, [result]);
 
-  useEffect(() => () => geometry.dispose(), [geometry]);
+  useEffect(() => () => geometries.forEach(({ geometry }) => geometry.dispose()), [geometries]);
 
   return (
     <div className="preview-card">
@@ -346,14 +411,38 @@ function ReliefPreview({ result }: { result: NonNullable<ReliefResult> }) {
         <ambientLight intensity={1.5} />
         <directionalLight position={[60, 100, 80]} intensity={3.2} />
         <directionalLight position={[-50, 35, -60]} intensity={1.1} color="#b6d7ff" />
-        <mesh geometry={geometry}>
-          <meshStandardMaterial color="#b7f58a" roughness={0.62} metalness={0.05} side={THREE.DoubleSide} />
-        </mesh>
+        {geometries.map(({ geometry, color }, index) => (
+          <mesh geometry={geometry} key={`${color}-${index}`}>
+            <meshStandardMaterial color={color} roughness={0.62} metalness={0.05} side={THREE.DoubleSide} />
+          </mesh>
+        ))}
         <gridHelper args={[modelSize * 1.6, 18, "#2e3944", "#1b222b"]} />
         <OrbitControls makeDefault target={[0, result.options.baseMm + result.options.reliefMm / 2, 0]} minDistance={modelSize * 0.65} maxDistance={modelSize * 3} enableDamping />
       </Canvas>
     </div>
   );
+}
+
+async function detectPalette(dataUrl: string, colorCount: number): Promise<string[]> {
+  const image = new Image();
+  await new Promise<void>((resolve, reject) => {
+    image.onload = () => resolve();
+    image.onerror = () => reject(new Error("Farben konnten nicht aus dem Bild gelesen werden."));
+    image.src = dataUrl;
+  });
+  const scale = Math.min(1, 320 / Math.max(image.naturalWidth, image.naturalHeight));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+  canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  if (!context) return [];
+  context.drawImage(image, 0, 0, canvas.width, canvas.height);
+  return extractColorPalette(context.getImageData(0, 0, canvas.width, canvas.height).data, colorCount);
+}
+
+function resizePalette(colors: string[], count: number): string[] {
+  const defaults = ["#111827", "#F5F5F4", "#22C55E", "#F59E0B", "#3B82F6", "#EF4444", "#A855F7", "#FDE047"];
+  return Array.from({ length: count }, (_, index) => colors[index] ?? defaults[index % defaults.length]);
 }
 
 function NumberField({ label, tooltip, value, unit, min, max, step, setValue }: {

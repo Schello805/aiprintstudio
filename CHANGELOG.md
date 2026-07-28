@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.8.0
+
+- Neuer AMS-Farbdruck-Modus mit frei wählbaren zwei bis acht Farben.
+- Dominante Bildfarben werden lokal automatisch erkannt und als editierbare AMS-Palette angezeigt.
+- Erkannte Bildfarben und gewünschte Filamentfarben bleiben getrennt, sodass ein Filamentwechsel die Flächenerkennung nicht verändert.
+- Die 3D-Vorschau zeigt die erkannte Mehrfarben-Aufteilung direkt am Relief.
+- Mehrfarbige 3MF-Dateien enthalten pro Farbe einen eigenen, passgenauen und benannten Körper mit 3MF-Basismaterial.
+- Die Grundplatte wird mit AMS-Farbe 1 kombiniert, sodass keine zusätzliche Farbe und kein zusätzliches Grundplattenobjekt entsteht.
+- STL bleibt als einfarbiger Fallback erhalten.
+- Neue Tests prüfen Palettenerkennung, Farbzuordnung und den mehrteiligen 3MF-Materialexport.
+
 ## 0.7.4
 
 - Logos werden mit höherer Mesh-Auflösung verarbeitet, damit runde Außenkonturen weniger polygonal wirken.

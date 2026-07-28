@@ -34,6 +34,8 @@ interface Window {
       smoothing: number;
       detail: number;
       processingMode: "auto" | "vector" | "depth" | "height";
+      sourceColors: string[];
+      colors: string[];
     }, editorHeightmapDataUrl?: string) => Promise<{
       stlPath: string;
       threeMfPath: string;
@@ -45,12 +47,15 @@ interface Window {
         widthMm: number; baseMm: number; reliefMm: number; resolution: number; invert: boolean;
         profile: "fast" | "balanced" | "fine" | "photo" | "logo"; smoothing: number; detail: number;
         processingMode: "auto" | "vector" | "depth" | "height";
+        sourceColors: string[];
+        colors: string[];
       };
       printability: { score: number; status: "ready" | "warning" | "critical"; issues: string[]; estimatedVolumeCm3: number };
       heightmapDataUrl: string;
       preview: {
         positions: number[];
         indices: number[];
+        colorParts: Array<{ color: string; indices: number[] }>;
       };
     } | null>;
     showItemInFolder: (path: string) => Promise<void>;
