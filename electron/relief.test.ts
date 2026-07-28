@@ -134,6 +134,19 @@ describe("relief mesh", () => {
     expect(corner?.[1]).not.toBeCloseTo(0);
   });
 
+  it("keeps preview boundary vertices on the base instead of creating spikes", () => {
+    const cells = [
+      false, true, false,
+      true, true, true,
+      false, true, false
+    ];
+    const heights = Array(16).fill(5);
+    heights[0] = 1;
+    const preview = reliefInternals.buildPreviewSurface(4, 4, 30, 30, heights, cells);
+    const boundary = reliefInternals.buildSmoothedBoundaryPositions(4, 4, 30, 30, cells);
+    for (const index of boundary.keys()) expect(preview.positions[index * 3 + 1]).toBe(1);
+  });
+
   it("uses a manually edited heightmap without renormalizing its levels", async () => {
     const directory = await mkdtemp(join(tmpdir(), "ai-print-editor-test-"));
     try {

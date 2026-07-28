@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.7.1
+
+- Stark vereinfachter Standardworkflow mit nur Automatisch, Logo/Wappen und Foto/3D-Tiefe
+- Automatik verwendet für Logos direkt den Konturmodus und für Fotos direkt Depth Anything
+- Qualitätsprofil wird optimal gewählt statt als zusätzliche 5-fache Auswahl angezeigt
+- Sichtbar bleiben nur Breite, Grundplatte und Reliefhöhe; Sonderoptionen liegen unter „Erweitert“
+- Kompaktere Überschrift, Vorschau, Workflowleiste und Einstellungsfläche für eine vollständige Bildschirmansicht
+- Sofort-Tooltips für alle Werkzeuge des Flächeneditors ergänzt
+- Vorschaurand wird auf Grundplattenhöhe fixiert und erzeugt keine langen Sägezahnspitzen mehr
+
 ## 0.7.0
 
 - Neuer interaktiver Flächeneditor für Logos, Wappen und andere flächige Motive

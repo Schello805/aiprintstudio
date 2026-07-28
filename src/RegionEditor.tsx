@@ -13,6 +13,23 @@ import {
   smoothSelectedLevels,
   type Segmentation
 } from "./domain/region-editor";
+import { SettingTooltip } from "./SettingTooltip";
+
+const editorTooltips = {
+  undo: "Nimmt die letzte Höhenänderung zurück.\nBeispiel: Ein versehentlich angehobener Bereich erhält wieder seine vorherige Höhe.",
+  redo: "Stellt eine zurückgenommene Änderung wieder her.\nBeispiel: Die zuletzt rückgängig gemachte Glättung wird erneut angewendet.",
+  expand: "Fügt alle direkt angrenzenden Teilflächen zur Auswahl hinzu.\nBeispiel: Von der Rollenkontur aus auch den Rollenkörper auswählen.",
+  reduce: "Entfernt die äußeren angrenzenden Teilflächen aus der Auswahl.\nBeispiel: Eine zu weit gewachsene Auswahl wieder auf den Kern verkleinern.",
+  similar: "Wählt getrennte Flächen mit einer ähnlichen Farbe aus.\nBeispiel: Alle vier weißen Rollenflächen gemeinsam auswählen.",
+  invert: "Tauscht ausgewählte und nicht ausgewählte Flächen.\nBeispiel: Statt des Motivs den gesamten Hintergrund bearbeiten.",
+  clear: "Hebt die aktuelle Markierung auf, ohne Höhen zu verändern.\nBeispiel: Eine neue Einzelauswahl beginnen.",
+  height: "Legt die absolute Reliefhöhe der markierten Flächen fest.\nBeispiel: 3,0 mm hebt Rollen deutlich über die Grundfläche.",
+  higher: "Hebt die Auswahl um eine kleine Höhenstufe an.\nBeispiel: Eine Kontur schrittweise stärker hervorheben.",
+  lower: "Senkt die Auswahl um eine kleine Höhenstufe ab.\nBeispiel: Einen zu dominanten Hintergrund zurücknehmen.",
+  base: "Setzt die Auswahl vollständig auf die Grundfläche.\nBeispiel: Unerwünschte Bilddetails verschwinden aus dem Relief.",
+  smooth: "Gleicht kleine Höhenunterschiede innerhalb der Auswahl aus.\nBeispiel: Bildrauschen auf einer großen Fläche reduzieren.",
+  round: "Glättet die Auswahl zweimal für weichere Übergänge.\nBeispiel: Harte Stufen an einer runden Rolle abrunden."
+};
 
 type EditorData = {
   segmentation: Segmentation;
@@ -147,8 +164,8 @@ export function RegionEditor({
       <div className="region-editor-heading">
         <div><span className="option-label">FLÄCHENEDITOR</span><strong>Motiv wie in einem einfachen 3D-Baukasten korrigieren</strong><p>Fläche anklicken · Umschalt-Klick fügt hinzu oder entfernt sie.</p></div>
         <div className="editor-history">
-          <button onClick={undo} disabled={!undoStack.length} title="Rückgängig"><Undo2 /></button>
-          <button onClick={redo} disabled={!redoStack.length} title="Wiederholen"><Redo2 /></button>
+          <button className="has-tooltip" onClick={undo} disabled={!undoStack.length} aria-description={editorTooltips.undo}><Undo2 /><SettingTooltip text={editorTooltips.undo} /></button>
+          <button className="has-tooltip" onClick={redo} disabled={!redoStack.length} aria-description={editorTooltips.redo}><Redo2 /><SettingTooltip text={editorTooltips.redo} /></button>
           <button onClick={onClose} title="Editor schließen"><X /></button>
         </div>
       </div>
@@ -160,27 +177,28 @@ export function RegionEditor({
         <EditorReliefPreview segmentation={data?.segmentation ?? null} levels={levels} />
       </div>
       <div className="selection-toolbar">
-        <button disabled={!selection.size || !data} onClick={() => data && setSelection(expandRegionSelection(selection, data.segmentation.regions))}><Plus /> Angrenzend erweitern</button>
-        <button disabled={!selection.size || !data} onClick={() => data && setSelection(reduceRegionSelection(selection, data.segmentation.regions))}><Minus /> Rand reduzieren</button>
-        <button disabled={selection.size !== 1 || !data} onClick={() => data && setSelection(selectSimilarRegions([...selection][0], data.segmentation.regions))}><WandSparkles /> Ähnliche Farbe</button>
-        <button disabled={!data} onClick={() => data && setSelection(new Set(data.segmentation.regions.map((region) => region.id).filter((id) => !selection.has(id))))}><RotateCcw /> Umkehren</button>
-        <button disabled={!selection.size} onClick={() => setSelection(new Set())}><X /> Auswahl aufheben</button>
+        <button className="has-tooltip" disabled={!selection.size || !data} onClick={() => data && setSelection(expandRegionSelection(selection, data.segmentation.regions))}><Plus /> Angrenzend erweitern<SettingTooltip text={editorTooltips.expand} /></button>
+        <button className="has-tooltip" disabled={!selection.size || !data} onClick={() => data && setSelection(reduceRegionSelection(selection, data.segmentation.regions))}><Minus /> Rand reduzieren<SettingTooltip text={editorTooltips.reduce} /></button>
+        <button className="has-tooltip" disabled={selection.size !== 1 || !data} onClick={() => data && setSelection(selectSimilarRegions([...selection][0], data.segmentation.regions))}><WandSparkles /> Ähnliche Farbe<SettingTooltip text={editorTooltips.similar} /></button>
+        <button className="has-tooltip" disabled={!data} onClick={() => data && setSelection(new Set(data.segmentation.regions.map((region) => region.id).filter((id) => !selection.has(id))))}><RotateCcw /> Umkehren<SettingTooltip text={editorTooltips.invert} /></button>
+        <button className="has-tooltip" disabled={!selection.size} onClick={() => setSelection(new Set())}><X /> Auswahl aufheben<SettingTooltip text={editorTooltips.clear} /></button>
       </div>
       <div className="height-toolbar">
-        <label>
+        <label className="has-tooltip">
           <span>HÖHE DER AUSWAHL</span>
           <input type="range" min={0} max={255} value={currentLevel} disabled={!selection.size} onChange={(event) => setLevel(Number(event.target.value))} />
           <strong>{(currentLevel / 255 * reliefMm).toFixed(1)} mm</strong>
+          <SettingTooltip text={editorTooltips.height} />
         </label>
-        <button disabled={!selection.size} onClick={() => setLevel(currentLevel + 20)}><ChevronUp /> Höher</button>
-        <button disabled={!selection.size} onClick={() => setLevel(currentLevel - 20)}><ChevronDown /> Tiefer</button>
-        <button disabled={!selection.size} onClick={() => setLevel(0)}>Auf Grundfläche</button>
-        <button disabled={!selection.size || !data || !levels} onClick={() => data && levels && commitLevels(smoothSelectedLevels(levels, selection, data.segmentation))}>Glätten</button>
-        <button disabled={!selection.size || !data || !levels} onClick={() => {
+        <button className="has-tooltip" disabled={!selection.size} onClick={() => setLevel(currentLevel + 20)}><ChevronUp /> Höher<SettingTooltip text={editorTooltips.higher} /></button>
+        <button className="has-tooltip" disabled={!selection.size} onClick={() => setLevel(currentLevel - 20)}><ChevronDown /> Tiefer<SettingTooltip text={editorTooltips.lower} /></button>
+        <button className="has-tooltip" disabled={!selection.size} onClick={() => setLevel(0)}>Auf Grundfläche<SettingTooltip text={editorTooltips.base} /></button>
+        <button className="has-tooltip" disabled={!selection.size || !data || !levels} onClick={() => data && levels && commitLevels(smoothSelectedLevels(levels, selection, data.segmentation))}>Glätten<SettingTooltip text={editorTooltips.smooth} /></button>
+        <button className="has-tooltip" disabled={!selection.size || !data || !levels} onClick={() => {
           if (!data || !levels) return;
           const once = smoothSelectedLevels(levels, selection, data.segmentation);
           commitLevels(smoothSelectedLevels(once, selection, data.segmentation));
-        }}>Kanten abrunden</button>
+        }}>Kanten abrunden<SettingTooltip text={editorTooltips.round} /></button>
       </div>
       <div className="editor-status">
         <span>{selection.size ? selection.size <= 20 ? `${selection.size} Fläche${selection.size === 1 ? "" : "n"} ausgewählt` : "Mehrere angrenzende Teilflächen ausgewählt" : "Klicke im Bild auf eine Fläche."}</span>

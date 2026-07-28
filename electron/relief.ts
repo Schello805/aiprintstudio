@@ -566,6 +566,7 @@ function buildPreviewSurface(
     return occupied >= Math.max(1, total * 0.5);
   });
   const boundaryPositions = buildSmoothedBoundaryPositions(previewColumns, previewRows, widthMm, heightMm, previewCells);
+  const baseHeight = Math.min(...heights);
   const positions: number[] = [];
   const indices: number[] = [];
   for (let previewY = 0; previewY < previewRows; previewY += 1) {
@@ -574,7 +575,7 @@ function buildPreviewSurface(
       const boundary = boundaryPositions.get(previewY * previewColumns + previewX);
       positions.push(
         (boundary?.[0] ?? x * widthMm / (columns - 1)) - widthMm / 2,
-        heights[y * columns + x],
+        boundary ? baseHeight : heights[y * columns + x],
         (boundary?.[1] ?? y * heightMm / (rows - 1)) - heightMm / 2
       );
     }

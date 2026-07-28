@@ -40,8 +40,8 @@ standardmäßig auf dem eigenen Mac.
 4. Die erzeugte STL oder 3MF unter `Downloads/AI Print Studio` im Slicer öffnen.
 
 Der aktuelle Modus erzeugt eine hochauflösende, wasserdichte Reliefplatte mit
-frei wählbaren Abmessungen. Fünf Qualitätsprofile optimieren Fotos, Logos oder
-schnelle Entwürfe unterschiedlich. Die mehrstufige Höhenpipeline kombiniert
+frei wählbaren Abmessungen. Die App wählt Qualitätsprofil und Auflösung
+automatisch passend zum Motiv. Die mehrstufige Höhenpipeline kombiniert
 Normalisierung, kantenerhaltende Glättung, Detailrückführung und profilabhängige
 Höhenstufen. Das Ergebnis enthält eine Höhenkarten-Vorschau, einen Druckscore,
 eine Materialschätzung und wird im lokalen Verlauf gespeichert.

@@ -18,6 +18,7 @@ import {
   X
 } from "lucide-react";
 import { RegionEditor } from "./RegionEditor";
+import { SettingTooltip } from "./SettingTooltip";
 type View = "studio" | "history" | "settings";
 type LegalPage = "imprint" | "privacy" | "cookies" | null;
 type SelectedImage = { path: string; name: string; size: number; width: number; height: number; suggestedProfile: "logo" | "photo"; dataUrl: string };
@@ -29,16 +30,16 @@ type HistoryEntry = {
   triangleCount: number; widthMm: number; heightMm: number; profile: QualityProfile; score: number;
 };
 
-const profileOptions: { id: QualityProfile; label: string; description: string; resolution: number; tooltip: string }[] = [
-  { id: "fast", label: "Schnell", description: "Vorschau & Entwurf", resolution: 128, tooltip: "Berechnet ein gröberes Mesh besonders schnell.\nBeispiel: Für einen ersten Formtest vor dem finalen Export." },
-  { id: "balanced", label: "Standard", description: "Gute Allround-Qualität", resolution: 256, tooltip: "Guter Kompromiss aus Detail, Dateigröße und Rechenzeit.\nBeispiel: Für die meisten Motive und normale FDM-Drucke." },
-  { id: "fine", label: "Fein", description: "Maximale Oberflächendetails", resolution: 512, tooltip: "Verwendet die höchste Auflösung und benötigt mehr Zeit.\nBeispiel: Für feine Gravuren oder große Resin-Drucke." },
-  { id: "photo", label: "Foto", description: "Weiche Tiefenübergänge", resolution: 320, tooltip: "Erhält sanfte Übergänge und vermeidet harte Höhenstufen.\nBeispiel: Für Gesichter, Tiere oder Landschaftsfotos." },
-  { id: "logo", label: "Logo", description: "Klare Kanten & Ebenen", resolution: 256, tooltip: "Trennt umrandete Flächen in klar definierte Höhenebenen.\nBeispiel: Beim Wappen werden Grundfläche, Rollen und Details gestaffelt." }
-];
+const optimalResolution: Record<QualityProfile, number> = {
+  fast: 192,
+  balanced: 320,
+  fine: 512,
+  photo: 384,
+  logo: 384
+};
 
 const modeTooltips: Record<ProcessingMode, string> = {
-  auto: "Analysiert das Bild und wählt den passenden Reliefmodus.\nBeispiel: Ein Wappen wird als Kontur-Relief, ein Foto als Höhenbild verarbeitet.",
+  auto: "Analysiert das Bild und verwendet automatisch die hochwertigste passende Methode.\nBeispiel: Ein Wappen nutzt saubere Flächen, ein Foto die lokale KI-Tiefenschätzung.",
   vector: "Erkennt geschlossene Flächen und ordnet ihnen feste Höhen zu.\nBeispiel: Schrift, Logos und die Rollen eines Wappens werden klar angehoben.",
   depth: "Schätzt mit Depth Anything V2 die räumliche Tiefe eines Fotos.\nBeispiel: Eine Person wird vom Hintergrund räumlich getrennt.",
   height: "Übernimmt die Helligkeit des Bildes direkt als Höhe.\nBeispiel: Weiß entspricht hoch und Schwarz niedrig – oder umgekehrt.",
@@ -79,6 +80,7 @@ export function App() {
   const [smoothing, setSmoothing] = useState(2);
   const [detail, setDetail] = useState(1);
   const [processingMode, setProcessingMode] = useState<ProcessingMode>("auto");
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editorHeightmap, setEditorHeightmap] = useState<string | null>(null);
   const [scanResult, setScanResult] = useState<{ usdzPath: string; photoCount: number } | null>(null);
@@ -122,11 +124,12 @@ export function App() {
     setBusy(true); setFileError(null); setResult(null);
     try {
       if (!window.desktop) throw new Error("Die lokale 3D-Engine ist nicht erreichbar. Bitte starte die App neu.");
+      const effectiveMode = processingMode === "auto" ? (file.suggestedProfile === "logo" ? "vector" : "depth") : processingMode;
       const next = await window.desktop.createRelief(file.path, {
         widthMm, baseMm, reliefMm,
-        resolution: profileOptions.find((option) => option.id === profile)?.resolution ?? 256,
+        resolution: optimalResolution[profile],
         invert: raiseLightAreas, profile, smoothing, detail,
-        processingMode: processingMode === "scan" ? "auto" : processingMode
+        processingMode: effectiveMode === "scan" ? "auto" : effectiveMode
       }, editorHeightmap ?? undefined);
       if (next) {
         setResult(next);
@@ -215,9 +218,10 @@ export function App() {
             {fileError && <div className="error-banner" role="alert"><strong>Verarbeitung fehlgeschlagen</strong><span>{fileError}</span><button onClick={() => setFileError(null)} aria-label="Fehlermeldung schließen"><X /></button></div>}
             {uploadStatus && !fileError && <div className="upload-status"><CheckCircle2 /> {uploadStatus}</div>}
             {file && !editorOpen && (
-              <button className={editorHeightmap ? "editor-launch active" : "editor-launch"} onClick={() => setEditorOpen(true)}>
+              <button className={editorHeightmap ? "editor-launch has-tooltip active" : "editor-launch has-tooltip"} onClick={() => setEditorOpen(true)}>
                 <Layers3 /> {editorHeightmap ? "Flächenkorrekturen weiter bearbeiten" : "Motivbereiche manuell korrigieren"}
                 {editorHeightmap && <span>Aktiv</span>}
+                <SettingTooltip text={"Öffnet den Flächeneditor für gezielte Höhenkorrekturen.\nBeispiel: Rollen im Wappen auswählen und unabhängig vom Hintergrund anheben."} />
               </button>
             )}
             {file && preview && editorOpen && (
@@ -230,22 +234,16 @@ export function App() {
             </div>
             <div className="conversion-options">
               <div className="option-group">
-                <span className="option-label">VERARBEITUNG</span>
-                <div className="mode-grid">
-                  <button className={processingMode === "auto" ? "mode-option has-tooltip selected" : "mode-option has-tooltip"} onClick={() => setProcessingMode("auto")} aria-description={modeTooltips.auto}>
-                    <Sparkles /><div><strong>Automatisch</strong><span>Wählt passend zu deinem Bild</span></div><SettingTooltip text={modeTooltips.auto} />
+                <div className="option-heading"><span className="option-label">ERGEBNISART</span><span className="quality-pill">Optimale Qualität automatisch aktiv</span></div>
+                <div className="mode-grid primary-modes">
+                  <button className={processingMode === "auto" ? "mode-option has-tooltip selected" : "mode-option has-tooltip"} onClick={() => { setProcessingMode("auto"); if (file) setProfile(file.suggestedProfile); }} aria-description={modeTooltips.auto}>
+                    <Sparkles /><div><strong>Automatisch</strong><span>Beste Methode wird gewählt</span></div><SettingTooltip text={modeTooltips.auto} />
                   </button>
                   <button className={processingMode === "vector" ? "mode-option has-tooltip selected" : "mode-option has-tooltip"} onClick={() => { setProcessingMode("vector"); setProfile("logo"); }} aria-description={modeTooltips.vector}>
-                    <Layers3 /><div><strong>Kontur-Relief</strong><span>Logos, Wappen und Schrift</span></div><SettingTooltip text={modeTooltips.vector} />
+                    <Layers3 /><div><strong>Logo & Wappen</strong><span>Klare Flächen und Kanten</span></div><SettingTooltip text={modeTooltips.vector} />
                   </button>
                   <button className={processingMode === "depth" ? "mode-option has-tooltip selected" : "mode-option has-tooltip"} onClick={() => { setProcessingMode("depth"); setProfile("photo"); }} aria-description={modeTooltips.depth}>
-                    <Box /><div><strong>KI-Tiefe</strong><span>Depth Anything V2 · lokal</span></div><SettingTooltip text={modeTooltips.depth} />
-                  </button>
-                  <button className={processingMode === "height" ? "mode-option has-tooltip selected" : "mode-option has-tooltip"} onClick={() => setProcessingMode("height")} aria-description={modeTooltips.height}>
-                    <ImagePlus /><div><strong>Höhenkarte</strong><span>Helligkeit direkt übernehmen</span></div><SettingTooltip text={modeTooltips.height} />
-                  </button>
-                  <button className={processingMode === "scan" ? "mode-option has-tooltip selected" : "mode-option has-tooltip"} onClick={() => setProcessingMode("scan")} aria-description={modeTooltips.scan}>
-                    <Layers3 /><div><strong>Mehrfoto-Scan</strong><span>Apple Object Capture · 12–300 Fotos</span></div><SettingTooltip text={modeTooltips.scan} />
+                    <Box /><div><strong>Foto & 3D-Tiefe</strong><span>Lokale KI-Tiefenschätzung</span></div><SettingTooltip text={modeTooltips.depth} />
                   </button>
                 </div>
               </div>
@@ -256,38 +254,41 @@ export function App() {
                 </div>
               ) : (
                 <>
-                  <div className="option-group">
-                    <span className="option-label">QUALITÄTSPROFIL</span>
-                    <div className="profile-grid">
-                      {profileOptions.map((option) => (
-                        <button key={option.id} className={profile === option.id ? "profile-option has-tooltip selected" : "profile-option has-tooltip"} onClick={() => setProfile(option.id)} aria-description={option.tooltip}>
-                          <strong>{option.label}</strong><span>{option.description}</span><SettingTooltip text={option.tooltip} />
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="parameter-grid">
+                  <div className="parameter-grid essential-parameters">
                     <NumberField label="BREITE" tooltip={parameterTooltips.width} value={widthMm} unit="mm" min={20} max={300} step={5} setValue={setWidthMm} />
                     <NumberField label="GRUNDPLATTE" tooltip={parameterTooltips.base} value={baseMm} unit="mm" min={0.8} max={10} step={0.2} setValue={setBaseMm} />
                     <NumberField label="RELIEF" tooltip={parameterTooltips.relief} value={reliefMm} unit="mm" min={0.5} max={20} step={0.5} setValue={setReliefMm} />
-                    <NumberField label="GLÄTTUNG" tooltip={parameterTooltips.smoothing} value={smoothing} min={0} max={5} step={1} setValue={setSmoothing} />
-                    <NumberField label="DETAIL" tooltip={parameterTooltips.detail} value={detail} min={0} max={2} step={0.25} setValue={setDetail} />
                   </div>
-                  <div className="option-footer">
-                    <div>
-                      <span className="option-label">RELIEF-RICHTUNG</span>
-                      <div className="segmented-control">
-                        <button className={!raiseLightAreas ? "has-tooltip selected" : "has-tooltip"} onClick={() => setRaiseLightAreas(false)} aria-description={parameterTooltips.dark}>Dunkles anheben<SettingTooltip text={parameterTooltips.dark} /></button>
-                        <button className={raiseLightAreas ? "has-tooltip selected" : "has-tooltip"} onClick={() => setRaiseLightAreas(true)} aria-description={parameterTooltips.light}>Helles anheben<SettingTooltip text={parameterTooltips.light} /></button>
+                  <button className="advanced-toggle has-tooltip" onClick={() => setAdvancedOpen((current) => !current)} aria-expanded={advancedOpen}>
+                    <Settings2 /> {advancedOpen ? "Erweiterte Einstellungen schließen" : "Erweiterte Einstellungen"}
+                    <SettingTooltip text={"Optionale Feineinstellungen für Sonderfälle. Die Automatik ist normalerweise die beste Wahl.\nBeispiel: Nur öffnen, wenn Helligkeitsrichtung oder Glättung bewusst geändert werden soll."} />
+                  </button>
+                  {advancedOpen && (
+                    <div className="advanced-options">
+                      <div className="parameter-grid advanced-parameters">
+                        <NumberField label="GLÄTTUNG" tooltip={parameterTooltips.smoothing} value={smoothing} min={0} max={5} step={1} setValue={setSmoothing} />
+                        <NumberField label="DETAIL" tooltip={parameterTooltips.detail} value={detail} min={0} max={2} step={0.25} setValue={setDetail} />
+                      </div>
+                      <div>
+                        <span className="option-label">RELIEF-RICHTUNG</span>
+                        <div className="segmented-control">
+                          <button className={!raiseLightAreas ? "has-tooltip selected" : "has-tooltip"} onClick={() => setRaiseLightAreas(false)} aria-description={parameterTooltips.dark}>Dunkles anheben<SettingTooltip text={parameterTooltips.dark} /></button>
+                          <button className={raiseLightAreas ? "has-tooltip selected" : "has-tooltip"} onClick={() => setRaiseLightAreas(true)} aria-description={parameterTooltips.light}>Helles anheben<SettingTooltip text={parameterTooltips.light} /></button>
+                        </div>
+                      </div>
+                      <div className="secondary-modes">
+                        <button className={processingMode === "height" ? "mode-option has-tooltip selected" : "mode-option has-tooltip"} onClick={() => { setProcessingMode("height"); setProfile("balanced"); }} aria-description={modeTooltips.height}>
+                          <ImagePlus /><div><strong>Höhenkarte</strong><span>Helligkeit direkt übernehmen</span></div><SettingTooltip text={modeTooltips.height} />
+                        </button>
+                        <button className="mode-option has-tooltip" onClick={() => setProcessingMode("scan")} aria-description={modeTooltips.scan}>
+                          <Layers3 /><div><strong>Mehrfoto-Scan</strong><span>Vollständiges 3D-Objekt</span></div><SettingTooltip text={modeTooltips.scan} />
+                        </button>
                       </div>
                     </div>
-                    <div className="cost-estimate">
-                      <span className="option-label">KOSTEN PRO UMWANDLUNG</span>
-                      <strong>0,00 €</strong><small>Lokale Verarbeitung · keine API-Nutzung</small>
-                    </div>
-                  </div>
+                  )}
                 </>
               )}
+              <div className="compact-cost"><strong>0,00 €</strong><span>lokal · keine API-Kosten</span></div>
             </div>
             <div className="action-bar">
               <div><Box size={20} /><div><strong>{processingMode === "scan" ? "Mehrfoto-Rekonstruktion" : file ? file.name : "Noch kein Bild gewählt"}</strong><span>{processingMode === "scan" ? "Wähle 12–300 überlappende Fotos aus verschiedenen Blickwinkeln." : file ? `${(file.size / 1_048_576).toFixed(1)} MB · ${file.width} × ${file.height} px · bereit` : "Wähle zuerst eine geeignete Aufnahme aus."}</span></div></div>
@@ -349,16 +350,6 @@ function ReliefPreview({ result }: { result: NonNullable<ReliefResult> }) {
         <OrbitControls makeDefault target={[0, result.options.baseMm + result.options.reliefMm / 2, 0]} minDistance={modelSize * 0.65} maxDistance={modelSize * 3} enableDamping />
       </Canvas>
     </div>
-  );
-}
-
-function SettingTooltip({ text }: { text: string }) {
-  const [explanation, example] = text.split("\n");
-  return (
-    <span className="setting-tooltip" role="tooltip" aria-hidden="true">
-      <span>{explanation}</span>
-      {example && <em>{example}</em>}
-    </span>
   );
 }
 
