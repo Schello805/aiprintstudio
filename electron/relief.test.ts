@@ -64,7 +64,7 @@ describe("relief mesh", () => {
     const report = reliefInternals.analysePrintability(
       mesh,
       Array(9).fill(1),
-      { widthMm: 20, baseMm: 0.8, reliefMm: 2, resolution: 32, invert: false, profile: "balanced", smoothing: 2, detail: 1, processingMode: "height", sourceColors: [], colors: [] },
+      { widthMm: 20, baseMm: 0.8, reliefMm: 2, resolution: 32, invert: false, profile: "balanced", smoothing: 2, detail: 1, processingMode: "height", sourceColors: [], colors: [], sideColorIndex: 0 },
       Array(4).fill(true),
       3
     );
@@ -133,6 +133,17 @@ describe("relief mesh", () => {
     expect(merged.vertices).toHaveLength(vertexCount * 2);
     expect(merged.triangles).toHaveLength((vertexCount - 2) * 2);
     expect(merged.triangles[vertexCount - 2][0]).toBe(vertexCount);
+  });
+
+  it("uses one filament for all side walls and thin color skins on top", () => {
+    const colored = reliefInternals.buildColoredMeshes(
+      3, 3, 20, 20, Array(9).fill(5), Array(4).fill(true),
+      [0, 1, 0, 1], ["#000000", "#FF0000"], 1.6, 0
+    );
+    const sideBody = colored.find((part) => part.color === "#000000");
+    const redSkin = colored.find((part) => part.color === "#FF0000");
+    expect(sideBody?.mesh.vertices.some((vertex) => vertex[2] === 0)).toBe(true);
+    expect(redSkin?.mesh.vertices.every((vertex) => vertex[2] >= 4.4)).toBe(true);
   });
 
   it("raises enclosed logo components above large background regions", () => {

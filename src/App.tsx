@@ -15,6 +15,7 @@ import {
   Settings2,
   ShieldCheck,
   Sparkles,
+  Type,
   UploadCloud,
   X
 } from "lucide-react";
@@ -89,7 +90,9 @@ export function App() {
   const [colorCount, setColorCount] = useState(4);
   const [sourceColors, setSourceColors] = useState(["#111827", "#F5F5F4", "#22C55E", "#F59E0B"]);
   const [colors, setColors] = useState(["#111827", "#F5F5F4", "#22C55E", "#F59E0B"]);
+  const [sideColorIndex, setSideColorIndex] = useState(0);
   const [scanResult, setScanResult] = useState<{ usdzPath: string; photoCount: number } | null>(null);
+  const [textDialogOpen, setTextDialogOpen] = useState(false);
   const [history, setHistory] = useState<HistoryEntry[]>(() => {
     try { return JSON.parse(localStorage.getItem("ai-print-studio-history") ?? "[]") as HistoryEntry[]; }
     catch { return []; }
@@ -107,6 +110,7 @@ export function App() {
         if (!active) return;
         setSourceColors(palette);
         setColors(palette);
+        setSideColorIndex(darkestColorIndex(palette));
       })
       .catch(() => {
         if (!active) return;
@@ -128,18 +132,30 @@ export function App() {
         setUploadStatus("Keine Datei ausgewählt.");
         return;
       }
-      setFileError(null);
-      setFile(selected);
-      setPreview(selected.dataUrl);
-      setProfile(selected.suggestedProfile);
-      setResult(null);
-      setEditorOpen(false);
-      setEditorHeightmap(null);
-      setUploadStatus(`${selected.width} × ${selected.height} Pixel geladen · Profil „${selected.suggestedProfile === "logo" ? "Logo" : "Foto"}“ empfohlen.`);
+      applySelectedImage(selected);
     } catch (error) {
       setFileError(error instanceof Error ? error.message : "Das Bild konnte nicht geöffnet werden.");
       setUploadStatus(null);
     }
+  }
+
+  function applySelectedImage(selected: SelectedImage) {
+    setFileError(null);
+    setFile(selected);
+    setPreview(selected.dataUrl);
+    setProfile(selected.suggestedProfile);
+    setProcessingMode(selected.suggestedProfile === "logo" ? "vector" : "depth");
+    setResult(null);
+    setEditorOpen(false);
+    setEditorHeightmap(null);
+    setUploadStatus(`${selected.width} × ${selected.height} Pixel geladen · Profil „${selected.suggestedProfile === "logo" ? "Logo" : "Foto"}“ empfohlen.`);
+  }
+
+  async function createTextSource(options: Parameters<NonNullable<typeof window.desktop>["createTextImage"]>[0]) {
+    if (!window.desktop) throw new Error("Text zu STL ist nur in der installierten Desktop-App verfügbar.");
+    const selected = await window.desktop.createTextImage(options);
+    applySelectedImage(selected);
+    setTextDialogOpen(false);
   }
 
   async function generateRelief() {
@@ -154,7 +170,8 @@ export function App() {
         invert: raiseLightAreas, profile, smoothing, detail,
         processingMode: effectiveMode === "scan" ? "auto" : effectiveMode,
         sourceColors: multicolorEnabled ? sourceColors : [],
-        colors: multicolorEnabled ? colors : []
+        colors: multicolorEnabled ? colors : [],
+        sideColorIndex: multicolorEnabled ? sideColorIndex : 0
       }, editorHeightmap ?? undefined);
       if (next) {
         setResult(next);
@@ -238,7 +255,7 @@ export function App() {
                 {preview ? (
                   <><div className="panel-label">ORIGINALBILD</div><img src={preview} alt="Vorschau des ausgewählten Bildes" /><div className="file-overlay"><ImagePlus size={18} /> Bild wechseln</div></>
                 ) : (
-                  <><div className="upload-icon"><UploadCloud size={32} /></div><h3>Bild oder SVG für dein Relief auswählen</h3><p>PNG, JPG, WEBP oder SVG · maximal 25 MB</p><button className="choose-file-button" onClick={(event) => { event.stopPropagation(); void selectFile(); }}>Datei auswählen</button><span>Die Datei wird ausschließlich lokal gelesen</span></>
+                  <><div className="upload-icon"><UploadCloud size={32} /></div><h3>Bild, SVG oder Text in 3D umwandeln</h3><p>PNG, JPG, WEBP, SVG oder eigener Text</p><div className="source-actions"><button className="choose-file-button" onClick={(event) => { event.stopPropagation(); void selectFile(); }}>Datei auswählen</button><button className="text-source-button" onClick={(event) => { event.stopPropagation(); setTextDialogOpen(true); }}><Type /> Text zu STL</button></div><span>Die Verarbeitung erfolgt ausschließlich lokal</span></>
                 )}
               </div>
               {result && <ReliefPreview result={result} />}
@@ -295,11 +312,13 @@ export function App() {
                     </button>
                     {multicolorEnabled && (
                       <div className="color-setup">
-                        <label>
+                        <label className="color-setting-label">
                           <span>ANZAHL FARBEN</span>
+                          <SettingTooltip text={"Reduziert das Bild auf die gewählte Zahl druckbarer Filamentfarben.\nBeispiel: 4 Farben entsprechen einem vollständig belegten AMS."} />
                           <select value={colorCount} onChange={(event) => {
                             const count = Number(event.target.value);
                             setColorCount(count);
+                            setSideColorIndex((current) => Math.min(current, count - 1));
                             setSourceColors((current) => resizePalette(current, count));
                             setColors((current) => resizePalette(current, count));
                           }}>
@@ -318,7 +337,14 @@ export function App() {
                             </label>
                           ))}
                         </div>
-                        <p>Die erkannten Bildfarben kannst du hier an deine tatsächlich eingelegten Filamente anpassen.</p>
+                        <label className="side-color-select color-setting-label">
+                          <span>SEITEN & TRAGKÖRPER</span>
+                          <SettingTooltip text={"Bestimmt die einheitliche Farbe aller Seitenflächen und der inneren Tragstruktur.\nBeispiel: Schwarz erzeugt saubere dunkle Seiten unter den farbigen Oberflächen."} />
+                          <select value={sideColorIndex} onChange={(event) => setSideColorIndex(Number(event.target.value))}>
+                            {colors.map((color, index) => <option value={index} key={`${color}-${index}`}>AMS {index + 1} · {color}</option>)}
+                          </select>
+                        </label>
+                        <p>Die Oberseiten erhalten die erkannten Farben. Alle Seitenflächen und der Tragkörper werden einheitlich mit der hier gewählten Farbe gedruckt.</p>
                       </div>
                     )}
                   </div>
@@ -381,6 +407,7 @@ export function App() {
 
         <Footer version={version} openLegal={setLegalPage} />
       </main>
+      {textDialogOpen && <TextToStlDialog close={() => setTextDialogOpen(false)} create={createTextSource} />}
     </div>
   );
 }
@@ -445,6 +472,18 @@ function resizePalette(colors: string[], count: number): string[] {
   return Array.from({ length: count }, (_, index) => colors[index] ?? defaults[index % defaults.length]);
 }
 
+function darkestColorIndex(colors: string[]): number {
+  let darkest = 0, darkestLuminance = Number.POSITIVE_INFINITY;
+  colors.forEach((color, index) => {
+    const red = Number.parseInt(color.slice(1, 3), 16);
+    const green = Number.parseInt(color.slice(3, 5), 16);
+    const blue = Number.parseInt(color.slice(5, 7), 16);
+    const luminance = 0.2126 * red + 0.7152 * green + 0.0722 * blue;
+    if (luminance < darkestLuminance) { darkest = index; darkestLuminance = luminance; }
+  });
+  return darkest;
+}
+
 function NumberField({ label, tooltip, value, unit, min, max, step, setValue }: {
   label: string; tooltip: string; value: number; unit?: string; min: number; max: number; step: number; setValue: (value: number) => void;
 }) {
@@ -454,6 +493,54 @@ function NumberField({ label, tooltip, value, unit, min, max, step, setValue }: 
       <div><input type="number" aria-description={tooltip} value={value} min={min} max={max} step={step} onChange={(event) => setValue(Math.max(min, Math.min(max, Number(event.target.value))))} />{unit && <small>{unit}</small>}</div>
       <SettingTooltip text={tooltip} />
     </label>
+  );
+}
+
+function TextToStlDialog({
+  close,
+  create
+}: {
+  close: () => void;
+  create: (options: Parameters<NonNullable<typeof window.desktop>["createTextImage"]>[0]) => Promise<void>;
+}) {
+  const [text, setText] = useState("Mein Text");
+  const [fontFamily, setFontFamily] = useState("Helvetica");
+  const [bold, setBold] = useState(true);
+  const [italic, setItalic] = useState(false);
+  const [alignment, setAlignment] = useState<"left" | "center" | "right">("center");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  async function submit() {
+    setBusy(true); setError(null);
+    try { await create({ text, fontFamily, bold, italic, alignment }); }
+    catch (nextError) { setError(nextError instanceof Error ? nextError.message : "Der Text konnte nicht vorbereitet werden."); }
+    finally { setBusy(false); }
+  }
+  return (
+    <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && close()}>
+      <section className="modal text-to-stl-modal" role="dialog" aria-modal="true" aria-labelledby="text-to-stl-title">
+        <button className="modal-close" onClick={close} aria-label="Dialog schließen"><X /></button>
+        <div className="modal-icon"><Type /></div>
+        <p className="eyebrow">LOKALE TEXTERSTELLUNG</p>
+        <h2 id="text-to-stl-title">Text zu STL</h2>
+        <p>Erzeuge freistehende Buchstaben oder ein Schrift-Relief. Danach kannst du Größe, Höhe und AMS-Farben wie bei einem Bild festlegen.</p>
+        <label htmlFor="text-content">Text · maximal 6 Zeilen</label>
+        <textarea id="text-content" maxLength={240} rows={4} value={text} onChange={(event) => setText(event.target.value)} />
+        <div className="text-options">
+          <label><span>SCHRIFTART</span><select value={fontFamily} onChange={(event) => setFontFamily(event.target.value)}>{["Helvetica", "Avenir Next", "Arial", "Times New Roman", "Courier New"].map((font) => <option key={font}>{font}</option>)}</select></label>
+          <label><span>AUSRICHTUNG</span><select value={alignment} onChange={(event) => setAlignment(event.target.value as typeof alignment)}><option value="left">Links</option><option value="center">Zentriert</option><option value="right">Rechts</option></select></label>
+        </div>
+        <div className="text-style-options">
+          <button className={bold ? "selected" : ""} onClick={() => setBold((current) => !current)}>Fett</button>
+          <button className={italic ? "selected" : ""} onClick={() => setItalic((current) => !current)}>Kursiv</button>
+        </div>
+        {error && <div className="notice error">{error}</div>}
+        <div className="modal-actions">
+          <button className="secondary-button" onClick={close}>Abbrechen</button>
+          <button className="primary-button" disabled={busy || !text.trim()} onClick={() => void submit()}>{busy ? "Text wird vorbereitet …" : "Text übernehmen"} <ChevronRight /></button>
+        </div>
+      </section>
+    </div>
   );
 }
 

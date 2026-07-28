@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import sharp, { type Metadata } from "sharp";
 import { createRelief, type ReliefOptions } from "./relief.js";
+import { renderTextImage, type TextImageOptions } from "./text-image.js";
 
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
 const developmentUrl = process.env.VITE_DEV_SERVER_URL ?? "http://localhost:5173";
@@ -332,6 +333,22 @@ app.whenReady().then(async () => {
       height: metadata.height,
       suggestedProfile,
       dataUrl: `data:${mime};base64,${previewBytes.toString("base64")}`
+    };
+  });
+  ipcMain.handle("text:createImage", async (_event, options: TextImageOptions) => {
+    const { png, text, width, height } = await renderTextImage(options);
+    const directory = join(app.getPath("temp"), "AI Print Studio Text");
+    await mkdir(directory, { recursive: true });
+    const path = join(directory, `text-${Date.now()}.png`);
+    await writeFile(path, png);
+    return {
+      path,
+      name: `${text.replace(/\s+/g, "-").replace(/[^a-zA-Z0-9äöüÄÖÜß_-]/g, "").slice(0, 48) || "Text"}.png`,
+      size: png.length,
+      width,
+      height,
+      suggestedProfile: "logo" as const,
+      dataUrl: `data:image/png;base64,${png.toString("base64")}`
     };
   });
   ipcMain.handle("objectCapture:create", async () => {

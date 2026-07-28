@@ -23,6 +23,21 @@ interface Window {
       suggestedProfile: "logo" | "photo";
       dataUrl: string;
     } | null>;
+    createTextImage: (options: {
+      text: string;
+      fontFamily: string;
+      bold: boolean;
+      italic: boolean;
+      alignment: "left" | "center" | "right";
+    }) => Promise<{
+      path: string;
+      name: string;
+      size: number;
+      width: number;
+      height: number;
+      suggestedProfile: "logo";
+      dataUrl: string;
+    }>;
     createObjectCapture: () => Promise<{ usdzPath: string; photoCount: number } | null>;
     createRelief: (imagePath: string, options: {
       widthMm: number;
@@ -36,6 +51,7 @@ interface Window {
       processingMode: "auto" | "vector" | "depth" | "height";
       sourceColors: string[];
       colors: string[];
+      sideColorIndex: number;
     }, editorHeightmapDataUrl?: string) => Promise<{
       stlPath: string;
       threeMfPath: string;
@@ -49,6 +65,7 @@ interface Window {
         processingMode: "auto" | "vector" | "depth" | "height";
         sourceColors: string[];
         colors: string[];
+        sideColorIndex: number;
       };
       printability: { score: number; status: "ready" | "warning" | "critical"; issues: string[]; estimatedVolumeCm3: number };
       heightmapDataUrl: string;

@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.9.0
+
+- Neuer Einstieg „Text zu STL“ für bis zu sechs Textzeilen mit Schriftart, Fett/Kursiv und Ausrichtung.
+- Text wird vollständig lokal als transparente, hochauflösende Vorlage gerendert und anschließend über den bewährten Logo-Reliefpfad exportiert.
+- Mehrfarbige Reliefs besitzen jetzt einen zusammenhängenden, einfarbigen Tragkörper; nur die oberen 0,6 mm bilden die farbigen Deckschichten.
+- Seitenflächen und Grundstruktur lassen sich gezielt einem AMS-Slot zuweisen, standardmäßig der dunkelsten erkannten Farbe.
+- Erkannte Oberflächenfarben bleiben unabhängig von der gewählten Seitenfarbe.
+- Sichtbare Info-Tooltips erklären Farbanzahl und Seitenfarbe.
+- Neue Tests prüfen sichere Textdarstellung, transparente Hintergründe, einfarbige Seitenkörper und dünne Farbdeckschichten.
+
 ## 0.8.0
 
 - Neuer AMS-Farbdruck-Modus mit frei wählbaren zwei bis acht Farben.

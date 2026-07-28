@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld("desktop", Object.freeze({
   removeOpenAiKey: () => ipcRenderer.invoke("settings:removeOpenAiKey"),
   acceptModelSetup: () => ipcRenderer.invoke("settings:acceptModelSetup"),
   selectImage: () => ipcRenderer.invoke("image:select"),
+  createTextImage: (options) => ipcRenderer.invoke("text:createImage", options),
   createObjectCapture: () => ipcRenderer.invoke("objectCapture:create"),
   createRelief: (imagePath, options, editorHeightmapDataUrl) => ipcRenderer.invoke("relief:create", imagePath, options, editorHeightmapDataUrl),
   showItemInFolder: (path) => ipcRenderer.invoke("shell:showItem", path),

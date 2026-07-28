@@ -42,6 +42,11 @@ h1,h2,h3 { font-family:Manrope, sans-serif; margin:0; }
 .upload-card p { color:#8f96a1; margin:7px 0 18px; font-size:13px; }
 .upload-card span { color:#555c68; font-size:10px; text-transform:uppercase; letter-spacing:.1em; }
 .choose-file-button { border:0; border-radius:9px; background:#a5f36d; color:#11150e; padding:10px 16px; margin:0 0 16px; font-weight:700; font-size:11px; cursor:pointer; }
+.source-actions { display:flex; gap:8px; margin:0 0 16px; }
+.source-actions .choose-file-button { margin:0; }
+.text-source-button { display:flex; align-items:center; gap:7px; border:1px solid #39434d; border-radius:9px; background:#151a21; color:#d3dae3; padding:9px 14px; font-weight:600; font-size:11px; cursor:pointer; }
+.text-source-button:hover { border-color:#668852; color:#e2ffd0; }
+.text-source-button svg { width:16px; }
 .upload-card.has-preview img { width:100%; height:100%; object-fit:contain; background:#090b0f; padding:12px; }
 .file-overlay { position:absolute; bottom:15px; right:15px; border:1px solid #ffffff22; background:#090c11d9; backdrop-filter:blur(8px); padding:9px 12px; border-radius:9px; display:flex; align-items:center; gap:7px; color:#e7ebf2!important; font-size:11px!important; letter-spacing:0!important; text-transform:none!important; }
 .workflow-row { margin:8px 0; border:1px solid #20252e; border-radius:10px; background:#0e1117; min-height:34px; display:grid; grid-template-columns:repeat(4,1fr); align-items:center; }
@@ -100,6 +105,10 @@ h1,h2,h3 { font-family:Manrope, sans-serif; margin:0; }
 .multicolor-panel.active .toggle-track>span { margin-left:14px; background:#a5f36d; }
 .color-setup { display:grid; grid-template-columns:145px 1fr; gap:9px 12px; padding:11px 12px 12px; border-top:1px solid #283426; }
 .color-setup>label>span { display:block; color:#758071; font-size:8px; font-weight:700; letter-spacing:.1em; margin-bottom:5px; }
+.color-setting-label { position:relative; padding-right:22px; }
+.color-setting-label>.tooltip-trigger { position:absolute; top:-4px; right:0; }
+.color-setting-label .setting-tooltip { left:0; transform:none; }
+.color-setting-label .setting-tooltip::after { left:8px; transform:none; }
 .color-setup select { width:100%; border:1px solid #34402f; border-radius:8px; background:#0a0e0b; color:#dce4d8; padding:8px; font-size:10px; }
 .color-swatches { display:grid; grid-template-columns:repeat(4,minmax(90px,1fr)); gap:6px; }
 .color-swatch { min-width:0; display:flex; align-items:center; gap:7px; padding:6px; border:1px solid #313b31; border-radius:8px; background:#111711; cursor:pointer; }
@@ -288,6 +297,15 @@ footer { padding:17px 36px; border-top:1px solid #1c2028; display:flex; justify-
 .modal>p:not(.eyebrow) { color:#8e96a2; font-size:12px; line-height:1.65; margin:10px 0 24px; }
 .modal label:not(.consent) { display:block; color:#bcc3cd; font-size:11px; font-weight:600; margin-bottom:8px; }
 .modal input[type=password] { width:100%; border:1px solid #323945; border-radius:10px; background:#0b0e13; color:#eef1f6; padding:12px 14px; outline:none; }
+.text-to-stl-modal textarea { width:100%; resize:vertical; min-height:92px; border:1px solid #323945; border-radius:10px; background:#0b0e13; color:#eef1f6; padding:12px 14px; outline:none; font:600 18px/1.4 Manrope,sans-serif; }
+.text-to-stl-modal textarea:focus { border-color:#8eea66; box-shadow:0 0 0 3px #8eea6615; }
+.text-options { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:13px; }
+.text-options label { margin:0!important; }
+.text-options span { display:block; color:#747e8a; font-size:8px; letter-spacing:.1em; margin-bottom:5px; }
+.text-options select { width:100%; border:1px solid #323945; border-radius:9px; background:#0b0e13; color:#dce2ea; padding:10px; }
+.text-style-options { display:flex; gap:7px; margin-top:11px; }
+.text-style-options button { border:1px solid #343c47; border-radius:8px; background:#171b22; color:#929aa6; padding:8px 13px; cursor:pointer; }
+.text-style-options button.selected { color:#dfffc7; border-color:#537143; background:#1a2619; }
 .modal input[type=password]:focus { border-color:#8eea66; box-shadow:0 0 0 3px #8eea6615; }
 .modal-actions { display:flex; justify-content:flex-end; gap:9px; margin-top:24px; }
 .secondary-button,.danger-button { border:1px solid #343b46; border-radius:9px; background:#171b22; color:#b4bbc5; padding:11px 14px; cursor:pointer; font-size:11px; }

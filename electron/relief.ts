@@ -15,6 +15,7 @@ export type ReliefOptions = {
   processingMode: "auto" | "vector" | "depth" | "height";
   sourceColors: string[];
   colors: string[];
+  sideColorIndex: number;
 };
 
 export type PrintabilityReport = {
@@ -57,7 +58,8 @@ const safeDefaults: ReliefOptions = {
   detail: 1
   ,processingMode: "auto",
   sourceColors: [],
-  colors: []
+  colors: [],
+  sideColorIndex: 0
 };
 
 export async function createRelief(
@@ -141,7 +143,10 @@ export async function createRelief(
   const stlPath = join(outputDirectory, `${stem}-relief.stl`);
   const threeMfPath = join(outputDirectory, `${stem}-relief.3mf`);
   const coloredMeshes = colorAssignments
-    ? buildColoredMeshes(gridWidth, gridHeight, options.widthMm, heightMm, heights, cellMask, colorAssignments, options.colors, options.baseMm)
+    ? buildColoredMeshes(
+      gridWidth, gridHeight, options.widthMm, heightMm, heights, cellMask,
+      colorAssignments, options.colors, options.baseMm, options.sideColorIndex
+    )
     : undefined;
   await Promise.all([
     writeFile(stlPath, encodeBinaryStl(mesh, "AI Print Studio Relief")),
@@ -176,6 +181,9 @@ function validateOptions(options: ReliefOptions): ReliefOptions {
   }
   if (!Array.isArray(options.sourceColors) || options.sourceColors.length > 16 || options.sourceColors.some((color) => !/^#[0-9a-fA-F]{6}$/.test(color))) {
     throw new Error("Die erkannte Bildpalette enthält ungültige Farben.");
+  }
+  if (!Number.isInteger(options.sideColorIndex) || options.sideColorIndex < 0 || (options.colors.length && options.sideColorIndex >= options.colors.length)) {
+    throw new Error("Die gewählte Seitenfarbe ist ungültig.");
   }
   return options;
 }
@@ -372,7 +380,7 @@ function buildWatertightHeightMesh(
   heightMm: number,
   heights: number[],
   cellMask?: boolean[],
-  bottomHeight = 0,
+  bottomHeight: number | number[] = 0,
   boundaryPositionsOverride?: Map<number, readonly [number, number]>
 ): Mesh {
   const vertices: Vec3[] = [];
@@ -393,7 +401,7 @@ function buildWatertightHeightMesh(
     vertices.push([
       boundary?.[0] ?? x * widthMm / (columns - 1),
       boundary?.[1] ?? y * heightMm / (rows - 1),
-      bottom ? bottomHeight : heights[gridIndex]
+      bottom ? (Array.isArray(bottomHeight) ? bottomHeight[gridIndex] : bottomHeight) : heights[gridIndex]
     ]);
     map.set(gridIndex, created);
     return created;
@@ -478,17 +486,20 @@ function buildColoredMeshes(
   cellMask: boolean[],
   assignments: number[],
   colors: string[],
-  baseMm: number
+  baseMm: number,
+  sideColorIndex: number
 ): ColoredMesh[] {
   const outerBoundary = buildSmoothedBoundaryPositions(columns, rows, widthMm, heightMm, cellMask);
-  const base = buildWatertightHeightMesh(
-    columns, rows, widthMm, heightMm, Array(columns * rows).fill(baseMm), cellMask, 0, outerBoundary
+  const colorSkinMm = 0.6;
+  const structureHeights = heights.map((height) => Math.max(baseMm, height - colorSkinMm));
+  const structure = buildWatertightHeightMesh(
+    columns, rows, widthMm, heightMm, structureHeights, cellMask, 0, outerBoundary
   );
   return colors.map((color, colorIndex) => {
     const mask = assignments.map((assignment) => assignment === colorIndex);
-    const top = buildWatertightHeightMesh(columns, rows, widthMm, heightMm, heights, mask, baseMm, outerBoundary);
+    const top = buildWatertightHeightMesh(columns, rows, widthMm, heightMm, heights, mask, structureHeights, outerBoundary);
     return {
-      mesh: colorIndex === 0 ? mergeMeshes([base, top]) : top,
+      mesh: colorIndex === sideColorIndex ? mergeMeshes([structure, top]) : top,
       color,
       name: `AMS ${colorIndex + 1}`
     };
