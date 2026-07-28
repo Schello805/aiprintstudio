@@ -3,7 +3,7 @@
 ## Unterstützte Versionen
 
 Während der frühen Entwicklung wird nur die jeweils aktuelle veröffentlichte
-Version unterstützt. Der aktuelle Entwicklungsstand ist 0.14.1.
+Version unterstützt. Der aktuelle Entwicklungsstand ist 0.14.2.
 
 ## Sicherheitsproblem melden
 

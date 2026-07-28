@@ -377,7 +377,11 @@ export function App() {
                         </label>
                         <div className="color-swatches">
                           {colors.map((color, index) => (
-                            <label className="color-swatch" key={`${index}-${color}`}>
+                            // Der Key darf nicht den veränderlichen Farbwert
+                            // enthalten. Sonst ersetzt React das native
+                            // Farbfeld bei jeder Auswahl und macOS schließt
+                            // seine Farbpalette sofort wieder.
+                            <label className="color-swatch" key={index}>
                               <input
                                 type="color"
                                 value={color}
@@ -391,7 +395,7 @@ export function App() {
                           <span>SEITEN & TRAGKÖRPER</span>
                           <SettingTooltip text={"Bestimmt die einheitliche Farbe aller Seitenflächen und der inneren Tragstruktur.\nBeispiel: Schwarz erzeugt saubere dunkle Seiten unter den farbigen Oberflächen."} />
                           <select value={sideColorIndex} onChange={(event) => setSideColorIndex(Number(event.target.value))}>
-                            {colors.map((color, index) => <option value={index} key={`${color}-${index}`}>AMS {index + 1} · {color}</option>)}
+                            {colors.map((color, index) => <option value={index} key={index}>AMS {index + 1} · {color}</option>)}
                           </select>
                         </label>
                         <p>Die Oberseiten erhalten die erkannten Farben. Alle Seitenflächen und der Tragkörper werden einheitlich mit der hier gewählten Farbe gedruckt.</p>

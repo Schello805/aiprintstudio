@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.14.2
+
+- Die native macOS-Farbpalette bleibt beim Verschieben und Anklicken geöffnet.
+- Farbfelder behalten beim Ändern des Farbwerts ihre stabile React-Identität
+  und werden nicht mehr nach jeder Eingabe neu erzeugt.
+
 ## 0.14.1
 
 - Außenkonturen durchlaufen mehr sanfte Glättungsschritte, sodass regelmäßige
