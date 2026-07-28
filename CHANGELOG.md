@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.12.4
+
+- Lokal gerenderte Schrift wird in der Originalvorschau reinweiß statt fast schwarz dargestellt.
+- Der Hintergrund der Schriftvorlage bleibt vollständig transparent.
+- Antialias-Randpixel werden vor der Reliefverarbeitung in eine saubere binäre Alphakontur überführt.
+- Einfarbige Schrift erhält eine einheitliche Reliefhöhe, damit an diagonalen Buchstabenenden wie beim „M“ keine erhöhten Spitzen entstehen.
+- Neue Regressionstests prüfen weiße Pixel, transparente Binärkonturen und einheitliche Schrifthöhen.
+
 ## 0.12.3
 
 - Die vereinfachte 3D-Vorschau stabilisiert Randfarben erst nach dem Herunterskalieren des Meshrasters.

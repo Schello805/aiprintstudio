@@ -212,7 +212,12 @@ function buildVectorLevels(rgba: Buffer, mask: boolean[], width: number, height:
   for (let index = 0; index < mask.length; index += sampleStep) {
     if (mask[index]) pixels.push([rgba[index * 4], rgba[index * 4 + 1], rgba[index * 4 + 2]]);
   }
-  const clusterCount = Math.max(2, Math.min(6, new Set(pixels.map(([r, g, b]) => `${r >> 5}:${g >> 5}:${b >> 5}`)).size));
+  const quantizedColors = new Set(pixels.map(([r, g, b]) => `${r >> 5}:${g >> 5}:${b >> 5}`));
+  // Einfarbige transparente Motive wie gerenderte Schrift benötigen keine
+  // semantischen Farbebenen. Eine konstante Höhe verhindert, dass einzelne
+  // Buchstabenenden als höhere Spitzen rekonstruiert werden.
+  if (quantizedColors.size <= 1) return mask.map((occupied) => occupied ? 1 : 0);
+  const clusterCount = Math.max(2, Math.min(6, quantizedColors.size));
   let centers = Array.from({ length: clusterCount }, (_, index) => {
     const source = pixels[Math.min(pixels.length - 1, Math.floor(index * pixels.length / clusterCount))] ?? [255, 255, 255];
     return [...source] as [number, number, number];

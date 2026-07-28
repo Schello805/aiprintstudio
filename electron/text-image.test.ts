@@ -16,6 +16,20 @@ describe("text image", () => {
     expect(metadata.height).toBeGreaterThan(300);
     expect(metadata.hasAlpha).toBe(true);
     expect(result.width).toBe(metadata.width);
+    const { data } = await sharp(result.png).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+    const visiblePixels: number[] = [];
+    let visiblePixelCount = 0;
+    const alphaValues = new Set<number>();
+    for (let offset = 0; offset < data.length; offset += 4) {
+      alphaValues.add(data[offset + 3]);
+      if (data[offset + 3]) {
+        visiblePixelCount += 1;
+        visiblePixels.push(data[offset], data[offset + 1], data[offset + 2]);
+      }
+    }
+    expect(new Set(visiblePixels)).toEqual(new Set([255]));
+    expect(alphaValues).toEqual(new Set([0, 255]));
+    expect(visiblePixelCount).toBeLessThan(data.length / 4 * 0.5);
   });
 
   it("safely renders XML characters and rejects empty text", async () => {

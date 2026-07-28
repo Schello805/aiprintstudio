@@ -99,6 +99,16 @@ describe("relief mesh", () => {
     expect(levels[0]).toBeGreaterThan(levels[3]);
   });
 
+  it("keeps monochrome transparent lettering on one uniform height", () => {
+    const rgba = Buffer.from([
+      255, 255, 255, 255, 255, 255, 255, 255,
+      255, 255, 255, 0, 255, 255, 255, 255
+    ]);
+    const mask = [true, true, false, true];
+    const levels = reliefInternals.buildVectorLevels(rgba, mask, 2, 2, false);
+    expect(levels).toEqual([1, 1, 0, 1]);
+  });
+
   it("assigns subject cells to the nearest configured filament color", () => {
     const rgba = Buffer.from([
       250, 5, 5, 255, 250, 5, 5, 255,
