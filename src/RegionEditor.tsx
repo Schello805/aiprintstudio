@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Canvas } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
-import { ChevronDown, ChevronUp, Minus, Plus, Redo2, RotateCcw, Undo2, WandSparkles, X } from "lucide-react";
+import { ChevronDown, ChevronUp, Minus, Palette, Plus, Redo2, RotateCcw, Scissors, Undo2, WandSparkles, X } from "lucide-react";
 import {
   expandRegionSelection,
   initialRegionLevels,
@@ -39,12 +39,16 @@ type EditorData = {
 export function RegionEditor({
   imageUrl,
   reliefMm,
+  colors,
   onHeightmapChange,
+  onColorMapChange,
   onClose
 }: {
   imageUrl: string;
   reliefMm: number;
+  colors: string[];
   onHeightmapChange: (dataUrl: string | null) => void;
+  onColorMapChange: (dataUrl: string | null) => void;
   onClose: () => void;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -53,6 +57,7 @@ export function RegionEditor({
   const [selection, setSelection] = useState<Set<number>>(new Set());
   const [undoStack, setUndoStack] = useState<Uint8ClampedArray[]>([]);
   const [redoStack, setRedoStack] = useState<Uint8ClampedArray[]>([]);
+  const [colorAssignments, setColorAssignments] = useState<Uint8ClampedArray | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -76,6 +81,7 @@ export function RegionEditor({
       setSelection(new Set());
       setUndoStack([]);
       setRedoStack([]);
+      setColorAssignments(new Uint8ClampedArray(width * height).fill(255));
     };
     image.src = imageUrl;
     return () => { active = false; };
@@ -99,6 +105,26 @@ export function RegionEditor({
   }, [data, levels, onHeightmapChange]);
 
   useEffect(() => {
+    if (!data || !colorAssignments || !colors.length) {
+      onColorMapChange(null);
+      return;
+    }
+    const canvas = document.createElement("canvas");
+    canvas.width = data.segmentation.width; canvas.height = data.segmentation.height;
+    const context = canvas.getContext("2d");
+    if (!context) return;
+    const pixels = new Uint8ClampedArray(colorAssignments.length * 4);
+    for (let index = 0; index < colorAssignments.length; index += 1) {
+      pixels[index * 4] = colorAssignments[index];
+      pixels[index * 4 + 1] = colorAssignments[index];
+      pixels[index * 4 + 2] = colorAssignments[index];
+      pixels[index * 4 + 3] = 255;
+    }
+    context.putImageData(new ImageData(pixels, canvas.width, canvas.height), 0, 0);
+    onColorMapChange(canvas.toDataURL("image/png"));
+  }, [colorAssignments, colors.length, data, onColorMapChange]);
+
+  useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || !data) return;
     canvas.width = data.segmentation.width; canvas.height = data.segmentation.height;
@@ -106,6 +132,14 @@ export function RegionEditor({
     if (!context) return;
     const display = data.source.slice();
     for (let index = 0; index < data.segmentation.regionIds.length; index += 1) {
+      const assigned = colorAssignments?.[index] ?? 255;
+      if (assigned < colors.length) {
+        const [r, g, b] = hexToRgb(colors[assigned]);
+        const offset = index * 4;
+        display[offset] = Math.round(display[offset] * 0.45 + r * 0.55);
+        display[offset + 1] = Math.round(display[offset + 1] * 0.45 + g * 0.55);
+        display[offset + 2] = Math.round(display[offset + 2] * 0.45 + b * 0.55);
+      }
       if (!selection.has(data.segmentation.regionIds[index])) continue;
       const offset = index * 4;
       display[offset] = Math.round(display[offset] * 0.2 + 165 * 0.8);
@@ -114,7 +148,7 @@ export function RegionEditor({
       display[offset + 3] = 255;
     }
     context.putImageData(new ImageData(display, canvas.width, canvas.height), 0, 0);
-  }, [data, selection]);
+  }, [colorAssignments, colors, data, selection]);
 
   const commitLevels = (next: Uint8ClampedArray) => {
     if (!levels) return;
@@ -130,6 +164,14 @@ export function RegionEditor({
   const setLevel = (value: number) => {
     if (!data || !levels || !selection.size) return;
     commitLevels(setSelectedRegionLevel(levels, selection, data.segmentation.regions, value));
+  };
+  const assignColor = (colorIndex: number) => {
+    if (!data || !colorAssignments || !selection.size) return;
+    const next = colorAssignments.slice();
+    for (const regionId of selection) {
+      for (const pixel of data.segmentation.regions[regionId]?.pixels ?? []) next[pixel] = colorIndex;
+    }
+    setColorAssignments(next);
   };
   const undo = () => {
     const previous = undoStack.at(-1);
@@ -183,6 +225,16 @@ export function RegionEditor({
         <button className="has-tooltip" disabled={!data} onClick={() => data && setSelection(new Set(data.segmentation.regions.map((region) => region.id).filter((id) => !selection.has(id))))}><RotateCcw /> Umkehren<SettingTooltip text={editorTooltips.invert} /></button>
         <button className="has-tooltip" disabled={!selection.size} onClick={() => setSelection(new Set())}><X /> Auswahl aufheben<SettingTooltip text={editorTooltips.clear} /></button>
       </div>
+      {colors.length > 0 && (
+        <div className="editor-color-toolbar">
+          <span><Palette /> AUSWAHL EINER AMS-FARBE ZUWEISEN</span>
+          {colors.map((color, index) => (
+            <button key={color} disabled={!selection.size} onClick={() => assignColor(index)}>
+              <i style={{ background: color }} /> AMS {index + 1}
+            </button>
+          ))}
+        </div>
+      )}
       <div className="height-toolbar">
         <label className="has-tooltip">
           <span>HÖHE DER AUSWAHL</span>
@@ -214,6 +266,7 @@ export function RegionEditor({
         <button className="has-tooltip" disabled={!selection.size} onClick={() => setLevel(currentLevel + 20)}><ChevronUp /> Höher<SettingTooltip text={editorTooltips.higher} /></button>
         <button className="has-tooltip" disabled={!selection.size} onClick={() => setLevel(currentLevel - 20)}><ChevronDown /> Tiefer<SettingTooltip text={editorTooltips.lower} /></button>
         <button className="has-tooltip" disabled={!selection.size} onClick={() => setLevel(0)}>Auf Grundfläche<SettingTooltip text={editorTooltips.base} /></button>
+        <button className="has-tooltip" disabled={!selection.size} onClick={() => setLevel(0)}><Scissors /> Vertiefen<SettingTooltip text={"Senkt die Auswahl auf die Grundfläche und erzeugt eine sichtbare Vertiefung.\nBeispiel: Eine ausgesparte Schriftfläche oder Nut vorbereiten."} /></button>
         <button className="has-tooltip" disabled={!selection.size || !data || !levels} onClick={() => data && levels && commitLevels(smoothSelectedLevels(levels, selection, data.segmentation))}>Glätten<SettingTooltip text={editorTooltips.smooth} /></button>
         <button className="has-tooltip" disabled={!selection.size || !data || !levels} onClick={() => {
           if (!data || !levels) return;
@@ -227,6 +280,10 @@ export function RegionEditor({
       </div>
     </section>
   );
+}
+
+function hexToRgb(color: string): [number, number, number] {
+  return [Number.parseInt(color.slice(1, 3), 16), Number.parseInt(color.slice(3, 5), 16), Number.parseInt(color.slice(5, 7), 16)];
 }
 
 function EditorReliefPreview({ segmentation, levels }: { segmentation: Segmentation | null; levels: Uint8ClampedArray | null }) {

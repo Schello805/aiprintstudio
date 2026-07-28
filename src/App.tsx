@@ -86,6 +86,7 @@ export function App() {
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editorHeightmap, setEditorHeightmap] = useState<string | null>(null);
+  const [editorColorMap, setEditorColorMap] = useState<string | null>(null);
   const [multicolorEnabled, setMulticolorEnabled] = useState(false);
   const [colorCount, setColorCount] = useState(4);
   const [sourceColors, setSourceColors] = useState(["#111827", "#F5F5F4", "#22C55E", "#F59E0B"]);
@@ -93,6 +94,7 @@ export function App() {
   const [sideColorIndex, setSideColorIndex] = useState(0);
   const [scanResult, setScanResult] = useState<{ usdzPath: string; photoCount: number } | null>(null);
   const [textDialogOpen, setTextDialogOpen] = useState(false);
+  const [ai3dDialogOpen, setAi3dDialogOpen] = useState(false);
   const [history, setHistory] = useState<HistoryEntry[]>(() => {
     try { return JSON.parse(localStorage.getItem("ai-print-studio-history") ?? "[]") as HistoryEntry[]; }
     catch { return []; }
@@ -148,6 +150,7 @@ export function App() {
     setResult(null);
     setEditorOpen(false);
     setEditorHeightmap(null);
+    setEditorColorMap(null);
     setUploadStatus(`${selected.width} × ${selected.height} Pixel geladen · Profil „${selected.suggestedProfile === "logo" ? "Logo" : "Foto"}“ empfohlen.`);
   }
 
@@ -172,7 +175,7 @@ export function App() {
         sourceColors: multicolorEnabled ? sourceColors : [],
         colors: multicolorEnabled ? colors : [],
         sideColorIndex: multicolorEnabled ? sideColorIndex : 0
-      }, editorHeightmap ?? undefined);
+      }, editorHeightmap ?? undefined, editorColorMap ?? undefined);
       if (next) {
         setResult(next);
         const entry: HistoryEntry = {
@@ -204,6 +207,10 @@ export function App() {
 
   const updateEditorHeightmap = useCallback((dataUrl: string | null) => {
     setEditorHeightmap(dataUrl);
+    setResult(null);
+  }, []);
+  const updateEditorColorMap = useCallback((dataUrl: string | null) => {
+    setEditorColorMap(dataUrl);
     setResult(null);
   }, []);
 
@@ -255,7 +262,7 @@ export function App() {
                 {preview ? (
                   <><div className="panel-label">ORIGINALBILD</div><img src={preview} alt="Vorschau des ausgewählten Bildes" /><div className="file-overlay"><ImagePlus size={18} /> Bild wechseln</div></>
                 ) : (
-                  <><div className="upload-icon"><UploadCloud size={32} /></div><h3>Bild, SVG oder Text in 3D umwandeln</h3><p>PNG, JPG, WEBP, SVG oder eigener Text</p><div className="source-actions"><button className="choose-file-button" onClick={(event) => { event.stopPropagation(); void selectFile(); }}>Datei auswählen</button><button className="text-source-button" onClick={(event) => { event.stopPropagation(); setTextDialogOpen(true); }}><Type /> Text zu STL</button></div><span>Die Verarbeitung erfolgt ausschließlich lokal</span></>
+                  <><div className="upload-icon"><UploadCloud size={32} /></div><h3>Bild, SVG, Schrift oder Prompt in 3D umwandeln</h3><p>Lokales Relief oder vollständiges KI-Modell</p><div className="source-actions"><button className="choose-file-button" onClick={(event) => { event.stopPropagation(); void selectFile(); }}>Datei auswählen</button><button className="text-source-button" onClick={(event) => { event.stopPropagation(); setTextDialogOpen(true); }}><Type /> Schrift zu STL</button><button className="text-source-button ai" onClick={(event) => { event.stopPropagation(); setAi3dDialogOpen(true); }}><Sparkles /> Prompt zu 3D</button></div><span>Reliefs lokal · Prompt-Modelle nur nach ausdrücklichem Cloud-Start</span></>
                 )}
               </div>
               {result && <ReliefPreview result={result} />}
@@ -270,7 +277,14 @@ export function App() {
               </button>
             )}
             {file && preview && editorOpen && (
-              <RegionEditor imageUrl={preview} reliefMm={reliefMm} onHeightmapChange={updateEditorHeightmap} onClose={() => setEditorOpen(false)} />
+              <RegionEditor
+                imageUrl={preview}
+                reliefMm={reliefMm}
+                colors={multicolorEnabled ? colors : []}
+                onHeightmapChange={updateEditorHeightmap}
+                onColorMapChange={updateEditorColorMap}
+                onClose={() => setEditorOpen(false)}
+              />
             )}
             <div className="workflow-row" aria-label="Verarbeitungsschritte">
               {["Bild analysieren", "3D rekonstruieren", "Mesh reparieren", "Exportieren"].map((step, index) => (
@@ -387,7 +401,7 @@ export function App() {
             {result && (
               <div className={`result-card ${result.printability.status}`}>
                 <div className="result-check"><CheckCircle2 /></div>
-                <div><strong>Modell erfolgreich erstellt · Druckscore {result.printability.score}/100</strong><p>{result.triangleCount.toLocaleString("de-DE")} Dreiecke · {result.widthMm.toFixed(0)} × {result.heightMm.toFixed(0)} mm · ca. {result.printability.estimatedVolumeCm3.toFixed(1)} cm³{result.options.colors.length ? ` · ${result.options.colors.length} AMS-Farben` : ""}</p><p>{result.printability.issues.join(" ")}</p></div>
+                <div><strong>Modell erfolgreich erstellt · Druckscore {result.printability.score}/100</strong><p>{result.triangleCount.toLocaleString("de-DE")} Dreiecke · {result.widthMm.toFixed(0)} × {result.heightMm.toFixed(0)} mm · ca. {result.printability.estimatedVolumeCm3.toFixed(1)} cm³{result.options.colors.length ? ` · ${result.options.colors.length} AMS-Farben` : ""}</p><p>{result.printability.issues.join(" ")}</p><div className="print-checks">{result.printability.checks.map((check) => <span className={check.status} key={check.label} title={check.detail}>{check.status === "ok" ? "✓" : "!"} {check.label}</span>)}</div></div>
                 <img className="heightmap-preview" src={result.heightmapDataUrl} alt="Berechnete Höhenkarte" title="Berechnete Höhenkarte" />
                 <button className="secondary-button" onClick={() => void window.desktop?.showItemInFolder(result.stlPath)}>Im Finder zeigen</button>
               </div>
@@ -408,6 +422,7 @@ export function App() {
         <Footer version={version} openLegal={setLegalPage} />
       </main>
       {textDialogOpen && <TextToStlDialog close={() => setTextDialogOpen(false)} create={createTextSource} />}
+      {ai3dDialogOpen && <Ai3dDialog close={() => setAi3dDialogOpen(false)} />}
     </div>
   );
 }
@@ -522,7 +537,7 @@ function TextToStlDialog({
         <button className="modal-close" onClick={close} aria-label="Dialog schließen"><X /></button>
         <div className="modal-icon"><Type /></div>
         <p className="eyebrow">LOKALE TEXTERSTELLUNG</p>
-        <h2 id="text-to-stl-title">Text zu STL</h2>
+        <h2 id="text-to-stl-title">Schrift zu STL</h2>
         <p>Erzeuge freistehende Buchstaben oder ein Schrift-Relief. Danach kannst du Größe, Höhe und AMS-Farben wie bei einem Bild festlegen.</p>
         <label htmlFor="text-content">Text · maximal 6 Zeilen</label>
         <textarea id="text-content" maxLength={240} rows={4} value={text} onChange={(event) => setText(event.target.value)} />
@@ -538,6 +553,43 @@ function TextToStlDialog({
         <div className="modal-actions">
           <button className="secondary-button" onClick={close}>Abbrechen</button>
           <button className="primary-button" disabled={busy || !text.trim()} onClick={() => void submit()}>{busy ? "Text wird vorbereitet …" : "Text übernehmen"} <ChevronRight /></button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function Ai3dDialog({ close }: { close: () => void }) {
+  const [prompt, setPrompt] = useState("Ein kleines Haus mit vier Fenstern, einem Stockwerk und einem Spitzdach");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<{ stlPath: string; optimizedPrompt: string; thumbnailUrl: string | null } | null>(null);
+  async function submit() {
+    setBusy(true); setError(null); setResult(null);
+    try {
+      if (!window.desktop) throw new Error("Prompt zu 3D ist nur in der installierten App verfügbar.");
+      setResult(await window.desktop.createAi3d(prompt));
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : "Das KI-Modell konnte nicht erstellt werden.");
+    } finally { setBusy(false); }
+  }
+  return (
+    <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && !busy && close()}>
+      <section className="modal ai3d-modal" role="dialog" aria-modal="true" aria-labelledby="ai3d-title">
+        <button className="modal-close" onClick={close} disabled={busy} aria-label="Dialog schließen"><X /></button>
+        <div className="modal-icon"><Sparkles /></div>
+        <p className="eyebrow">KI · VOLLSTÄNDIGES 3D-OBJEKT</p>
+        <h2 id="ai3d-title">Prompt zu druckbarer STL</h2>
+        <p>Beschreibe Form, Anzahl und wichtige Details. OpenAI optimiert den Prompt optional für den 3D-Druck; Meshy erzeugt daraus ein vollständiges Mesh.</p>
+        <label htmlFor="ai3d-prompt">OBJEKT BESCHREIBEN</label>
+        <textarea id="ai3d-prompt" rows={5} maxLength={800} value={prompt} onChange={(event) => setPrompt(event.target.value)} disabled={busy} />
+        <div className="notice">Cloud-Funktion: Der Text wird an OpenAI (falls eingerichtet) und Meshy übertragen. Meshy benötigt einen eigenen API-Key und Guthaben.</div>
+        {busy && <div className="ai-progress"><span /><div><strong>3D-Modell wird erzeugt …</strong><small>Das kann mehrere Minuten dauern. Bitte App geöffnet lassen.</small></div></div>}
+        {error && <div className="notice error">{error}</div>}
+        {result && <div className="ai-result">{result.thumbnailUrl && <img src={result.thumbnailUrl} alt="Vorschau des KI-Modells" />}<div><strong>STL erfolgreich erstellt</strong><small>{result.optimizedPrompt}</small><button className="secondary-button" onClick={() => void window.desktop?.showItemInFolder(result.stlPath)}>Im Finder zeigen</button></div></div>}
+        <div className="modal-actions">
+          <button className="secondary-button" onClick={close} disabled={busy}>{result ? "Schließen" : "Abbrechen"}</button>
+          {!result && <button className="primary-button" disabled={busy || prompt.trim().length < 10} onClick={() => void submit()}>{busy ? "Meshy arbeitet …" : "3D-Modell erstellen"} <ChevronRight /></button>}
         </div>
       </section>
     </div>
@@ -568,6 +620,7 @@ function EmptyState({ icon: Icon, title, text }: { icon: typeof Clock3; title: s
 
 type SettingsStatus = {
   openAiConfigured: boolean;
+  meshyConfigured: boolean;
   modelSetupAccepted: boolean;
   encryptionAvailable: boolean;
   storageVersion: number;
@@ -575,9 +628,10 @@ type SettingsStatus = {
 };
 
 function Settings() {
-  const [dialog, setDialog] = useState<"openai" | "model" | null>(null);
+  const [dialog, setDialog] = useState<"openai" | "meshy" | "model" | null>(null);
   const [status, setStatus] = useState<SettingsStatus>({
     openAiConfigured: false,
+    meshyConfigured: false,
     modelSetupAccepted: false,
     encryptionAvailable: true,
     storageVersion: 0
@@ -596,14 +650,53 @@ function Settings() {
     <>
       <section className="settings-grid">
         <article><div className="setting-icon"><Sparkles /></div><div><h3>OpenAI-Analyse</h3><p>{status.openAiConfigured ? "API-Key ist verschlüsselt gespeichert und lesbar." : "Optional: Erkennt das Motiv und schlägt passende Druckparameter vor."}</p></div><div className="setting-action">{status.openAiConfigured ? <span className="tag"><CheckCircle2 /> Eingerichtet</span> : <span className="tag neutral">Nicht eingerichtet</span>}<button onClick={() => setDialog("openai")}>{status.openAiConfigured ? "Verwalten" : "Einrichten"}</button></div></article>
+        <article><div className="setting-icon"><Box /></div><div><h3>Meshy Text zu 3D</h3><p>{status.meshyConfigured ? "Bereit für vollständige KI-Modelle aus einem Prompt." : "Erzeugt über die Meshy-Cloud vollständige STL-Modelle statt Reliefs."}</p></div><div className="setting-action">{status.meshyConfigured ? <span className="tag"><CheckCircle2 /> Eingerichtet</span> : <span className="tag neutral">Nicht eingerichtet</span>}<button onClick={() => setDialog("meshy")}>{status.meshyConfigured ? "Verwalten" : "Einrichten"}</button></div></article>
         <article><div className="setting-icon"><Layers3 /></div><div><h3>Lokale Relief-Engine</h3><p>Integriert · erzeugt wasserdichte STL- und 3MF-Dateien vollständig offline.</p></div><button onClick={() => setDialog("model")}>Details</button></article>
         <article><div className="setting-icon"><Box /></div><div><h3>Depth Anything V2</h3><p>Lokale KI-Tiefenschätzung für Fotos · Apple Core ML · keine Cloud.</p></div><span className={status.depthModelAvailable ? "tag" : "tag neutral"}>{status.depthModelAvailable ? "Bereit" : "Nur im Release"}</span></article>
         <article><div className="setting-icon"><CheckCircle2 /></div><div><h3>Hardwareprofil</h3><p>Apple M3 · 16 GB · automatische CPU-/Metal-Auswahl</p></div><span className="tag">Erkannt</span></article>
         <UpdateSettings />
       </section>
       {dialog === "openai" && <OpenAiDialog status={status} close={() => setDialog(null)} refresh={refreshStatus} />}
+      {dialog === "meshy" && <MeshyDialog status={status} close={() => setDialog(null)} refresh={refreshStatus} />}
       {dialog === "model" && <ModelDialog close={() => setDialog(null)} refresh={refreshStatus} />}
     </>
+  );
+}
+
+function MeshyDialog({ status, close, refresh }: { status: SettingsStatus; close: () => void; refresh: () => Promise<void> }) {
+  const [key, setKey] = useState("");
+  const [message, setMessage] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  async function save() {
+    setBusy(true); setMessage(null);
+    try {
+      if (!window.desktop) throw new Error("Die Desktop-Verbindung ist nicht verfügbar.");
+      await window.desktop.saveMeshyKey(key); await refresh(); setKey("");
+      setMessage("Der Meshy-Schlüssel wurde verschlüsselt auf diesem Mac gespeichert.");
+    } catch (error) { setMessage(error instanceof Error ? error.message : "Der Schlüssel konnte nicht gespeichert werden."); }
+    finally { setBusy(false); }
+  }
+  async function remove() {
+    if (!window.desktop) return;
+    await window.desktop.removeMeshyKey(); await refresh(); setMessage("Der Meshy-Schlüssel wurde entfernt.");
+  }
+  return (
+    <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && close()}>
+      <section className="modal" role="dialog" aria-modal="true" aria-labelledby="meshy-title">
+        <button className="modal-close" onClick={close} aria-label="Dialog schließen"><X /></button>
+        <div className="modal-icon"><Box /></div><p className="eyebrow">TEXT ZU VOLLSTÄNDIGEM 3D</p>
+        <h2 id="meshy-title">Meshy sicher verbinden</h2>
+        <p>Meshy erzeugt das eigentliche 3D-Mesh. Der Schlüssel wird lokal mit der macOS-Systemverschlüsselung geschützt.</p>
+        <label htmlFor="meshy-key">Meshy API-Schlüssel</label>
+        <input id="meshy-key" type="password" value={key} onChange={(event) => setKey(event.target.value)} autoComplete="off" placeholder="Meshy API-Key" />
+        {message && <div className="notice">{message}</div>}
+        <div className="modal-actions">
+          {status.meshyConfigured && <button className="danger-button" onClick={() => void remove()}>Schlüssel entfernen</button>}
+          <button className="secondary-button" onClick={close}>Abbrechen</button>
+          <button className="primary-button" onClick={() => void save()} disabled={busy || key.trim().length < 20}>{busy ? "Speichern …" : "Speichern"}</button>
+        </div>
+      </section>
+    </div>
   );
 }
 

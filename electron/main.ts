@@ -17,6 +17,7 @@ const execFileAsync = promisify(execFile);
 type StoredSettings = {
   schemaVersion?: number;
   encryptedOpenAiKey?: string;
+  encryptedMeshyKey?: string;
   modelSetupAccepted?: boolean;
 };
 
@@ -170,6 +171,33 @@ function hasUsableOpenAiKey(settings: StoredSettings): boolean {
   }
 }
 
+function decryptSetting(value?: string): string | null {
+  if (!value || !safeStorage.isEncryptionAvailable()) return null;
+  try { return safeStorage.decryptString(Buffer.from(value, "base64")); }
+  catch { return null; }
+}
+
+function hasUsableMeshyKey(settings: StoredSettings): boolean {
+  return Boolean(decryptSetting(settings.encryptedMeshyKey)?.match(/^[A-Za-z0-9_-]{20,}$/));
+}
+
+async function optimizePrintablePrompt(prompt: string, settings: StoredSettings): Promise<string> {
+  const apiKey = decryptSetting(settings.encryptedOpenAiKey);
+  if (!apiKey) return `${prompt}. Single watertight printable object, stable flat base, no floating parts, no paper-thin walls, no unsupported fragile details.`;
+  const response = await fetch("https://api.openai.com/v1/responses", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "gpt-4.1-mini",
+      input: `Rewrite this German or English 3D request as one concise English prompt for a watertight FDM-printable object. Preserve every requested feature. Require a flat stable base, connected parts, walls at least 1.2 mm, no floating geometry and no supports where practical. Return only the prompt:\n${prompt}`
+    })
+  });
+  if (!response.ok) return `${prompt}. Single watertight printable object, stable flat base, no floating parts, no paper-thin walls.`;
+  const body = await response.json() as { output?: Array<{ content?: Array<{ type?: string; text?: string }> }> };
+  return body.output?.flatMap((item) => item.content ?? []).find((item) => item.type === "output_text")?.text?.trim()
+    || `${prompt}. Single watertight printable object, stable flat base, no floating parts.`;
+}
+
 function createWindow(): void {
   const preloadPath = join(currentDirectory, "../electron/preload.cjs");
   const window = new BrowserWindow({
@@ -248,6 +276,7 @@ app.whenReady().then(async () => {
     const settings = await readSettings();
     return {
       openAiConfigured: hasUsableOpenAiKey(settings),
+      meshyConfigured: hasUsableMeshyKey(settings),
       modelSetupAccepted: Boolean(settings.modelSetupAccepted),
       encryptionAvailable: safeStorage.isEncryptionAvailable(),
       storageVersion: settings.schemaVersion ?? 0
@@ -273,6 +302,19 @@ app.whenReady().then(async () => {
   ipcMain.handle("settings:removeOpenAiKey", async () => {
     const settings = await readSettings();
     delete settings.encryptedOpenAiKey;
+    await writeSettings(settings);
+  });
+  ipcMain.handle("settings:saveMeshyKey", async (_event, apiKey: string) => {
+    const normalized = apiKey.trim();
+    if (!/^[A-Za-z0-9_-]{20,}$/.test(normalized)) throw new Error("Der Meshy API-Schlüssel ist zu kurz oder ungültig.");
+    if (!safeStorage.isEncryptionAvailable()) throw new Error("Die sichere macOS-Schlüsselverschlüsselung ist nicht verfügbar.");
+    const settings = await readSettings();
+    settings.encryptedMeshyKey = safeStorage.encryptString(normalized).toString("base64");
+    await writeSettings(settings);
+  });
+  ipcMain.handle("settings:removeMeshyKey", async () => {
+    const settings = await readSettings();
+    delete settings.encryptedMeshyKey;
     await writeSettings(settings);
   });
   ipcMain.handle("settings:acceptModelSetup", async () => {
@@ -351,6 +393,46 @@ app.whenReady().then(async () => {
       dataUrl: `data:image/png;base64,${png.toString("base64")}`
     };
   });
+  ipcMain.handle("ai3d:create", async (_event, promptValue: string) => {
+    const prompt = promptValue.trim();
+    if (prompt.length < 10 || prompt.length > 800) throw new Error("Beschreibe das Objekt bitte mit 10 bis 800 Zeichen.");
+    const settings = await readSettings();
+    const meshyKey = decryptSetting(settings.encryptedMeshyKey);
+    if (!meshyKey) throw new Error("Bitte hinterlege zuerst in den Einstellungen einen Meshy API-Schlüssel.");
+    const optimizedPrompt = await optimizePrintablePrompt(prompt, settings);
+    const created = await fetch("https://api.meshy.ai/openapi/v2/text-to-3d", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${meshyKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        mode: "preview",
+        prompt: optimizedPrompt,
+        should_remesh: true,
+        target_polycount: 100000
+      })
+    });
+    if (!created.ok) throw new Error(`Meshy hat die Erstellung abgelehnt (${created.status}). Prüfe API-Key und Guthaben.`);
+    const taskId = ((await created.json()) as { result?: string }).result;
+    if (!taskId) throw new Error("Meshy hat keine Aufgaben-ID zurückgegeben.");
+    const deadline = Date.now() + 12 * 60_000;
+    let task: { status?: string; progress?: number; model_urls?: { stl?: string; glb?: string }; thumbnail_url?: string; task_error?: { message?: string } };
+    do {
+      await new Promise((resolve) => setTimeout(resolve, 5_000));
+      const response = await fetch(`https://api.meshy.ai/openapi/v2/text-to-3d/${encodeURIComponent(taskId)}`, {
+        headers: { Authorization: `Bearer ${meshyKey}` }
+      });
+      if (!response.ok) throw new Error(`Meshy-Status konnte nicht geladen werden (${response.status}).`);
+      task = await response.json() as typeof task;
+      if (task.status === "FAILED" || task.status === "CANCELED") throw new Error(task.task_error?.message || "Die 3D-Erstellung ist fehlgeschlagen.");
+    } while (task.status !== "SUCCEEDED" && Date.now() < deadline);
+    if (task.status !== "SUCCEEDED" || !task.model_urls?.stl) throw new Error("Die Erstellung dauert länger als 12 Minuten. Die Aufgabe kann später bei Meshy geprüft werden.");
+    const modelResponse = await fetch(task.model_urls.stl);
+    if (!modelResponse.ok) throw new Error("Das fertige STL konnte nicht heruntergeladen werden.");
+    const outputDirectory = join(app.getPath("downloads"), "AI Print Studio");
+    await mkdir(outputDirectory, { recursive: true });
+    const stlPath = join(outputDirectory, `ki-${Date.now()}.stl`);
+    await writeFile(stlPath, Buffer.from(await modelResponse.arrayBuffer()));
+    return { stlPath, taskId, optimizedPrompt, thumbnailUrl: task.thumbnail_url ?? null };
+  });
   ipcMain.handle("objectCapture:create", async () => {
     const selection = await dialog.showOpenDialog({
       title: "Fotoserie für den 3D-Scan auswählen",
@@ -378,7 +460,7 @@ app.whenReady().then(async () => {
       await rm(workspace, { recursive: true, force: true });
     }
   });
-  ipcMain.handle("relief:create", async (_event, imagePath: string, options: Partial<ReliefOptions>, editorHeightmapDataUrl?: string) => {
+  ipcMain.handle("relief:create", async (_event, imagePath: string, options: Partial<ReliefOptions>, editorHeightmapDataUrl?: string, editorColorMapDataUrl?: string) => {
     const outputDirectory = join(app.getPath("downloads"), "AI Print Studio");
     let depthMap: Awaited<ReturnType<typeof createDepthMap>> | undefined;
     let editorDirectory: string | undefined;
@@ -396,8 +478,18 @@ app.whenReady().then(async () => {
         depthMap = await createDepthMap(imagePath);
         mapPath = depthMap.path;
       }
+      let colorMapPath: string | undefined;
+      if (editorColorMapDataUrl) {
+        const match = /^data:image\/png;base64,([A-Za-z0-9+/=]+)$/.exec(editorColorMapDataUrl);
+        if (!match) throw new Error("Die bearbeitete Farbkarte besitzt ein ungültiges Format.");
+        const bytes = Buffer.from(match[1], "base64");
+        if (!bytes.length || bytes.length > 12 * 1024 * 1024) throw new Error("Die bearbeitete Farbkarte ist leer oder zu groß.");
+        if (!editorDirectory) editorDirectory = await mkdtemp(join(tmpdir(), "ai-print-editor-"));
+        colorMapPath = join(editorDirectory, "colormap.png");
+        await writeFile(colorMapPath, bytes);
+      }
       const effectiveOptions = editorHeightmapDataUrl ? { ...options, processingMode: "height" as const } : options;
-      return await createRelief(imagePath, outputDirectory, effectiveOptions, mapPath, Boolean(editorHeightmapDataUrl));
+      return await createRelief(imagePath, outputDirectory, effectiveOptions, mapPath, Boolean(editorHeightmapDataUrl), colorMapPath);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unbekannter Exportfehler";
       throw new Error(`Das Relief konnte nicht unter „${outputDirectory}“ gespeichert werden: ${message}`);

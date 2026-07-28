@@ -36,6 +36,10 @@ export async function renderTextImage(options: TextImageOptions): Promise<{
 <rect width="100%" height="100%" fill="none"/>
 <text text-anchor="${anchor}" font-family="${escapeSvgText(fontFamily)}" font-size="190" font-weight="${options.bold ? 700 : 400}" font-style="${options.italic ? "italic" : "normal"}" fill="#111111">${tspans}</text>
 </svg>`;
-  return { png: await sharp(Buffer.from(svg)).png().toBuffer(), text, width, height };
+  const rendered = sharp(Buffer.from(svg)).png();
+  const { data, info } = await rendered
+    .trim({ background: { r: 0, g: 0, b: 0, alpha: 0 }, threshold: 1 })
+    .extend({ top: 48, bottom: 48, left: 48, right: 48, background: { r: 0, g: 0, b: 0, alpha: 0 } })
+    .toBuffer({ resolveWithObject: true });
+  return { png: data, text, width: info.width, height: info.height };
 }
-

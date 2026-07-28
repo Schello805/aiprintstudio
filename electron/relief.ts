@@ -23,6 +23,7 @@ export type PrintabilityReport = {
   status: "ready" | "warning" | "critical";
   issues: string[];
   estimatedVolumeCm3: number;
+  checks: Array<{ label: string; status: "ok" | "warning" | "error"; detail: string }>;
 };
 
 export type ReliefResult = {
@@ -67,7 +68,8 @@ export async function createRelief(
   outputDirectory: string,
   requested: Partial<ReliefOptions> = {},
   depthMapPath?: string,
-  editorHeightmap = false
+  editorHeightmap = false,
+  editorColorMapPath?: string
 ): Promise<ReliefResult> {
   const options = validateOptions({ ...safeDefaults, ...requested });
   const metadata = await sharp(imagePath).metadata();
@@ -83,8 +85,10 @@ export async function createRelief(
   const { data: rgba } = await prepared.clone()
     .raw()
     .toBuffer({ resolveWithObject: true });
-  const subjectPixels = cleanSubjectPixelMask(buildSubjectPixelMask(rgba, gridWidth, gridHeight), gridWidth, gridHeight);
-  const cellMask = buildCellMask(subjectPixels, gridWidth, gridHeight);
+  const rawSubjectPixels = buildSubjectPixelMask(rgba, gridWidth, gridHeight);
+  const hasTransparency = hasUsefulTransparency(rgba);
+  const subjectPixels = hasTransparency ? rawSubjectPixels : cleanSubjectPixelMask(rawSubjectPixels, gridWidth, gridHeight);
+  const cellMask = buildCellMask(subjectPixels, gridWidth, gridHeight, hasTransparency ? 1 : 2);
   const heightMm = options.widthMm * gridHeight / gridWidth;
   const profile = profileSettings(options.profile);
   const activeMode = options.processingMode === "auto"
@@ -124,10 +128,20 @@ export async function createRelief(
   const levels = applyBoundaryRim(profiledLevels, subjectPixels, gridWidth, gridHeight, options.profile === "logo" ? 2 : 1);
   const heights = levels.map((value) => options.baseMm + value * options.reliefMm);
   const mesh = buildWatertightHeightMesh(gridWidth, gridHeight, options.widthMm, heightMm, heights, cellMask);
+  let editorColorAssignments: Buffer | undefined;
+  if (editorColorMapPath) {
+    const { data } = await sharp(editorColorMapPath)
+      .resize(gridWidth, gridHeight, { fit: "fill", kernel: "nearest" })
+      .grayscale()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    editorColorAssignments = data;
+  }
   const colorAssignments = options.colors.length
     ? buildColorCellAssignments(
       rgba, cellMask, gridWidth, gridHeight,
-      options.sourceColors.length === options.colors.length ? options.sourceColors : options.colors
+      options.sourceColors.length === options.colors.length ? options.sourceColors : options.colors,
+      editorColorAssignments
     )
     : undefined;
   const preview = buildPreviewSurface(
@@ -352,16 +366,36 @@ function smoothHeightField(values: number[], width: number, height: number, pass
 
 function analysePrintability(mesh: Mesh, heights: number[], options: ReliefOptions, cellMask: boolean[], columns: number): PrintabilityReport {
   const issues: string[] = [];
+  const checks: PrintabilityReport["checks"] = [];
   let score = 100;
-  if (options.baseMm < 1.2) { issues.push("Grundplatte dünner als 1,2 mm."); score -= 25; }
+  if (options.baseMm < 1.2) {
+    issues.push("Grundplatte dünner als 1,2 mm."); score -= 25;
+    checks.push({ label: "Grundplatte", status: "error", detail: `${options.baseMm.toFixed(1)} mm – mindestens 1,2 mm empfohlen.` });
+  } else checks.push({ label: "Grundplatte", status: "ok", detail: `${options.baseMm.toFixed(1)} mm sind stabil.` });
   const pixelMm = options.widthMm / Math.max(1, columns - 1);
   let steepEdges = 0;
   for (let i = 1; i < heights.length; i += 1) {
     if (i % columns !== 0 && Math.abs(heights[i] - heights[i - 1]) / pixelMm > 2) steepEdges += 1;
   }
-  if (steepEdges / Math.max(1, heights.length) > 0.08) { issues.push("Viele steile Übergänge können Details unsauber drucken."); score -= 20; }
+  if (steepEdges / Math.max(1, heights.length) > 0.08) {
+    issues.push("Viele steile Übergänge können Details unsauber drucken."); score -= 20;
+    checks.push({ label: "Übergänge", status: "warning", detail: "Viele sehr steile Höhenwechsel erkannt." });
+  } else checks.push({ label: "Übergänge", status: "ok", detail: "Höhenwechsel sind druckfreundlich." });
   if (mesh.triangles.length > 800_000) { issues.push("Sehr großes Mesh – der Slicer kann länger benötigen."); score -= 5; }
   if (cellMask.filter(Boolean).length < 4) { issues.push("Das erkannte Motiv ist zu klein oder unvollständig."); score -= 45; }
+  const components = countCellComponents(cellMask, columns - 1);
+  if (components > 12) {
+    issues.push(`${components} getrennte Kleinteile erkannt – einzelne Buchstaben könnten verloren gehen.`);
+    score -= Math.min(20, components - 10);
+    checks.push({ label: "Zusammenhalt", status: "warning", detail: `${components} getrennte Bereiche erkannt.` });
+  } else checks.push({ label: "Zusammenhalt", status: "ok", detail: `${components} zusammenhängende Objektbereiche.` });
+  const narrowCells = countNarrowCells(cellMask, columns - 1);
+  const narrowWidthMm = pixelMm * 2;
+  if (narrowCells > 0 && narrowWidthMm < 0.8) {
+    issues.push(`Feine Stege sind nur etwa ${narrowWidthMm.toFixed(1)} mm breit; für eine 0,4-mm-Düse sind mindestens 0,8 mm besser.`);
+    score -= 15;
+    checks.push({ label: "Mindestbreite", status: "warning", detail: `Schmalste Bereiche ca. ${narrowWidthMm.toFixed(1)} mm.` });
+  } else checks.push({ label: "Mindestbreite", status: "ok", detail: "Keine kritisch dünnen Stege erkannt." });
   const areaMm2 = cellMask.filter(Boolean).length * pixelMm * pixelMm;
   const averageHeight = heights.reduce((sum, height) => sum + height, 0) / Math.max(1, heights.length);
   const boundedScore = Math.max(0, score);
@@ -369,8 +403,40 @@ function analysePrintability(mesh: Mesh, heights: number[], options: ReliefOptio
     score: boundedScore,
     status: boundedScore >= 80 ? "ready" : boundedScore >= 55 ? "warning" : "critical",
     issues: issues.length ? issues : ["Keine offensichtlichen Druckprobleme erkannt."],
-    estimatedVolumeCm3: areaMm2 * averageHeight / 1000
+    estimatedVolumeCm3: areaMm2 * averageHeight / 1000,
+    checks
   };
+}
+
+function countCellComponents(mask: boolean[], width: number): number {
+  const height = Math.ceil(mask.length / width);
+  const seen = new Uint8Array(mask.length);
+  let count = 0;
+  for (let start = 0; start < mask.length; start += 1) {
+    if (!mask[start] || seen[start]) continue;
+    count += 1; seen[start] = 1;
+    const queue = [start];
+    for (let cursor = 0; cursor < queue.length; cursor += 1) {
+      const index = queue[cursor], x = index % width, y = Math.floor(index / width);
+      for (const neighbor of [x > 0 ? index - 1 : -1, x + 1 < width ? index + 1 : -1, y > 0 ? index - width : -1, y + 1 < height ? index + width : -1]) {
+        if (neighbor >= 0 && mask[neighbor] && !seen[neighbor]) { seen[neighbor] = 1; queue.push(neighbor); }
+      }
+    }
+  }
+  return count;
+}
+
+function countNarrowCells(mask: boolean[], width: number): number {
+  const height = Math.ceil(mask.length / width);
+  let count = 0;
+  for (let index = 0; index < mask.length; index += 1) {
+    if (!mask[index]) continue;
+    const x = index % width, y = Math.floor(index / width);
+    const horizontal = (x > 0 && mask[index - 1]) || (x + 1 < width && mask[index + 1]);
+    const vertical = (y > 0 && mask[index - width]) || (y + 1 < height && mask[index + width]);
+    if (!horizontal || !vertical) count += 1;
+  }
+  return count;
 }
 
 function buildWatertightHeightMesh(
@@ -441,12 +507,20 @@ function buildColorCellAssignments(
   cellMask: boolean[],
   width: number,
   height: number,
-  colors: string[]
+  colors: string[],
+  editorAssignments?: Buffer
 ): number[] {
   const palette = colors.map(parseHexColor);
   return Array.from({ length: (width - 1) * (height - 1) }, (_, cell) => {
     if (!cellMask[cell]) return -1;
     const x = cell % (width - 1), y = Math.floor(cell / (width - 1));
+    if (editorAssignments) {
+      const samples = [y * width + x, y * width + x + 1, (y + 1) * width + x, (y + 1) * width + x + 1];
+      const explicit = samples.map((sample) => editorAssignments[sample]).filter((value) => value < colors.length);
+      if (explicit.length) return explicit.sort((a, b) =>
+        explicit.filter((value) => value === b).length - explicit.filter((value) => value === a).length
+      )[0];
+    }
     const pixel = y * width + x;
     let red = 0, green = 0, blue = 0, weight = 0;
     for (const sample of [pixel, pixel + 1, pixel + width, pixel + width + 1]) {
@@ -548,16 +622,22 @@ function buildSubjectPixelMask(rgba: Buffer, width: number, height: number): boo
   return Array.from({ length: pixelCount }, (_, i) => outside[i] === 0);
 }
 
-function buildCellMask(pixels: boolean[], columns: number, rows: number): boolean[] {
+function buildCellMask(pixels: boolean[], columns: number, rows: number, threshold = 2): boolean[] {
   const cells: boolean[] = [];
   for (let y = 0; y < rows - 1; y += 1) {
     for (let x = 0; x < columns - 1; x += 1) {
       const a = y * columns + x;
       const occupied = Number(pixels[a]) + Number(pixels[a + 1]) + Number(pixels[a + columns]) + Number(pixels[a + columns + 1]);
-      cells.push(occupied >= 2);
+      cells.push(occupied >= threshold);
     }
   }
   return cells;
+}
+
+function hasUsefulTransparency(rgba: Buffer): boolean {
+  let transparent = 0;
+  for (let index = 0; index < rgba.length; index += 4) if (rgba[index + 3] < 245) transparent += 1;
+  return transparent > rgba.length / 4 * 0.01;
 }
 
 function cleanSubjectPixelMask(pixels: boolean[], width: number, height: number): boolean[] {

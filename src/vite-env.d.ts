@@ -6,6 +6,7 @@ interface Window {
     checkForUpdate: () => Promise<{ currentVersion: string; latestVersion: string; available: boolean; url: string; directDownload: boolean }>;
     getSettingsStatus: () => Promise<{
       openAiConfigured: boolean;
+      meshyConfigured: boolean;
       modelSetupAccepted: boolean;
       encryptionAvailable: boolean;
       storageVersion: number;
@@ -13,6 +14,8 @@ interface Window {
     }>;
     saveOpenAiKey: (apiKey: string) => Promise<void>;
     removeOpenAiKey: () => Promise<void>;
+    saveMeshyKey: (apiKey: string) => Promise<void>;
+    removeMeshyKey: () => Promise<void>;
     acceptModelSetup: () => Promise<void>;
     selectImage: () => Promise<{
       path: string;
@@ -38,6 +41,7 @@ interface Window {
       suggestedProfile: "logo";
       dataUrl: string;
     }>;
+    createAi3d: (prompt: string) => Promise<{ stlPath: string; taskId: string; optimizedPrompt: string; thumbnailUrl: string | null }>;
     createObjectCapture: () => Promise<{ usdzPath: string; photoCount: number } | null>;
     createRelief: (imagePath: string, options: {
       widthMm: number;
@@ -52,7 +56,7 @@ interface Window {
       sourceColors: string[];
       colors: string[];
       sideColorIndex: number;
-    }, editorHeightmapDataUrl?: string) => Promise<{
+    }, editorHeightmapDataUrl?: string, editorColorMapDataUrl?: string) => Promise<{
       stlPath: string;
       threeMfPath: string;
       vertexCount: number;
@@ -67,7 +71,7 @@ interface Window {
         colors: string[];
         sideColorIndex: number;
       };
-      printability: { score: number; status: "ready" | "warning" | "critical"; issues: string[]; estimatedVolumeCm3: number };
+      printability: { score: number; status: "ready" | "warning" | "critical"; issues: string[]; estimatedVolumeCm3: number; checks: Array<{ label: string; status: "ok" | "warning" | "error"; detail: string }> };
       heightmapDataUrl: string;
       preview: {
         positions: number[];

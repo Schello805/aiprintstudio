@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.10.0
+
+- Neuer „Prompt zu 3D“-Workflow für vollständige STL-Objekte über die offizielle Meshy Text-to-3D-API.
+- OpenAI optimiert den eingegebenen Prompt optional auf zusammenhängende, wasserdichte und FDM-taugliche Geometrie.
+- Meshy API-Schlüssel werden getrennt vom OpenAI-Schlüssel verschlüsselt gespeichert und können in den Einstellungen verwaltet werden.
+- „Text zu STL“ heißt präziser „Schrift zu STL“ und rendert eng zugeschnittene, transparente Vorlagen ohne aggressive Erosion dünner Buchstaben.
+- Der Flächeneditor weist ausgewählten Motivbereichen gezielt einen AMS-Slot zu; die Korrekturen werden in Vorschau und 3MF-Objekten übernommen.
+- Neue Baukastenaktion für Vertiefungen sowie die vorhandenen Höhen-, Glättungs- und Abrundungswerkzeuge stehen direkt an der Auswahl bereit.
+- Der Druckscore prüft jetzt zusätzlich Mindestbreiten und getrennte Kleinteile und zeigt die Einzelprüfungen sichtbar an.
+- 29 Tests sichern unter anderem den vollständigen Schrift-zu-Mesh-Workflow ab.
+
 ## 0.9.0
 
 - Neuer Einstieg „Text zu STL“ für bis zu sechs Textzeilen mit Schriftart, Fett/Kursiv und Ausrichtung.
