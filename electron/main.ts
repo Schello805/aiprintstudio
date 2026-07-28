@@ -32,6 +32,60 @@ function isNewerVersion(candidate: string, current: string): boolean {
   return false;
 }
 
+async function ensureApplicationLocation(): Promise<boolean> {
+  if (process.platform !== "darwin" || !app.isPackaged || app.isInApplicationsFolder() || process.argv.includes("--smoke-test")) {
+    return true;
+  }
+  const installedApp = "/Applications/AI Print Studio.app";
+  let installedVersion = "";
+  if (existsSync(installedApp)) {
+    try {
+      const { stdout } = await execFileAsync("/usr/libexec/PlistBuddy", [
+        "-c", "Print :CFBundleShortVersionString", join(installedApp, "Contents/Info.plist")
+      ]);
+      installedVersion = stdout.trim();
+    } catch {
+      // Eine unvollständige Installation darf durch die aktuelle App ersetzt werden.
+    }
+  }
+  const currentVersion = app.getVersion();
+  const installedIsCurrentOrNewer = Boolean(installedVersion) && !isNewerVersion(currentVersion, installedVersion);
+  if (installedIsCurrentOrNewer) {
+    const choice = dialog.showMessageBoxSync({
+      type: "info",
+      buttons: ["Installierte App öffnen", "Diese Kopie trotzdem starten"],
+      defaultId: 0,
+      cancelId: 1,
+      title: "AI Print Studio ist bereits installiert",
+      message: `In „Programme“ liegt Version ${installedVersion}.`,
+      detail: `Du hast Version ${currentVersion} außerhalb des Programme-Ordners gestartet. So entstehen falsche Versionsanzeigen.`
+    });
+    if (choice === 0) {
+      await shell.openPath(installedApp);
+      app.quit();
+      return false;
+    }
+    return true;
+  }
+  const choice = dialog.showMessageBoxSync({
+    type: "question",
+    buttons: ["In Programme installieren", "Nur diesmal hier starten"],
+    defaultId: 0,
+    cancelId: 1,
+    title: "AI Print Studio installieren",
+    message: `Version ${currentVersion} läuft noch außerhalb des Programme-Ordners.`,
+    detail: "AI Print Studio kann sich jetzt selbst nach „Programme“ verschieben und anschließend neu starten."
+  });
+  if (choice !== 0) return true;
+  try {
+    const moved = app.moveToApplicationsFolder({ conflictHandler: () => true });
+    return !moved;
+  } catch (error) {
+    dialog.showErrorBox("Installation fehlgeschlagen", error instanceof Error ? error.message : "Die App konnte nicht nach „Programme“ verschoben werden.");
+    return true;
+  }
+}
+
 function settingsRoot(): string {
   if (process.argv.includes("--smoke-test") && process.env.AI_PRINT_STUDIO_SETTINGS_ROOT) {
     return process.env.AI_PRINT_STUDIO_SETTINGS_ROOT;
@@ -164,7 +218,8 @@ function createWindow(): void {
   }
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  if (!(await ensureApplicationLocation())) return;
   nativeTheme.themeSource = "dark";
   ipcMain.handle("app:version", () => app.getVersion());
   ipcMain.handle("app:checkUpdate", async () => {

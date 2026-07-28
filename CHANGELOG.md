@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.1
+
+- Erkennt beim Start alte oder doppelte App-Kopien außerhalb von „Programme“
+- Öffnet automatisch die bereits installierte neuere Version
+- Kann eine gestartete DMG-/Download-Kopie selbst nach „Programme“ verschieben
+
 ## 0.6.0
 
 - Neuer Konturmodus clustert Logo- und Wappenfarben zu stabilen Höhenebenen
