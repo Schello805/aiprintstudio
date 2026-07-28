@@ -148,7 +148,8 @@ export async function createRelief(
     ? enforceUniformEdgeColor(detectedColorAssignments, cellMask, gridWidth, gridHeight, options.sideColorIndex)
     : undefined;
   const preview = buildPreviewSurface(
-    gridWidth, gridHeight, options.widthMm, heightMm, heights, cellMask, colorAssignments, options.colors
+    gridWidth, gridHeight, options.widthMm, heightMm, heights, cellMask,
+    colorAssignments, options.colors, options.sideColorIndex
   );
   const printability = analysePrintability(mesh, heights, options, cellMask, gridWidth);
   const heightmapPng = await sharp(Buffer.from(levels.map((value) => Math.round(value * 255))), {
@@ -561,7 +562,11 @@ function enforceUniformEdgeColor(
       const index = y * cellColumns + x;
       const color = original[index];
       if (!cellMask[index] || color < 0 || color === sideColorIndex) continue;
-      const neighbors = [at(x - 1, y), at(x + 1, y), at(x, y - 1), at(x, y + 1)];
+      const neighbors = [
+        at(x - 1, y - 1), at(x, y - 1), at(x + 1, y - 1),
+        at(x - 1, y),                       at(x + 1, y),
+        at(x - 1, y + 1), at(x, y + 1), at(x + 1, y + 1)
+      ];
       if (neighbors.some((neighbor) => neighbor !== color)) result[index] = sideColorIndex;
     }
   }
@@ -781,7 +786,8 @@ function buildPreviewSurface(
   heights: number[],
   cellMask?: boolean[],
   colorAssignments?: number[],
-  colors: string[] = []
+  colors: string[] = [],
+  sideColorIndex = 0
 ): { positions: number[]; indices: number[]; colorParts: Array<{ color: string; indices: number[] }> } {
   const stride = Math.max(1, Math.ceil(Math.max(columns, rows) / 300));
   const xs = Array.from(new Set([...Array(Math.ceil((columns - 1) / stride) + 1)].map((_, i) => Math.min(i * stride, columns - 1))));
@@ -801,6 +807,41 @@ function buildPreviewSurface(
     return occupied >= Math.max(1, total * 0.5);
   });
   const boundaryPositions = buildSmoothedBoundaryPositions(previewColumns, previewRows, widthMm, heightMm, previewCells);
+  const previewColorAssignments = Array((previewColumns - 1) * (previewRows - 1)).fill(-1) as number[];
+  if (colorAssignments && colors.length) {
+    for (let y = 0; y < previewRows - 1; y += 1) {
+      for (let x = 0; x < previewColumns - 1; x += 1) {
+        const previewIndex = y * (previewColumns - 1) + x;
+        if (!previewCells[previewIndex]) continue;
+        const votes = new Map<number, number>();
+        for (let sourceY = ys[y]; sourceY < ys[y + 1]; sourceY += 1) {
+          for (let sourceX = xs[x]; sourceX < xs[x + 1]; sourceX += 1) {
+            const assignment = colorAssignments[sourceY * (columns - 1) + sourceX];
+            if (assignment >= 0) votes.set(assignment, (votes.get(assignment) ?? 0) + 1);
+          }
+        }
+        previewColorAssignments[previewIndex] = [...votes].sort((a, b) => b[1] - a[1])[0]?.[0] ?? sideColorIndex;
+      }
+    }
+    const detectedPreviewColors = previewColorAssignments.slice();
+    const colorAt = (x: number, y: number) =>
+      x < 0 || y < 0 || x >= previewColumns - 1 || y >= previewRows - 1
+        ? -1
+        : detectedPreviewColors[y * (previewColumns - 1) + x];
+    for (let y = 0; y < previewRows - 1; y += 1) {
+      for (let x = 0; x < previewColumns - 1; x += 1) {
+        const previewIndex = y * (previewColumns - 1) + x;
+        const color = detectedPreviewColors[previewIndex];
+        if (!previewCells[previewIndex] || color < 0 || color === sideColorIndex) continue;
+        const neighbors = [
+          colorAt(x - 1, y - 1), colorAt(x, y - 1), colorAt(x + 1, y - 1),
+          colorAt(x - 1, y),                           colorAt(x + 1, y),
+          colorAt(x - 1, y + 1), colorAt(x, y + 1), colorAt(x + 1, y + 1)
+        ];
+        if (neighbors.some((neighbor) => neighbor !== color)) previewColorAssignments[previewIndex] = sideColorIndex;
+      }
+    }
+  }
   let baseHeight = Number.POSITIVE_INFINITY;
   for (const height of heights) if (height < baseHeight) baseHeight = height;
   if (!Number.isFinite(baseHeight)) baseHeight = 0;
@@ -828,14 +869,7 @@ function buildPreviewSurface(
       const triangles = [a, d, b, a, c, d];
       indices.push(...triangles);
       if (colorAssignments && colors.length) {
-        const votes = new Map<number, number>();
-        for (let sourceY = ys[y]; sourceY < ys[y + 1]; sourceY += 1) {
-          for (let sourceX = xs[x]; sourceX < xs[x + 1]; sourceX += 1) {
-            const assignment = colorAssignments[sourceY * (columns - 1) + sourceX];
-            if (assignment >= 0) votes.set(assignment, (votes.get(assignment) ?? 0) + 1);
-          }
-        }
-        const colorIndex = [...votes].sort((a, b) => b[1] - a[1])[0]?.[0] ?? 0;
+        const colorIndex = previewColorAssignments[y * (previewColumns - 1) + x];
         colorPartIndices[colorIndex]?.push(...triangles);
       }
     }

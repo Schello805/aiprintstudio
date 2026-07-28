@@ -165,6 +165,28 @@ describe("relief mesh", () => {
     expect(stabilized.filter((color) => color === 0).length).toBeGreaterThan(0);
   });
 
+  it("keeps simplified preview sides in the configured side color", () => {
+    const columns = 304, rows = 12;
+    const cellMask = Array((columns - 1) * (rows - 1)).fill(true) as boolean[];
+    const assignments = cellMask.map(() => 1);
+    const preview = reliefInternals.buildPreviewSurface(
+      columns,
+      rows,
+      100,
+      40,
+      Array(columns * rows).fill(5),
+      cellMask,
+      assignments,
+      ["#000000", "#FF0000"],
+      0
+    );
+    const black = preview.colorParts.find((part) => part.color === "#000000");
+    const red = preview.colorParts.find((part) => part.color === "#FF0000");
+    expect(black?.indices).toContain(0);
+    expect(black?.indices.length).toBeGreaterThan(0);
+    expect(red?.indices.length).toBeGreaterThan(0);
+  });
+
   it("raises enclosed logo components above large background regions", () => {
     const width = 20, height = 20;
     const rgba = Buffer.alloc(width * height * 4);

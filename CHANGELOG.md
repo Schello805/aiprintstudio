@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.12.3
+
+- Die vereinfachte 3D-Vorschau stabilisiert Randfarben erst nach dem Herunterskalieren des Meshrasters.
+- Außenwände bleiben dadurch auch bei hochauflösenden und gekrümmten Motiven vollständig in der gewählten Farbe „Seiten & Tragkörper“.
+- Diagonale Randkontakte werden zusätzlich berücksichtigt, damit an schrägen Konturen keine einzelnen Fremdfarben sichtbar bleiben.
+- Ein Regressionstest prüft, dass eine farbige Innenfläche erhalten bleibt, während die Vorschau-Außenkante einfarbig dargestellt wird.
+
 ## 0.12.2
 
 - Außenkanten und Farbübergänge werden konsequent der gewählten Farbe „Seiten & Tragkörper“ zugewiesen.
