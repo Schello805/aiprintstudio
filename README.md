@@ -7,7 +7,7 @@ CAD-Pläne und Mesh-Dateien bleiben standardmäßig auf dem eigenen Mac.
 
 [![Quality](https://github.com/Schello805/aiprintstudio/actions/workflows/quality.yml/badge.svg)](https://github.com/Schello805/aiprintstudio/actions/workflows/quality.yml)
 
-> Aktueller Stand: Version 0.13.1. Bild- und Schrift-Reliefs, mehrfarbige
+> Aktueller Stand: Version 0.13.2. Bild- und Schrift-Reliefs, mehrfarbige
 > AMS-3MF-Dateien sowie einfache, per OpenAI geplante und lokal konstruierte
 > Prompt-zu-3D-Modelle sind testbar. Die vollständige Rundum-Rekonstruktion aus
 > einem einzelnen Bild bleibt eine spätere Ausbaustufe.
@@ -84,13 +84,17 @@ Höhenkarten-Vorschau, einen Druckscore und eine Materialschätzung.
 
 Der AMS-Modus reduziert das Motiv auf zwei bis acht frei definierbare
 Filamentfarben. Erkannte Bildfarben können direkt den tatsächlich eingelegten
-Filamenten zugeordnet werden. Der 3MF-Export enthält getrennte, benannte Körper
-mit Basismaterialien für Bambu Studio.
+Filamenten zugeordnet werden. Der 3MF-Export enthält getrennte, benannte
+Farbkörper mit Basismaterialien. Sie werden als Komponenten eines einzigen
+gemeinsamen 3MF-Modells exportiert, damit Slicer wie Anycubic Slicer und Bambu
+Studio sie als zusammengehöriges Mehrmaterialobjekt laden.
 
 Senkrechte Außenkanten, Tragkörper und Farbgrenzen erhalten einheitlich die
-gewählte Farbe **Seiten & Tragkörper**. Die übrigen Farben liegen als 0,04 mm
-dünne Deckflächen auf horizontalen Motivbereichen. Dadurch entstehen an den
-Seiten keine gestreiften Farbkanten. STL bleibt als einfarbiger Fallback erhalten.
+gewählte Farbe **Seiten & Tragkörper**. Die übrigen Farben liegen als 0,4 mm
+starke und damit mindestens zwei typische 0,2-mm-Schichten umfassende
+Deckkörper auf horizontalen Motivbereichen. Dadurch entstehen an den Seiten
+keine gestreiften Farbkanten und Slicer erkennen keine scheinbar
+dimensionslosen Teile. STL bleibt als einfarbiger Fallback erhalten.
 
 ## Verarbeitungsarten
 

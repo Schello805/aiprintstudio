@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.13.2
+
+- Mehrfarbige 3MF-Dateien werden als ein gemeinsames Assembly mit mehreren
+  Materialkomponenten exportiert, statt jeden Farbkörper als separates
+  Hauptobjekt zu laden.
+- Der 3MF-Build-Bereich enthält genau ein Modell und weist Millimeter explizit
+  als Einheit aus. Dadurch entfallen die Anycubic-Rückfragen zu Skalierung und
+  getrennt positionierten Objekten.
+- Farbige Deckkörper sind nun 0,4 mm stark und damit bei einer üblichen
+  Schichthöhe von 0,2 mm zuverlässig druck- und slicebar.
+- Regressionstests prüfen Assembly-Struktur, Komponentenanzahl und die neue
+  Farbkörperstärke.
+
 ## 0.13.1
 
 - Das neue AI-Print-Studio-Logo wird als offizielles macOS-App- und Finder-Icon verwendet.

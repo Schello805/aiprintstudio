@@ -54,12 +54,14 @@ beim Import sicher gerastert, bevor die Verarbeitung beginnt.
 
 Die lokal erkannte Palette wird auf zwei bis acht frei definierbare
 Filamentfarben abgebildet. Für AMS-Modelle reicht der einfarbige Tragkörper bis
-zur vollständigen Reliefhöhe. Motivfarben werden als separate, 0,04 mm dünne
-Deckkörper erzeugt.
+zur vollständigen Reliefhöhe. Motivfarben werden als separate, 0,4 mm starke
+und damit slicer-taugliche Deckkörper erzeugt.
 
 Außenränder und Farbübergänge werden vor dem Meshaufbau der gewählten Farbe
 **Seiten & Tragkörper** zugewiesen. Dadurch bleiben senkrechte Wände einfarbig.
-Vorschau und 3MF verwenden dieselbe stabilisierte Farbkarte. STL bleibt ein
+Vorschau und 3MF verwenden dieselbe stabilisierte Farbkarte. Im 3MF sind alle
+Farbkörper Komponenten eines einzigen Assembly-Objekts; der Build-Bereich
+enthält deshalb genau ein gemeinsames Modell in Millimetern. STL bleibt ein
 einfarbiges Fallback.
 
 ## Prompt zu 3D

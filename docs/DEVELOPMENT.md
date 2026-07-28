@@ -47,9 +47,11 @@
 ## Exportregeln
 
 - STL ist ein einfarbiges, wasserdichtes Fallback.
-- Mehrfarbige 3MF-Dateien enthalten getrennte Körper und Basismaterialien.
+- Mehrfarbige 3MF-Dateien enthalten getrennte Farbkörper und Basismaterialien
+  als Komponenten eines einzigen Assembly-Objekts.
 - Die konfigurierte Seitenfarbe umfasst Tragkörper, Außenwände und Farbgrenzen.
-- Motivfarben bilden nur eine 0,04-mm-Decklage auf horizontalen Oberflächen.
+- Motivfarben bilden eine 0,4-mm-Decklage auf horizontalen Oberflächen.
+- Das 3MF verwendet Millimeter und genau einen Eintrag im Build-Bereich.
 - Exportänderungen müssen mindestens mit `electron/relief.test.ts` geprüft werden.
 - Änderungen an IPC-Verträgen müssen Main Process, Preload und
   `src/vite-env.d.ts` gemeinsam aktualisieren.

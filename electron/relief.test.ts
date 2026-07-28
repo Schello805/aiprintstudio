@@ -129,8 +129,10 @@ describe("relief mesh", () => {
     const model = await zip.file("3D/3dmodel.model")?.async("string");
     expect(model).toContain('displaycolor="#FF0000FF"');
     expect(model).toContain('displaycolor="#0000FFFF"');
-    expect(model?.match(/<object /g)).toHaveLength(2);
-    expect(model?.match(/<item /g)).toHaveLength(2);
+    expect(model?.match(/<object /g)).toHaveLength(3);
+    expect(model?.match(/<component /g)).toHaveLength(2);
+    expect(model?.match(/<item /g)).toHaveLength(1);
+    expect(model).toContain('name="AI Print Studio Multicolor"');
   });
 
   it("merges high-resolution color meshes without overflowing the call stack", () => {
@@ -154,7 +156,7 @@ describe("relief mesh", () => {
     const redSkin = colored.find((part) => part.color === "#FF0000");
     expect(sideBody?.mesh.vertices.some((vertex) => vertex[2] === 0)).toBe(true);
     expect(redSkin?.mesh.vertices.every((vertex) => vertex[2] >= 5)).toBe(true);
-    expect(Math.max(...(redSkin?.mesh.vertices.map((vertex) => vertex[2]) ?? []))).toBeCloseTo(5.04);
+    expect(Math.max(...(redSkin?.mesh.vertices.map((vertex) => vertex[2]) ?? []))).toBeCloseTo(5.4);
   });
 
   it("assigns every outer and color-transition edge to the configured side color", () => {

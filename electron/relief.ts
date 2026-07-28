@@ -601,7 +601,10 @@ function buildColoredMeshes(
   sideColorIndex: number
 ): ColoredMesh[] {
   const outerBoundary = buildSmoothedBoundaryPositions(columns, rows, widthMm, heightMm, cellMask);
-  const colorSkinMm = 0.04;
+  // Zwei typische 0,2-mm-Schichten sind in allen gängigen Slicern als
+  // druckbarer Körper erkennbar. Die frühere 0,04-mm-Haut wurde von Anycubic
+  // als vermutlich falsch skalierte Datei bewertet.
+  const colorSkinMm = 0.4;
   const structureHeights = heights.slice();
   const structure = buildWatertightHeightMesh(
     columns, rows, widthMm, heightMm, structureHeights, cellMask, 0, outerBoundary
@@ -756,11 +759,14 @@ async function encodeThreeMf(mesh: Mesh, coloredMeshes?: ColoredMesh[]): Promise
     const triangleXml = part.triangles.map(([v1, v2, v3]) => `<triangle v1="${v1}" v2="${v2}" v3="${v3}"/>`).join("");
     return `<object id="${index + 3}" type="model" name="${escapeXml(name)}" pid="2" pindex="${index}"><mesh><vertices>${vertexXml}</vertices><triangles>${triangleXml}</triangles></mesh></object>`;
   }).join("");
-  const buildXml = parts.map((_, index) => `<item objectid="${index + 3}"/>`).join("");
+  const assemblyId = parts.length + 3;
+  const componentsXml = parts.map((_, index) => `<component objectid="${index + 3}"/>`).join("");
+  const assemblyXml = `<object id="${assemblyId}" type="model" name="AI Print Studio Multicolor"><components>${componentsXml}</components></object>`;
+  const buildXml = `<item objectid="${assemblyId}"/>`;
   zip.folder("3D")?.file("3dmodel.model", `<?xml version="1.0" encoding="UTF-8"?>
 <model unit="millimeter" xml:lang="de-DE" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
 <metadata name="Title">AI Print Studio Relief</metadata>
-<resources><basematerials id="2">${materialXml}</basematerials>${objectsXml}</resources>
+<resources><basematerials id="2">${materialXml}</basematerials>${objectsXml}${assemblyXml}</resources>
 <build>${buildXml}</build></model>`);
   return zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE", compressionOptions: { level: 6 } });
 }

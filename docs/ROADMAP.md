@@ -1,13 +1,14 @@
 # Roadmap
 
-## Aktueller Stand 0.13.1
+## Aktueller Stand 0.13.2
 
 - Bild zu 3D mit Kontur-, Höhenkarten- und lokaler KI-Tiefe
 - Schrift zu 3D mit gemeinsamem Relief- und AMS-Workflow
 - Prompt zu 3D über OpenAI Structured Outputs, iterative Folgeanweisungen,
   lokale 3D-Vorschau und CAD-/STL-Erzeugung
 - Flächeneditor mit Auswahl-, Höhen-, Glättungs- und Farbwerkzeugen
-- mehrfarbiger 3MF-Export mit einheitlichen Seiten- und Übergangskanten
+- mehrfarbiger 3MF-Export als slicer-kompatibles Assembly mit einheitlichen
+  Seiten- und Übergangskanten
 - SVG-Import, Druckscore, Verlauf und Updateprüfung
 
 ## Als Nächstes: erweiterte Druckanalyse und Bearbeitung
