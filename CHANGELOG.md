@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.12.0
+
+- Meshy wurde vollständig aus Konfiguration, Oberfläche und aktivem Netzwerkpfad entfernt.
+- „Prompt zu 3D“ benötigt nur noch den bereits vorhandenen OpenAI API-Schlüssel.
+- GPT-5.6 Sol erzeugt über Structured Outputs einen strikt validierten, druckgerechten CAD-Bauplan.
+- Die App konstruiert Geometrie und Binär-STL anschließend vollständig lokal.
+- Der lokale CAD-Kern unterstützt Quader, hochauflösende Zylinder und Satteldach-Prismen.
+- OpenAI-Ausgaben werden auf Bauteilzahl, Koordinaten, Gesamtgröße und mindestens 1,2 mm Materialstärke geprüft.
+- Prompt-Dialog, Datenschutztext und Einstellungen erklären den OpenAI-only-Workflow eindeutig.
+- 31 Tests prüfen jetzt zusätzlich CAD-Validierung und STL-Erzeugung.
+
 ## 0.11.0
 
 - „Studio“ öffnet jetzt eine übersichtliche Werkzeug-Zentrale statt sofort alle Relief-Einstellungen anzuzeigen.

@@ -6,7 +6,6 @@ interface Window {
     checkForUpdate: () => Promise<{ currentVersion: string; latestVersion: string; available: boolean; url: string; directDownload: boolean }>;
     getSettingsStatus: () => Promise<{
       openAiConfigured: boolean;
-      meshyConfigured: boolean;
       modelSetupAccepted: boolean;
       encryptionAvailable: boolean;
       storageVersion: number;
@@ -14,8 +13,6 @@ interface Window {
     }>;
     saveOpenAiKey: (apiKey: string) => Promise<void>;
     removeOpenAiKey: () => Promise<void>;
-    saveMeshyKey: (apiKey: string) => Promise<void>;
-    removeMeshyKey: () => Promise<void>;
     acceptModelSetup: () => Promise<void>;
     selectImage: () => Promise<{
       path: string;
@@ -41,7 +38,13 @@ interface Window {
       suggestedProfile: "logo";
       dataUrl: string;
     }>;
-    createAi3d: (prompt: string) => Promise<{ stlPath: string; taskId: string; optimizedPrompt: string; thumbnailUrl: string | null }>;
+    createAi3d: (prompt: string) => Promise<{
+      stlPath: string;
+      plan: {
+        title: string; widthMm: number; depthMm: number; heightMm: number;
+        primitives: Array<{ type: "box" | "cylinder" | "roof"; name: string; position: [number, number, number]; size: [number, number, number] }>;
+      };
+    }>;
     createObjectCapture: () => Promise<{ usdzPath: string; photoCount: number } | null>;
     createRelief: (imagePath: string, options: {
       widthMm: number;

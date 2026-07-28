@@ -6,8 +6,6 @@ contextBridge.exposeInMainWorld("desktop", Object.freeze({
   getSettingsStatus: () => ipcRenderer.invoke("settings:status"),
   saveOpenAiKey: (apiKey) => ipcRenderer.invoke("settings:saveOpenAiKey", apiKey),
   removeOpenAiKey: () => ipcRenderer.invoke("settings:removeOpenAiKey"),
-  saveMeshyKey: (apiKey) => ipcRenderer.invoke("settings:saveMeshyKey", apiKey),
-  removeMeshyKey: () => ipcRenderer.invoke("settings:removeMeshyKey"),
   acceptModelSetup: () => ipcRenderer.invoke("settings:acceptModelSetup"),
   selectImage: () => ipcRenderer.invoke("image:select"),
   createTextImage: (options) => ipcRenderer.invoke("text:createImage", options),

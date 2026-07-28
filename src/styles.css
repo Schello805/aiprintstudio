@@ -55,7 +55,7 @@ h1,h2,h3 { font-family:Manrope, sans-serif; margin:0; }
 .ai-progress>span { width:18px; height:18px; border:2px solid #a5f36d44; border-top-color:#a5f36d; border-radius:50%; animation:spin .8s linear infinite; }
 .ai-progress strong,.ai-progress small { display:block; }
 .ai-progress small { margin-top:3px; color:#889481; }
-.ai-result { display:grid; grid-template-columns:120px 1fr; gap:12px; align-items:center; padding:12px; border:1px solid #405c32; border-radius:10px; }
+.ai-result { display:block; padding:12px; border:1px solid #405c32; border-radius:10px; }
 .ai-result img { width:120px; height:90px; object-fit:cover; border-radius:8px; }
 .ai-result strong,.ai-result small { display:block; }
 .ai-result small { margin:5px 0 10px; color:#8f998a; line-height:1.4; }

@@ -9,6 +9,7 @@ import { promisify } from "node:util";
 import sharp, { type Metadata } from "sharp";
 import { createRelief, type ReliefOptions } from "./relief.js";
 import { renderTextImage, type TextImageOptions } from "./text-image.js";
+import { encodeCadStl, validateCadPlan } from "./cad.js";
 
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
 const developmentUrl = process.env.VITE_DEV_SERVER_URL ?? "http://localhost:5173";
@@ -17,7 +18,6 @@ const execFileAsync = promisify(execFile);
 type StoredSettings = {
   schemaVersion?: number;
   encryptedOpenAiKey?: string;
-  encryptedMeshyKey?: string;
   modelSetupAccepted?: boolean;
 };
 
@@ -177,25 +177,54 @@ function decryptSetting(value?: string): string | null {
   catch { return null; }
 }
 
-function hasUsableMeshyKey(settings: StoredSettings): boolean {
-  return Boolean(decryptSetting(settings.encryptedMeshyKey)?.match(/^[A-Za-z0-9_-]{20,}$/));
-}
-
-async function optimizePrintablePrompt(prompt: string, settings: StoredSettings): Promise<string> {
+async function createPrintableCadPlan(prompt: string, settings: StoredSettings) {
   const apiKey = decryptSetting(settings.encryptedOpenAiKey);
-  if (!apiKey) return `${prompt}. Single watertight printable object, stable flat base, no floating parts, no paper-thin walls, no unsupported fragile details.`;
+  if (!apiKey) throw new Error("Bitte hinterlege zuerst in den Einstellungen deinen OpenAI API-Schlüssel.");
+  const primitiveSchema = {
+    type: "object",
+    additionalProperties: false,
+    required: ["type", "name", "position", "size"],
+    properties: {
+      type: { type: "string", enum: ["box", "cylinder", "roof"] },
+      name: { type: "string" },
+      position: { type: "array", minItems: 3, maxItems: 3, items: { type: "number" } },
+      size: { type: "array", minItems: 3, maxItems: 3, items: { type: "number", minimum: 1.2, maximum: 300 } }
+    }
+  };
   const response = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: "gpt-4.1-mini",
-      input: `Rewrite this German or English 3D request as one concise English prompt for a watertight FDM-printable object. Preserve every requested feature. Require a flat stable base, connected parts, walls at least 1.2 mm, no floating geometry and no supports where practical. Return only the prompt:\n${prompt}`
+      model: "gpt-5.6-sol",
+      reasoning: { effort: "medium" },
+      input: `Create a printable constructive CAD plan for this request: ${prompt}
+Use only additive boxes, vertical cylinders and triangular-prism roofs. All coordinates and sizes are millimeters. Put the object on z=0, keep every feature connected or intersecting, use at least 1.2 mm thickness, prefer a stable flat base, and model requested windows/doors as raised frames or panels. Preserve exact requested counts. Keep it under 80 primitives.`,
+      text: {
+        format: {
+          type: "json_schema",
+          name: "printable_cad_plan",
+          strict: true,
+          schema: {
+            type: "object",
+            additionalProperties: false,
+            required: ["title", "widthMm", "depthMm", "heightMm", "primitives"],
+            properties: {
+              title: { type: "string" },
+              widthMm: { type: "number", minimum: 5, maximum: 300 },
+              depthMm: { type: "number", minimum: 5, maximum: 300 },
+              heightMm: { type: "number", minimum: 5, maximum: 300 },
+              primitives: { type: "array", minItems: 1, maxItems: 80, items: primitiveSchema }
+            }
+          }
+        }
+      }
     })
   });
-  if (!response.ok) return `${prompt}. Single watertight printable object, stable flat base, no floating parts, no paper-thin walls.`;
+  if (!response.ok) throw new Error(`OpenAI konnte den CAD-Bauplan nicht erzeugen (${response.status}). Prüfe API-Key und Guthaben.`);
   const body = await response.json() as { output?: Array<{ content?: Array<{ type?: string; text?: string }> }> };
-  return body.output?.flatMap((item) => item.content ?? []).find((item) => item.type === "output_text")?.text?.trim()
-    || `${prompt}. Single watertight printable object, stable flat base, no floating parts.`;
+  const output = body.output?.flatMap((item) => item.content ?? []).find((item) => item.type === "output_text")?.text;
+  if (!output) throw new Error("OpenAI hat keinen CAD-Bauplan zurückgegeben.");
+  return validateCadPlan(JSON.parse(output));
 }
 
 function createWindow(): void {
@@ -276,7 +305,6 @@ app.whenReady().then(async () => {
     const settings = await readSettings();
     return {
       openAiConfigured: hasUsableOpenAiKey(settings),
-      meshyConfigured: hasUsableMeshyKey(settings),
       modelSetupAccepted: Boolean(settings.modelSetupAccepted),
       encryptionAvailable: safeStorage.isEncryptionAvailable(),
       storageVersion: settings.schemaVersion ?? 0
@@ -302,19 +330,6 @@ app.whenReady().then(async () => {
   ipcMain.handle("settings:removeOpenAiKey", async () => {
     const settings = await readSettings();
     delete settings.encryptedOpenAiKey;
-    await writeSettings(settings);
-  });
-  ipcMain.handle("settings:saveMeshyKey", async (_event, apiKey: string) => {
-    const normalized = apiKey.trim();
-    if (!/^[A-Za-z0-9_-]{20,}$/.test(normalized)) throw new Error("Der Meshy API-Schlüssel ist zu kurz oder ungültig.");
-    if (!safeStorage.isEncryptionAvailable()) throw new Error("Die sichere macOS-Schlüsselverschlüsselung ist nicht verfügbar.");
-    const settings = await readSettings();
-    settings.encryptedMeshyKey = safeStorage.encryptString(normalized).toString("base64");
-    await writeSettings(settings);
-  });
-  ipcMain.handle("settings:removeMeshyKey", async () => {
-    const settings = await readSettings();
-    delete settings.encryptedMeshyKey;
     await writeSettings(settings);
   });
   ipcMain.handle("settings:acceptModelSetup", async () => {
@@ -397,41 +412,12 @@ app.whenReady().then(async () => {
     const prompt = promptValue.trim();
     if (prompt.length < 10 || prompt.length > 800) throw new Error("Beschreibe das Objekt bitte mit 10 bis 800 Zeichen.");
     const settings = await readSettings();
-    const meshyKey = decryptSetting(settings.encryptedMeshyKey);
-    if (!meshyKey) throw new Error("Bitte hinterlege zuerst in den Einstellungen einen Meshy API-Schlüssel.");
-    const optimizedPrompt = await optimizePrintablePrompt(prompt, settings);
-    const created = await fetch("https://api.meshy.ai/openapi/v2/text-to-3d", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${meshyKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        mode: "preview",
-        prompt: optimizedPrompt,
-        should_remesh: true,
-        target_polycount: 100000
-      })
-    });
-    if (!created.ok) throw new Error(`Meshy hat die Erstellung abgelehnt (${created.status}). Prüfe API-Key und Guthaben.`);
-    const taskId = ((await created.json()) as { result?: string }).result;
-    if (!taskId) throw new Error("Meshy hat keine Aufgaben-ID zurückgegeben.");
-    const deadline = Date.now() + 12 * 60_000;
-    let task: { status?: string; progress?: number; model_urls?: { stl?: string; glb?: string }; thumbnail_url?: string; task_error?: { message?: string } };
-    do {
-      await new Promise((resolve) => setTimeout(resolve, 5_000));
-      const response = await fetch(`https://api.meshy.ai/openapi/v2/text-to-3d/${encodeURIComponent(taskId)}`, {
-        headers: { Authorization: `Bearer ${meshyKey}` }
-      });
-      if (!response.ok) throw new Error(`Meshy-Status konnte nicht geladen werden (${response.status}).`);
-      task = await response.json() as typeof task;
-      if (task.status === "FAILED" || task.status === "CANCELED") throw new Error(task.task_error?.message || "Die 3D-Erstellung ist fehlgeschlagen.");
-    } while (task.status !== "SUCCEEDED" && Date.now() < deadline);
-    if (task.status !== "SUCCEEDED" || !task.model_urls?.stl) throw new Error("Die Erstellung dauert länger als 12 Minuten. Die Aufgabe kann später bei Meshy geprüft werden.");
-    const modelResponse = await fetch(task.model_urls.stl);
-    if (!modelResponse.ok) throw new Error("Das fertige STL konnte nicht heruntergeladen werden.");
+    const plan = await createPrintableCadPlan(prompt, settings);
     const outputDirectory = join(app.getPath("downloads"), "AI Print Studio");
     await mkdir(outputDirectory, { recursive: true });
     const stlPath = join(outputDirectory, `ki-${Date.now()}.stl`);
-    await writeFile(stlPath, Buffer.from(await modelResponse.arrayBuffer()));
-    return { stlPath, taskId, optimizedPrompt, thumbnailUrl: task.thumbnail_url ?? null };
+    await writeFile(stlPath, encodeCadStl(plan));
+    return { stlPath, plan };
   });
   ipcMain.handle("objectCapture:create", async () => {
     const selection = await dialog.showOpenDialog({

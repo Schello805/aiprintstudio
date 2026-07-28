@@ -29,7 +29,7 @@ standardmäßig auf dem eigenen Mac.
 - Interaktiver Flächeneditor mit Mehrfachauswahl, angrenzender Erweiterung,
   Höhenwerkzeugen, manueller AMS-Zuweisung, Rückgängig/Wiederholen und Live-3D-Vorschau
 - Eng zugeschnittene, lokal gerenderte Schrift-zu-STL-Vorlagen
-- Optionaler Prompt-zu-3D-Workflow über OpenAI-Promptoptimierung und Meshy-Meshgenerierung
+- Optionaler Prompt-zu-3D-Workflow über OpenAI und einen lokalen CAD-/STL-Generator
 - Direkter SVG-Import für bereits vektorisierte Logos und Wappen
 - Depth Anything V2 Small über Apple Core ML für lokale Foto-Tiefenschätzung
 - Mehrfoto-Rekonstruktion über Apple RealityKit Object Capture
@@ -117,11 +117,11 @@ freigegeben werden.
 
 ## Konfiguration
 
-OpenAI und Meshy sind optional. Beide Schlüssel werden in der fertigen App
-getrennt über die Einstellungen erfasst und mit der macOS-Systemverschlüsselung
-geschützt. OpenAI optimiert auf Wunsch den Druck-Prompt; Meshy erzeugt das
-vollständige 3D-Mesh. Schlüssel gehören niemals in Git, eine Frontend-Datei
-oder ein Release-Artefakt.
+OpenAI ist optional und wird ausschließlich für „Prompt zu 3D“ benötigt. Der
+Schlüssel wird in der fertigen App über die Einstellungen erfasst und mit der
+macOS-Systemverschlüsselung geschützt. OpenAI erstellt einen strukturierten
+CAD-Bauplan; die App erzeugt Geometrie und STL anschließend lokal. Der Schlüssel
+gehört niemals in Git, eine Frontend-Datei oder ein Release-Artefakt.
 
 ## Veröffentlichung und Versionierung
 
@@ -135,8 +135,8 @@ Projekt-Repository: <https://github.com/Schello805/aiprintstudio>
 ## Datenschutz
 
 Lokale Relief-, Schrift- und Scan-Workflows übertragen keine Nutzbilder an
-OpenAI oder Meshy. Nur ein ausdrücklich gestarteter „Prompt zu 3D“-Auftrag
-sendet den eingegebenen Text an die eingerichteten Anbieter. Details stehen in
+OpenAI. Nur ein ausdrücklich gestarteter „Prompt zu 3D“-Auftrag sendet den
+eingegebenen Text an OpenAI. CAD-Bauplan und STL bleiben lokal. Details stehen in
 [SECURITY.md](SECURITY.md).
 
 ## Lizenz

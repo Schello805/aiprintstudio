@@ -492,7 +492,7 @@ function StudioHub({
       eyebrow: "KI · VOLLSTÄNDIGES OBJEKT",
       title: "Prompt zu 3D",
       description: "Eine Idee beschreiben und als vollständiges räumliches Modell erzeugen.",
-      detail: "OpenAI-Optimierung + Meshy-Mesh",
+      detail: "OpenAI-Bauplan + lokale STL",
       action: openPrompt
     }
   ];
@@ -661,7 +661,7 @@ function Ai3dDialog({ close }: { close: () => void }) {
   const [prompt, setPrompt] = useState("Ein kleines Haus mit vier Fenstern, einem Stockwerk und einem Spitzdach");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<{ stlPath: string; optimizedPrompt: string; thumbnailUrl: string | null } | null>(null);
+  const [result, setResult] = useState<Awaited<ReturnType<NonNullable<typeof window.desktop>["createAi3d"]>> | null>(null);
   async function submit() {
     setBusy(true); setError(null); setResult(null);
     try {
@@ -678,16 +678,16 @@ function Ai3dDialog({ close }: { close: () => void }) {
         <div className="modal-icon"><Sparkles /></div>
         <p className="eyebrow">KI · VOLLSTÄNDIGES 3D-OBJEKT</p>
         <h2 id="ai3d-title">Prompt zu druckbarer STL</h2>
-        <p>Beschreibe Form, Anzahl und wichtige Details. OpenAI optimiert den Prompt optional für den 3D-Druck; Meshy erzeugt daraus ein vollständiges Mesh.</p>
+        <p>Beschreibe Form, Anzahl und wichtige Details. OpenAI erstellt daraus einen druckgerechten CAD-Bauplan; die App erzeugt das STL anschließend lokal.</p>
         <label htmlFor="ai3d-prompt">OBJEKT BESCHREIBEN</label>
         <textarea id="ai3d-prompt" rows={5} maxLength={800} value={prompt} onChange={(event) => setPrompt(event.target.value)} disabled={busy} />
-        <div className="notice">Cloud-Funktion: Der Text wird an OpenAI (falls eingerichtet) und Meshy übertragen. Meshy benötigt einen eigenen API-Key und Guthaben.</div>
-        {busy && <div className="ai-progress"><span /><div><strong>3D-Modell wird erzeugt …</strong><small>Das kann mehrere Minuten dauern. Bitte App geöffnet lassen.</small></div></div>}
+        <div className="notice">Nur der eingegebene Text wird an OpenAI übertragen. Bauplan, Geometrie und STL werden anschließend lokal auf deinem Mac verarbeitet.</div>
+        {busy && <div className="ai-progress"><span /><div><strong>OpenAI konstruiert den CAD-Bauplan …</strong><small>Danach erzeugt die App das STL lokal.</small></div></div>}
         {error && <div className="notice error">{error}</div>}
-        {result && <div className="ai-result">{result.thumbnailUrl && <img src={result.thumbnailUrl} alt="Vorschau des KI-Modells" />}<div><strong>STL erfolgreich erstellt</strong><small>{result.optimizedPrompt}</small><button className="secondary-button" onClick={() => void window.desktop?.showItemInFolder(result.stlPath)}>Im Finder zeigen</button></div></div>}
+        {result && <div className="ai-result"><div><strong>{result.plan.title} · STL erfolgreich erstellt</strong><small>{result.plan.primitives.length} Bauteile · {result.plan.widthMm} × {result.plan.depthMm} × {result.plan.heightMm} mm</small><button className="secondary-button" onClick={() => void window.desktop?.showItemInFolder(result.stlPath)}>Im Finder zeigen</button></div></div>}
         <div className="modal-actions">
           <button className="secondary-button" onClick={close} disabled={busy}>{result ? "Schließen" : "Abbrechen"}</button>
-          {!result && <button className="primary-button" disabled={busy || prompt.trim().length < 10} onClick={() => void submit()}>{busy ? "Meshy arbeitet …" : "3D-Modell erstellen"} <ChevronRight /></button>}
+          {!result && <button className="primary-button" disabled={busy || prompt.trim().length < 10} onClick={() => void submit()}>{busy ? "OpenAI konstruiert …" : "3D-Modell erstellen"} <ChevronRight /></button>}
         </div>
       </section>
     </div>
@@ -718,7 +718,6 @@ function EmptyState({ icon: Icon, title, text }: { icon: typeof Clock3; title: s
 
 type SettingsStatus = {
   openAiConfigured: boolean;
-  meshyConfigured: boolean;
   modelSetupAccepted: boolean;
   encryptionAvailable: boolean;
   storageVersion: number;
@@ -726,10 +725,9 @@ type SettingsStatus = {
 };
 
 function Settings() {
-  const [dialog, setDialog] = useState<"openai" | "meshy" | "model" | null>(null);
+  const [dialog, setDialog] = useState<"openai" | "model" | null>(null);
   const [status, setStatus] = useState<SettingsStatus>({
     openAiConfigured: false,
-    meshyConfigured: false,
     modelSetupAccepted: false,
     encryptionAvailable: true,
     storageVersion: 0
@@ -747,54 +745,15 @@ function Settings() {
   return (
     <>
       <section className="settings-grid">
-        <article><div className="setting-icon"><Sparkles /></div><div><h3>OpenAI-Analyse</h3><p>{status.openAiConfigured ? "API-Key ist verschlüsselt gespeichert und lesbar." : "Optional: Erkennt das Motiv und schlägt passende Druckparameter vor."}</p></div><div className="setting-action">{status.openAiConfigured ? <span className="tag"><CheckCircle2 /> Eingerichtet</span> : <span className="tag neutral">Nicht eingerichtet</span>}<button onClick={() => setDialog("openai")}>{status.openAiConfigured ? "Verwalten" : "Einrichten"}</button></div></article>
-        <article><div className="setting-icon"><Box /></div><div><h3>Meshy Text zu 3D</h3><p>{status.meshyConfigured ? "Bereit für vollständige KI-Modelle aus einem Prompt." : "Erzeugt über die Meshy-Cloud vollständige STL-Modelle statt Reliefs."}</p></div><div className="setting-action">{status.meshyConfigured ? <span className="tag"><CheckCircle2 /> Eingerichtet</span> : <span className="tag neutral">Nicht eingerichtet</span>}<button onClick={() => setDialog("meshy")}>{status.meshyConfigured ? "Verwalten" : "Einrichten"}</button></div></article>
+        <article><div className="setting-icon"><Sparkles /></div><div><h3>OpenAI · Prompt zu 3D</h3><p>{status.openAiConfigured ? "Bereit für strukturierte CAD-Baupläne aus deinen Beschreibungen." : "Erstellt den CAD-Bauplan; die App baut daraus lokal das STL."}</p></div><div className="setting-action">{status.openAiConfigured ? <span className="tag"><CheckCircle2 /> Eingerichtet</span> : <span className="tag neutral">Nicht eingerichtet</span>}<button onClick={() => setDialog("openai")}>{status.openAiConfigured ? "Verwalten" : "Einrichten"}</button></div></article>
         <article><div className="setting-icon"><Layers3 /></div><div><h3>Lokale Relief-Engine</h3><p>Integriert · erzeugt wasserdichte STL- und 3MF-Dateien vollständig offline.</p></div><button onClick={() => setDialog("model")}>Details</button></article>
         <article><div className="setting-icon"><Box /></div><div><h3>Depth Anything V2</h3><p>Lokale KI-Tiefenschätzung für Fotos · Apple Core ML · keine Cloud.</p></div><span className={status.depthModelAvailable ? "tag" : "tag neutral"}>{status.depthModelAvailable ? "Bereit" : "Nur im Release"}</span></article>
         <article><div className="setting-icon"><CheckCircle2 /></div><div><h3>Hardwareprofil</h3><p>Apple M3 · 16 GB · automatische CPU-/Metal-Auswahl</p></div><span className="tag">Erkannt</span></article>
         <UpdateSettings />
       </section>
       {dialog === "openai" && <OpenAiDialog status={status} close={() => setDialog(null)} refresh={refreshStatus} />}
-      {dialog === "meshy" && <MeshyDialog status={status} close={() => setDialog(null)} refresh={refreshStatus} />}
       {dialog === "model" && <ModelDialog close={() => setDialog(null)} refresh={refreshStatus} />}
     </>
-  );
-}
-
-function MeshyDialog({ status, close, refresh }: { status: SettingsStatus; close: () => void; refresh: () => Promise<void> }) {
-  const [key, setKey] = useState("");
-  const [message, setMessage] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  async function save() {
-    setBusy(true); setMessage(null);
-    try {
-      if (!window.desktop) throw new Error("Die Desktop-Verbindung ist nicht verfügbar.");
-      await window.desktop.saveMeshyKey(key); await refresh(); setKey("");
-      setMessage("Der Meshy-Schlüssel wurde verschlüsselt auf diesem Mac gespeichert.");
-    } catch (error) { setMessage(error instanceof Error ? error.message : "Der Schlüssel konnte nicht gespeichert werden."); }
-    finally { setBusy(false); }
-  }
-  async function remove() {
-    if (!window.desktop) return;
-    await window.desktop.removeMeshyKey(); await refresh(); setMessage("Der Meshy-Schlüssel wurde entfernt.");
-  }
-  return (
-    <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && close()}>
-      <section className="modal" role="dialog" aria-modal="true" aria-labelledby="meshy-title">
-        <button className="modal-close" onClick={close} aria-label="Dialog schließen"><X /></button>
-        <div className="modal-icon"><Box /></div><p className="eyebrow">TEXT ZU VOLLSTÄNDIGEM 3D</p>
-        <h2 id="meshy-title">Meshy sicher verbinden</h2>
-        <p>Meshy erzeugt das eigentliche 3D-Mesh. Der Schlüssel wird lokal mit der macOS-Systemverschlüsselung geschützt.</p>
-        <label htmlFor="meshy-key">Meshy API-Schlüssel</label>
-        <input id="meshy-key" type="password" value={key} onChange={(event) => setKey(event.target.value)} autoComplete="off" placeholder="Meshy API-Key" />
-        {message && <div className="notice">{message}</div>}
-        <div className="modal-actions">
-          {status.meshyConfigured && <button className="danger-button" onClick={() => void remove()}>Schlüssel entfernen</button>}
-          <button className="secondary-button" onClick={close}>Abbrechen</button>
-          <button className="primary-button" onClick={() => void save()} disabled={busy || key.trim().length < 20}>{busy ? "Speichern …" : "Speichern"}</button>
-        </div>
-      </section>
-    </div>
   );
 }
 
@@ -860,9 +819,9 @@ function OpenAiDialog({ status, close, refresh }: { status: SettingsStatus; clos
       <section className="modal" role="dialog" aria-modal="true" aria-labelledby="openai-title">
         <button className="modal-close" onClick={close} aria-label="Dialog schließen"><X /></button>
         <div className="modal-icon"><Sparkles /></div>
-        <p className="eyebrow">OPTIONALE ANALYSE</p>
+        <p className="eyebrow">PROMPT ZU 3D</p>
         <h2 id="openai-title">OpenAI sicher verbinden</h2>
-        <p>Der Schlüssel wird mit der macOS-Systemverschlüsselung geschützt und niemals im Frontend oder in Protokollen angezeigt.</p>
+        <p>OpenAI erstellt einen strukturierten CAD-Bauplan. Geometrie und STL werden lokal erzeugt. Der Schlüssel wird mit der macOS-Systemverschlüsselung geschützt.</p>
         <label htmlFor="openai-key">OpenAI API-Schlüssel</label>
         <input id="openai-key" type="password" value={key} onChange={(event) => setKey(event.target.value)} placeholder="sk-••••••••••••••••••••" autoComplete="off" />
         {!status.encryptionAvailable && <div className="notice error">Die macOS-Verschlüsselung ist auf diesem System nicht verfügbar.</div>}
