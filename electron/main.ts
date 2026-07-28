@@ -1,8 +1,8 @@
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, safeStorage, shell } from "electron";
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
-import { copyFile, mkdir, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { copyFile, mkdir, mkdtemp, readFile, rename, rm, statfs, writeFile } from "node:fs/promises";
+import { arch, platform, tmpdir, totalmem } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
@@ -10,6 +10,7 @@ import sharp, { type Metadata } from "sharp";
 import { createRelief, type ReliefOptions } from "./relief.js";
 import { renderTextImage, type TextImageOptions } from "./text-image.js";
 import { buildCadPlanningRequest, encodeCadStl, validateCadPlan, type CadPlan } from "./cad.js";
+import { checkSystemCompatibility } from "./system-check.js";
 
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
 const developmentUrl = process.env.VITE_DEV_SERVER_URL ?? "http://localhost:5173";
@@ -111,6 +112,54 @@ function depthResources() {
 function depthModelAvailable(): boolean {
   const resources = depthResources();
   return existsSync(resources.worker) && existsSync(resources.model);
+}
+
+async function ensureCompatibleSystem(): Promise<boolean> {
+  if (!app.isPackaged || process.argv.includes("--smoke-test")) return true;
+  const resources = depthResources();
+  let freeDiskBytes = Number.POSITIVE_INFINITY;
+  try {
+    const disk = await statfs(app.getPath("downloads"));
+    freeDiskBytes = disk.bavail * disk.bsize;
+  } catch {
+    // Ein nicht lesbarer Speicherwert soll den Start nicht verhindern.
+  }
+  const result = checkSystemCompatibility({
+    platform: platform(),
+    architecture: arch(),
+    macOsVersion: process.getSystemVersion(),
+    totalMemoryBytes: totalmem(),
+    freeDiskBytes,
+    depthModelAvailable: depthModelAvailable(),
+    objectCaptureAvailable: existsSync(resources.objectCaptureWorker)
+  });
+  if (!result.supported) {
+    dialog.showMessageBoxSync({
+      type: "error",
+      buttons: ["Beenden"],
+      title: "Dieser Mac wird nicht unterstützt",
+      message: "AI Print Studio kann auf diesem Mac nicht zuverlässig ausgeführt werden.",
+      detail: `${result.errors.map((entry) => `• ${entry}`).join("\n")}\n\nSystemanforderungen: Apple Silicon, macOS 13 oder neuer, mindestens 8 GB RAM empfohlen.`
+    });
+    app.quit();
+    return false;
+  }
+  if (result.warnings.length) {
+    const choice = dialog.showMessageBoxSync({
+      type: "warning",
+      buttons: ["Trotzdem starten", "Beenden"],
+      defaultId: 0,
+      cancelId: 1,
+      title: "Systemcheck mit Hinweisen",
+      message: "AI Print Studio kann starten, aber einige Funktionen könnten eingeschränkt sein.",
+      detail: result.warnings.map((entry) => `• ${entry}`).join("\n")
+    });
+    if (choice === 1) {
+      app.quit();
+      return false;
+    }
+  }
+  return true;
 }
 
 async function createDepthMap(imagePath: string): Promise<{ path: string; cleanup: () => Promise<void> }> {
@@ -277,6 +326,7 @@ function createWindow(): void {
 }
 
 app.whenReady().then(async () => {
+  if (!(await ensureCompatibleSystem())) return;
   if (!(await ensureApplicationLocation())) return;
   nativeTheme.themeSource = "dark";
   ipcMain.handle("app:version", () => app.getVersion());

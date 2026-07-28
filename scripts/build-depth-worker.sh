@@ -16,10 +16,10 @@ fi
 if [[ ! -d "$MODEL_COMPILED" ]]; then
   xcrun coremlcompiler compile "$MODEL_PACKAGE" "$RESOURCE_DIR"
 fi
-xcrun swiftc -O "$ROOT_DIR/native/DepthWorker.swift" \
+xcrun swiftc -O -target arm64-apple-macos13.0 "$ROOT_DIR/native/DepthWorker.swift" \
   -framework AppKit -framework CoreML -framework Vision -framework ImageIO \
   -o "$RESOURCE_DIR/depth-worker"
 chmod +x "$RESOURCE_DIR/depth-worker"
-xcrun swiftc -O -parse-as-library "$ROOT_DIR/native/ObjectCaptureWorker.swift" \
+xcrun swiftc -O -parse-as-library -target arm64-apple-macos13.0 "$ROOT_DIR/native/ObjectCaptureWorker.swift" \
   -framework RealityKit -o "$RESOURCE_DIR/object-capture-worker"
 chmod +x "$RESOURCE_DIR/object-capture-worker"

@@ -14,6 +14,7 @@ strikt von lokaler, deterministischer Geometrieerzeugung und Prüfung getrennt.
 React Renderer
   │ sichere, typisierte IPC-Aufrufe
 Electron Main Process
+  ├── Systemcheck / Hardware- und Ressourcenprüfung
   ├── Einstellungen / safeStorage
   ├── Verlauf / Updateprüfung
   ├── Dateivalidierung

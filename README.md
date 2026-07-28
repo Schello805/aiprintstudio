@@ -9,10 +9,33 @@ CAD-Pläne und Mesh-Dateien bleiben standardmäßig auf dem eigenen Mac.
 
 [![Quality](https://github.com/Schello805/aiprintstudio/actions/workflows/quality.yml/badge.svg)](https://github.com/Schello805/aiprintstudio/actions/workflows/quality.yml)
 
-> Aktueller Stand: Version 0.13.7. Bild- und Schrift-Reliefs, mehrfarbige
+> Aktueller Stand: Version 0.13.8. Bild- und Schrift-Reliefs, mehrfarbige
 > AMS-3MF-Dateien sowie einfache, per OpenAI geplante und lokal konstruierte
 > Prompt-zu-3D-Modelle sind testbar. Die vollständige Rundum-Rekonstruktion aus
 > einem einzelnen Bild bleibt eine spätere Ausbaustufe.
+
+## Läuft AI Print Studio auf meinem Mac?
+
+Vor dem Download bitte kurz prüfen:
+
+| Voraussetzung | Benötigt | Hinweis |
+| --- | --- | --- |
+| Mac | **Apple Silicon (M1 oder neuer)** | Intel-Macs werden vom ARM64-Build nicht unterstützt. |
+| Betriebssystem | **macOS 13 Ventura oder neuer** | Ein aktuelles macOS wird empfohlen. |
+| Arbeitsspeicher | **8 GB empfohlen**, 16 GB für große Modelle | Unter 8 GB startet die App mit einem Ressourcenhinweis. |
+| Freier Speicher | **mindestens 4 GB empfohlen** | Mehrfoto-Scans und große 3MF-Dateien benötigen zusätzlichen temporären Speicher. |
+| Grafik | In Apple Silicon integriert | Keine separate Grafikkarte erforderlich. |
+| Internet | Für Installation/Updates und optional Prompt zu 3D | Bild zu 3D, Schrift zu 3D und lokale Exporte funktionieren offline. |
+
+Beim Start führt die App zusätzlich einen lokalen Systemcheck durch. Nicht
+unterstützte Macs erhalten eine konkrete Fehlermeldung, bevor das Studio geladen
+wird. Bei wenig RAM, wenig freiem Speicher oder fehlenden lokalen
+KI-Komponenten erscheint eine Warnung mit der Wahl, trotzdem zu starten oder die
+App zu beenden.
+
+**Schnellentscheidung:** Wenn unter **Apple-Menü → Über diesen Mac** bei „Chip“
+M1, M2, M3, M4 oder neuer und bei macOS mindestens Version 13 steht, ist die App
+grundsätzlich kompatibel.
 
 ## Leitprinzipien
 

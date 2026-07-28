@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.13.8
+
+- Ein lokaler Systemcheck prüft vor dem Laden des Studios Plattform,
+  Apple-Silicon-Architektur, macOS-Version, RAM, freien Speicher und native
+  KI-Komponenten.
+- Nicht unterstützte Systeme erhalten eine konkrete Abbruchmeldung; bei knappen
+  Ressourcen kann der Nutzer bewusst fortfahren oder die App beenden.
+- Die README enthält vor der Funktionsbeschreibung eine übersichtliche
+  Kompatibilitätsmatrix und eine einfache Schnellprüfung.
+- Native Core-ML- und Object-Capture-Worker werden ausdrücklich für macOS 13
+  statt versehentlich für die SDK-Version des Build-Macs kompiliert.
+- Das App-Bundle deklariert macOS 13.0 als Mindestversion.
+
 ## 0.13.7
 
 - Filament-Presets in Anycubic-/Orca-basierten Slicern heißen jetzt

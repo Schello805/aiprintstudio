@@ -14,10 +14,14 @@
 
 ## Voraussetzungen
 
-- macOS auf Apple Silicon
+- macOS 13 oder neuer auf Apple Silicon
 - Node.js 22 oder neuer
 - npm 10 oder neuer
 - Xcode Command Line Tools für die nativen Swift-Worker
+
+Die nativen Worker werden mit dem expliziten Deployment-Target
+`arm64-apple-macos13.0` gebaut. Dadurch wird nicht versehentlich die
+macOS-Version des jeweiligen Build-Macs zur Mindestversion des Releases.
 
 ## Befehle
 

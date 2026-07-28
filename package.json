@@ -1,6 +1,6 @@
 {
   "name": "ai-print-studio",
-  "version": "0.13.7",
+  "version": "0.13.8",
   "description": "Lokale Bild-zu-3D-Desktop-App für Apple Silicon",
   "author": "Michael Schellenberger",
   "license": "SEE LICENSE IN LICENSE.md",
@@ -80,6 +80,7 @@
     "mac": {
       "icon": "build/icon.png",
       "category": "public.app-category.graphics-design",
+      "minimumSystemVersion": "13.0.0",
       "target": [
         {
           "target": "dmg",
