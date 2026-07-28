@@ -142,6 +142,8 @@ describe("relief mesh", () => {
     expect(modelSettings).toContain('<metadata key="extruder" value="1"/>');
     expect(modelSettings).toContain('<metadata key="extruder" value="2"/>');
     expect(JSON.parse(projectSettings ?? "{}").filament_colour).toEqual(["#FF0000", "#0000FF"]);
+    expect(JSON.parse(projectSettings ?? "{}").filament_settings_id).toEqual(["AI Print Studio", "AI Print Studio"]);
+    expect(JSON.parse(projectSettings ?? "{}").print_settings_id).toBe("AI Print Studio");
   });
 
   it("merges high-resolution color meshes without overflowing the call stack", () => {

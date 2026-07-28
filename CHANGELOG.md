@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.13.7
+
+- Filament-Presets in Anycubic-/Orca-basierten Slicern heißen jetzt
+  **AI Print Studio** statt wie die importierte 3MF-Datei.
+- Auch das eingebettete Prozessprofil verwendet den kurzen Namen
+  **AI Print Studio**.
+
 ## 0.13.6
 
 - Mehrfarbige 3MF-Projekte heißen im Slicer einheitlich und kompakt

@@ -833,9 +833,10 @@ async function encodeThreeMf(mesh: Mesh, coloredMeshes?: ColoredMesh[]): Promise
   </object>
 </config>`);
     zip.folder("Metadata")?.file("project_settings.config", JSON.stringify({
+      print_settings_id: "AI Print Studio",
       filament_colour: parts.map(({ color }) => color.toUpperCase()),
       filament_type: parts.map(() => "PLA"),
-      filament_settings_id: parts.map(() => "")
+      filament_settings_id: parts.map(() => "AI Print Studio")
     }, null, 2));
   }
   return zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE", compressionOptions: { level: 6 } });
