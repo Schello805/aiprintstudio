@@ -7,7 +7,7 @@ CAD-Pläne und Mesh-Dateien bleiben standardmäßig auf dem eigenen Mac.
 
 [![Quality](https://github.com/Schello805/aiprintstudio/actions/workflows/quality.yml/badge.svg)](https://github.com/Schello805/aiprintstudio/actions/workflows/quality.yml)
 
-> Aktueller Stand: Version 0.12.4. Bild- und Schrift-Reliefs, mehrfarbige
+> Aktueller Stand: Version 0.13.0. Bild- und Schrift-Reliefs, mehrfarbige
 > AMS-3MF-Dateien sowie einfache, per OpenAI geplante und lokal konstruierte
 > Prompt-zu-3D-Modelle sind testbar. Die vollständige Rundum-Rekonstruktion aus
 > einem einzelnen Bild bleibt eine spätere Ausbaustufe.
@@ -52,6 +52,12 @@ CAD-Bauplan aus einfachen Körpern um. Die eigentliche Geometrie und die
 Binär-STL erzeugt AI Print Studio lokal. Dieser Workflow eignet sich für einfache
 konstruktive Objekte, nicht für organische Meshes auf dem Niveau spezialisierter
 Text-zu-3D-Dienste. Meshy wird nicht verwendet.
+
+Nach der ersten Erstellung erscheint der Bauplan als dreh- und zoombare
+3D-Vorschau. Folgeanweisungen wie „Füge unten links und rechts zwei Haustüren
+hinzu“ überarbeiten das vorhandene Modell. Nicht erwähnte Bauteile bleiben
+erhalten, jede Revision erzeugt lokal eine neue STL und die letzte Änderung kann
+im Dialog zurückgenommen werden.
 
 ### Mehrfoto-Scan
 
@@ -187,8 +193,10 @@ Projekt-Repository: <https://github.com/Schello805/aiprintstudio>
 ## Datenschutz und Sicherheit
 
 Lokale Workflows übertragen keine Nutzbilder an OpenAI. Nur ein ausdrücklich
-gestarteter Prompt-zu-3D-Auftrag sendet den eingegebenen Text an OpenAI.
-CAD-Bauplan und STL bleiben lokal. Details stehen in
+gestarteter Prompt-zu-3D-Auftrag sendet den eingegebenen Text an OpenAI. Bei
+Folgeanweisungen wird zusätzlich der aktuelle strukturierte CAD-Bauplan
+übertragen, damit OpenAI das bestehende Modell gezielt überarbeiten kann.
+Vorschau, Geometrie und STL entstehen lokal. Details stehen in
 [SECURITY.md](SECURITY.md).
 
 Die Druckbarkeitsanalyse ist eine technische Hilfestellung, keine Garantie für

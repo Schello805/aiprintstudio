@@ -3,7 +3,7 @@
 ## Unterstützte Versionen
 
 Während der frühen Entwicklung wird nur die jeweils aktuelle veröffentlichte
-Version unterstützt. Der aktuelle Entwicklungsstand ist 0.12.4.
+Version unterstützt. Der aktuelle Entwicklungsstand ist 0.13.0.
 
 ## Sicherheitsproblem melden
 
@@ -26,7 +26,9 @@ Stattdessen bitte einen privaten Security Advisory im GitHub-Repository öffnen:
   Gesamtgröße und Mindestmaterialstärke, bevor lokale Geometrie entsteht.
 - Bild-, Schrift-, Relief-, Tiefen- und AMS-Workflows arbeiten lokal. Nur beim
   ausdrücklich gestarteten Prompt-zu-3D-Workflow wird die Beschreibung an
-  OpenAI übertragen.
+  OpenAI übertragen. Bei einer Folgeanweisung wird außerdem der zuvor
+  validierte strukturierte CAD-Bauplan übertragen; STL und 3D-Vorschau bleiben
+  lokal.
 - Updateprüfungen greifen ausschließlich auf GitHub Releases dieses Projekts zu.
 
 ## Lokale Daten

@@ -27,6 +27,9 @@ type StudioTool = "home" | "image" | "text" | "prompt";
 type LegalPage = "imprint" | "privacy" | "cookies" | null;
 type SelectedImage = { path: string; name: string; size: number; width: number; height: number; suggestedProfile: "logo" | "photo"; dataUrl: string };
 type ReliefResult = Awaited<ReturnType<NonNullable<typeof window.desktop>["createRelief"]>>;
+type Ai3dResult = Awaited<ReturnType<NonNullable<typeof window.desktop>["createAi3d"]>>;
+type CadPlan = Ai3dResult["plan"];
+type CadPrimitive = CadPlan["primitives"][number];
 type QualityProfile = "fast" | "balanced" | "fine" | "photo" | "logo";
 type ProcessingMode = "auto" | "vector" | "depth" | "height" | "scan";
 type HistoryEntry = {
@@ -659,17 +662,30 @@ function TextToStlDialog({
 
 function Ai3dDialog({ close }: { close: () => void }) {
   const [prompt, setPrompt] = useState("Ein kleines Haus mit vier Fenstern, einem Stockwerk und einem Spitzdach");
+  const [followUp, setFollowUp] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<Awaited<ReturnType<NonNullable<typeof window.desktop>["createAi3d"]>> | null>(null);
-  async function submit() {
-    setBusy(true); setError(null); setResult(null);
+  const [result, setResult] = useState<Ai3dResult | null>(null);
+  const [previousResults, setPreviousResults] = useState<Ai3dResult[]>([]);
+  async function submit(instruction: string, existing?: Ai3dResult) {
+    setBusy(true); setError(null);
     try {
       if (!window.desktop) throw new Error("Prompt zu 3D ist nur in der installierten App verfügbar.");
-      setResult(await window.desktop.createAi3d(prompt));
+      const next = await window.desktop.createAi3d(instruction, existing?.plan);
+      if (existing) setPreviousResults((current) => [...current, existing]);
+      else setPreviousResults([]);
+      setResult(next);
+      setFollowUp("");
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : "Das KI-Modell konnte nicht erstellt werden.");
     } finally { setBusy(false); }
+  }
+  function undoRevision() {
+    setPreviousResults((current) => {
+      const previous = current.at(-1);
+      if (previous) setResult(previous);
+      return current.slice(0, -1);
+    });
   }
   return (
     <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && !busy && close()}>
@@ -677,21 +693,104 @@ function Ai3dDialog({ close }: { close: () => void }) {
         <button className="modal-close" onClick={close} disabled={busy} aria-label="Dialog schließen"><X /></button>
         <div className="modal-icon"><Sparkles /></div>
         <p className="eyebrow">KI · VOLLSTÄNDIGES 3D-OBJEKT</p>
-        <h2 id="ai3d-title">Prompt zu druckbarer STL</h2>
-        <p>Beschreibe Form, Anzahl und wichtige Details. OpenAI erstellt daraus einen druckgerechten CAD-Bauplan; die App erzeugt das STL anschließend lokal.</p>
-        <label htmlFor="ai3d-prompt">OBJEKT BESCHREIBEN</label>
-        <textarea id="ai3d-prompt" rows={5} maxLength={800} value={prompt} onChange={(event) => setPrompt(event.target.value)} disabled={busy} />
-        <div className="notice">Nur der eingegebene Text wird an OpenAI übertragen. Bauplan, Geometrie und STL werden anschließend lokal auf deinem Mac verarbeitet.</div>
-        {busy && <div className="ai-progress"><span /><div><strong>OpenAI konstruiert den CAD-Bauplan …</strong><small>Danach erzeugt die App das STL lokal.</small></div></div>}
+        <h2 id="ai3d-title">{result ? "3D-Modell prüfen und weiterentwickeln" : "Prompt zu druckbarer STL"}</h2>
+        {!result && <>
+          <p>Beschreibe Form, Anzahl und wichtige Details. OpenAI erstellt daraus einen druckgerechten CAD-Bauplan; die App erzeugt das STL anschließend lokal.</p>
+          <label htmlFor="ai3d-prompt">OBJEKT BESCHREIBEN</label>
+          <textarea id="ai3d-prompt" rows={5} maxLength={800} value={prompt} onChange={(event) => setPrompt(event.target.value)} disabled={busy} />
+        </>}
+        {result && <div className="ai3d-workspace">
+          <CadPlanPreview plan={result.plan} />
+          <div className="ai3d-result-summary">
+            <div><strong>{result.plan.title}</strong><small>{result.plan.primitives.length} Bauteile · {result.plan.widthMm} × {result.plan.depthMm} × {result.plan.heightMm} mm</small></div>
+            <div className="ai3d-result-actions">
+              {previousResults.length > 0 && <button className="secondary-button" onClick={undoRevision} disabled={busy}>Letzte Änderung zurück</button>}
+              <button className="secondary-button" onClick={() => void window.desktop?.showItemInFolder(result.stlPath)}>STL im Finder</button>
+            </div>
+          </div>
+          <div className="ai3d-follow-up">
+            <label htmlFor="ai3d-follow-up">MODELL WEITER BEARBEITEN</label>
+            <textarea
+              id="ai3d-follow-up"
+              rows={3}
+              maxLength={800}
+              value={followUp}
+              placeholder="Zum Beispiel: Füge unten links und rechts zwei Haustüren hinzu."
+              onChange={(event) => setFollowUp(event.target.value)}
+              disabled={busy}
+            />
+            <button className="primary-button" disabled={busy || followUp.trim().length < 3} onClick={() => void submit(followUp, result)}>
+              {busy ? "Änderung wird konstruiert …" : "Änderung anwenden"} <ChevronRight />
+            </button>
+          </div>
+        </div>}
+        <div className="notice">{result ? "Für Änderungen werden deine Folgeanweisung und der aktuelle CAD-Bauplan an OpenAI übertragen. Vorschau, Geometrie und STL werden lokal erzeugt." : "Nur deine Beschreibung wird an OpenAI übertragen. Geometrie und STL werden anschließend lokal auf deinem Mac erzeugt."}</div>
+        {busy && <div className="ai-progress"><span /><div><strong>{result ? "OpenAI überarbeitet den CAD-Bauplan …" : "OpenAI konstruiert den CAD-Bauplan …"}</strong><small>Danach aktualisiert die App Vorschau und STL lokal.</small></div></div>}
         {error && <div className="notice error">{error}</div>}
-        {result && <div className="ai-result"><div><strong>{result.plan.title} · STL erfolgreich erstellt</strong><small>{result.plan.primitives.length} Bauteile · {result.plan.widthMm} × {result.plan.depthMm} × {result.plan.heightMm} mm</small><button className="secondary-button" onClick={() => void window.desktop?.showItemInFolder(result.stlPath)}>Im Finder zeigen</button></div></div>}
         <div className="modal-actions">
           <button className="secondary-button" onClick={close} disabled={busy}>{result ? "Schließen" : "Abbrechen"}</button>
-          {!result && <button className="primary-button" disabled={busy || prompt.trim().length < 10} onClick={() => void submit()}>{busy ? "OpenAI konstruiert …" : "3D-Modell erstellen"} <ChevronRight /></button>}
+          {!result && <button className="primary-button" disabled={busy || prompt.trim().length < 10} onClick={() => void submit(prompt)}>{busy ? "OpenAI konstruiert …" : "3D-Modell erstellen"} <ChevronRight /></button>}
         </div>
       </section>
     </div>
   );
+}
+
+function CadPlanPreview({ plan }: { plan: CadPlan }) {
+  const span = Math.max(plan.widthMm, plan.depthMm, plan.heightMm, 20);
+  return (
+    <div className="cad-preview">
+      <div className="panel-label">3D-VORSCHAU · ZIEHEN ZUM DREHEN</div>
+      <Canvas camera={{ position: [span * 1.25, span * 0.9, span * 1.35], fov: 42, near: 0.1, far: span * 10 }} shadows>
+        <color attach="background" args={["#090d13"]} />
+        <ambientLight intensity={1.15} />
+        <directionalLight position={[span, span * 1.5, span]} intensity={2.1} castShadow />
+        <group position={[-plan.widthMm / 2, 0, -plan.depthMm / 2]}>
+          {plan.primitives.map((primitive, index) => <CadPrimitiveMesh primitive={primitive} key={`${primitive.name}-${index}`} />)}
+        </group>
+        <gridHelper args={[span * 2.5, 24, "#344151", "#202936"]} position={[0, -0.05, 0]} />
+        <OrbitControls makeDefault target={[0, plan.heightMm * 0.35, 0]} enableDamping minDistance={span * 0.65} maxDistance={span * 4} />
+      </Canvas>
+    </div>
+  );
+}
+
+function CadPrimitiveMesh({ primitive }: { primitive: CadPrimitive }) {
+  const [x, y, z] = primitive.position;
+  const [width, depth, height] = primitive.size;
+  const color = primitive.type === "roof" ? "#d98f5c" : primitive.name.toLowerCase().includes("fenster") ? "#71b8ed" : primitive.name.toLowerCase().includes("tür") ? "#9b6848" : "#d9e5cf";
+  if (primitive.type === "cylinder") {
+    return <mesh position={[x, z + height / 2, y]} castShadow receiveShadow>
+      <cylinderGeometry args={[width / 2, width / 2, height, 48]} />
+      <meshStandardMaterial color={color} roughness={0.68} metalness={0.02} />
+    </mesh>;
+  }
+  if (primitive.type === "roof") {
+    return <RoofMesh primitive={primitive} color={color} />;
+  }
+  return <mesh position={[x + width / 2, z + height / 2, y + depth / 2]} castShadow receiveShadow>
+    <boxGeometry args={[width, height, depth]} />
+    <meshStandardMaterial color={color} roughness={0.72} metalness={0.01} />
+  </mesh>;
+}
+
+function RoofMesh({ primitive, color }: { primitive: CadPrimitive; color: string }) {
+  const [x, y, z] = primitive.position;
+  const [width, depth, height] = primitive.size;
+  const geometry = useMemo(() => {
+    const next = new THREE.BufferGeometry();
+    next.setAttribute("position", new THREE.Float32BufferAttribute([
+      -width / 2, -height / 2, -depth / 2, width / 2, -height / 2, -depth / 2, 0, height / 2, -depth / 2,
+      -width / 2, -height / 2, depth / 2, width / 2, -height / 2, depth / 2, 0, height / 2, depth / 2
+    ], 3));
+    next.setIndex([0, 2, 1, 3, 4, 5, 0, 1, 4, 0, 4, 3, 1, 2, 5, 1, 5, 4, 2, 0, 3, 2, 3, 5]);
+    next.computeVertexNormals();
+    return next;
+  }, [width, depth, height]);
+  useEffect(() => () => geometry.dispose(), [geometry]);
+  return <mesh geometry={geometry} position={[x + width / 2, z + height / 2, y + depth / 2]} castShadow receiveShadow>
+    <meshStandardMaterial color={color} roughness={0.7} />
+  </mesh>;
 }
 
 function HistoryView({ entries, clear }: { entries: HistoryEntry[]; clear: () => void }) {

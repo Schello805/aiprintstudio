@@ -9,7 +9,7 @@ contextBridge.exposeInMainWorld("desktop", Object.freeze({
   acceptModelSetup: () => ipcRenderer.invoke("settings:acceptModelSetup"),
   selectImage: () => ipcRenderer.invoke("image:select"),
   createTextImage: (options) => ipcRenderer.invoke("text:createImage", options),
-  createAi3d: (prompt) => ipcRenderer.invoke("ai3d:create", prompt),
+  createAi3d: (prompt, existingPlan) => ipcRenderer.invoke("ai3d:create", prompt, existingPlan),
   createObjectCapture: () => ipcRenderer.invoke("objectCapture:create"),
   createRelief: (imagePath, options, editorHeightmapDataUrl, editorColorMapDataUrl) => ipcRenderer.invoke("relief:create", imagePath, options, editorHeightmapDataUrl, editorColorMapDataUrl),
   showItemInFolder: (path) => ipcRenderer.invoke("shell:showItem", path),

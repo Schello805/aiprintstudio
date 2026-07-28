@@ -22,6 +22,15 @@ export function validateCadPlan(value: unknown): CadPlan {
   if (typeof plan.title !== "string" || !Array.isArray(plan.primitives) || !plan.primitives.length || plan.primitives.length > 80) {
     throw new Error("Der CAD-Bauplan ist leer oder zu komplex.");
   }
+  if (
+    plan.title.trim().length < 1 ||
+    plan.title.length > 120 ||
+    [plan.widthMm, plan.depthMm, plan.heightMm].some((dimension) =>
+      typeof dimension !== "number" || !Number.isFinite(dimension) || dimension < 5 || dimension > 300
+    )
+  ) {
+    throw new Error("Der CAD-Bauplan enthält ungültige Gesamtmaße.");
+  }
   for (const primitive of plan.primitives) {
     if (!["box", "cylinder", "roof"].includes(primitive.type) || !Array.isArray(primitive.position) || !Array.isArray(primitive.size)) {
       throw new Error("Der CAD-Bauplan enthält eine unbekannte Form.");
@@ -32,6 +41,22 @@ export function validateCadPlan(value: unknown): CadPlan {
     if (primitive.size.some((number) => number < 1.2)) throw new Error("OpenAI hat ein Bauteil unter 1,2 mm erzeugt.");
   }
   return plan as CadPlan;
+}
+
+export function buildCadPlanningRequest(instruction: string, existingPlan?: CadPlan): string {
+  const normalized = instruction.trim();
+  if (normalized.length < 3 || normalized.length > 800) {
+    throw new Error("Die Anweisung muss zwischen 3 und 800 Zeichen enthalten.");
+  }
+  const rules = `Use only additive boxes, vertical cylinders and triangular-prism roofs. All coordinates and sizes are millimeters. Put the object on z=0, keep every feature connected or intersecting, use at least 1.2 mm thickness, prefer a stable flat base, and model requested windows/doors as raised frames or panels. Preserve exact requested counts. Keep it under 80 primitives.`;
+  if (!existingPlan) return `Create a printable constructive CAD plan for this request: ${normalized}
+${rules}`;
+  const validated = validateCadPlan(existingPlan);
+  return `Revise the existing printable CAD plan according to this follow-up instruction: ${normalized}
+Return the complete replacement plan, not a patch. Preserve every existing feature that the instruction does not explicitly change. Keep names and coordinates stable where possible.
+Existing CAD plan:
+${JSON.stringify(validated)}
+${rules}`;
 }
 
 export function encodeCadStl(plan: CadPlan): Buffer {

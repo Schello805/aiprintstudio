@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { encodeCadStl, validateCadPlan } from "./cad";
+import { buildCadPlanningRequest, encodeCadStl, validateCadPlan } from "./cad";
 
 describe("OpenAI CAD generator", () => {
   it("creates a binary STL from boxes, cylinders and roofs", () => {
@@ -17,6 +17,24 @@ describe("OpenAI CAD generator", () => {
   });
 
   it("rejects unsafe or overly thin plans", () => {
-    expect(() => validateCadPlan({ title: "Fehler", primitives: [{ type: "box", name: "dünn", position: [0, 0, 0], size: [1, 10, 10] }] })).toThrow("1,2 mm");
+    expect(() => validateCadPlan({
+      title: "Fehler", widthMm: 20, depthMm: 20, heightMm: 20,
+      primitives: [{ type: "box", name: "dünn", position: [0, 0, 0], size: [1, 10, 10] }]
+    })).toThrow("1,2 mm");
+    expect(() => validateCadPlan({
+      title: "Fehler", widthMm: Number.NaN, depthMm: 20, heightMm: 20,
+      primitives: [{ type: "box", name: "Körper", position: [0, 0, 0], size: [10, 10, 10] }]
+    })).toThrow("Gesamtmaße");
+  });
+
+  it("includes the validated existing plan in a follow-up request", () => {
+    const plan = validateCadPlan({
+      title: "Haus", widthMm: 80, depthMm: 60, heightMm: 70,
+      primitives: [{ type: "box", name: "Hauskörper", position: [0, 0, 0], size: [80, 60, 45] }]
+    });
+    const request = buildCadPlanningRequest("Füge unten links und rechts zwei Haustüren hinzu.", plan);
+    expect(request).toContain("complete replacement plan");
+    expect(request).toContain("Hauskörper");
+    expect(request).toContain("zwei Haustüren");
   });
 });

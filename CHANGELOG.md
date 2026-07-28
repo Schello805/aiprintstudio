@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.13.0
+
+- Prompt zu 3D zeigt das erzeugte CAD-Modell unmittelbar als dreh- und zoombare lokale 3D-Vorschau.
+- Folgeanweisungen überarbeiten den bestehenden CAD-Bauplan, statt ein neues Modell ohne Kontext zu erzeugen.
+- Nicht ausdrücklich geänderte Bauteile sollen bei Revisionen erhalten bleiben; jede Antwort liefert einen vollständig validierten Ersatzplan.
+- Frühere Revisionen lassen sich im geöffneten Dialog schrittweise wiederherstellen.
+- Bauteile wie Dächer, Fenster und Türen erhalten in der Vorschau unterscheidbare Materialien.
+- Jede Revision erzeugt lokal eine neue STL und kann direkt im Finder geöffnet werden.
+- Datenschutztext und CAD-Validierung berücksichtigen den bei Folgeanweisungen übertragenen Ausgangsplan.
+
 ## 0.12.4
 
 - Lokal gerenderte Schrift wird in der Originalvorschau reinweiß statt fast schwarz dargestellt.

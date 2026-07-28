@@ -361,6 +361,20 @@ footer { padding:17px 36px; border-top:1px solid #1c2028; display:flex; justify-
 .legal-shell article>p:not(.eyebrow) { color:#a1a9b5; line-height:1.75; font-size:13px; }
 .modal-backdrop { position:fixed; inset:0; z-index:50; display:grid; place-items:center; background:#05070ad9; backdrop-filter:blur(10px); padding:30px; }
 .modal { width:min(560px,100%); position:relative; border:1px solid #2a303b; border-radius:20px; padding:34px; background:linear-gradient(145deg,#151922,#0e1218); box-shadow:0 30px 90px #000a; }
+.ai3d-modal { width:min(940px,calc(100vw - 60px)); max-height:calc(100vh - 60px); overflow:auto; }
+.ai3d-workspace { display:grid; gap:12px; margin-top:18px; }
+.cad-preview { position:relative; height:390px; overflow:hidden; border:1px solid #303a47; border-radius:14px; background:#090d13; }
+.cad-preview canvas { cursor:grab; }
+.cad-preview canvas:active { cursor:grabbing; }
+.ai3d-result-summary { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:12px 14px; border:1px solid #31402f; border-radius:11px; background:#101710; }
+.ai3d-result-summary strong,.ai3d-result-summary small { display:block; }
+.ai3d-result-summary strong { color:#e1eadc; font-size:12px; }
+.ai3d-result-summary small { margin-top:4px; color:#82907e; font-size:9px; }
+.ai3d-result-actions { display:flex; gap:8px; flex:0 0 auto; }
+.ai3d-follow-up { display:grid; grid-template-columns:1fr auto; gap:8px 10px; align-items:end; padding:14px; border:1px solid #384a32; border-radius:12px; background:#111912; }
+.ai3d-follow-up label { grid-column:1/-1; margin:0!important; color:#a8bc9e!important; }
+.ai3d-follow-up textarea { min-height:74px; }
+.ai3d-follow-up .primary-button { align-self:stretch; justify-content:center; min-width:185px; }
 .modal-close { position:absolute; top:18px; right:18px; width:34px; height:34px; display:grid; place-items:center; border:1px solid #303641; border-radius:9px; background:#171b22; color:#8f97a3; cursor:pointer; }
 .modal-close svg { width:17px; }
 .modal-icon { width:48px; height:48px; display:grid; place-items:center; color:#a5f36d; background:#19231a; border-radius:13px; margin-bottom:22px; }
@@ -389,3 +403,4 @@ footer { padding:17px 36px; border-top:1px solid #1c2028; display:flex; justify-
 .consent { display:flex; gap:10px; align-items:flex-start; color:#abb2bd; font-size:11px; line-height:1.5; cursor:pointer; }
 .consent input { accent-color:#a5f36d; margin-top:2px; }
 @media(max-width:1100px){.app-shell{grid-template-columns:200px 1fr}.workspace{width:calc(100% - 60px)}.topbar{padding-left:38px;padding-right:38px}}
+@media(max-width:760px){.ai3d-modal{width:calc(100vw - 24px);padding:22px}.cad-preview{height:300px}.ai3d-result-summary{align-items:flex-start;flex-direction:column}.ai3d-follow-up{grid-template-columns:1fr}.ai3d-follow-up .primary-button{min-width:0}.ai3d-result-actions{flex-wrap:wrap}}

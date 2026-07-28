@@ -9,7 +9,7 @@ import { promisify } from "node:util";
 import sharp, { type Metadata } from "sharp";
 import { createRelief, type ReliefOptions } from "./relief.js";
 import { renderTextImage, type TextImageOptions } from "./text-image.js";
-import { encodeCadStl, validateCadPlan } from "./cad.js";
+import { buildCadPlanningRequest, encodeCadStl, validateCadPlan, type CadPlan } from "./cad.js";
 
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
 const developmentUrl = process.env.VITE_DEV_SERVER_URL ?? "http://localhost:5173";
@@ -177,7 +177,7 @@ function decryptSetting(value?: string): string | null {
   catch { return null; }
 }
 
-async function createPrintableCadPlan(prompt: string, settings: StoredSettings) {
+async function createPrintableCadPlan(prompt: string, settings: StoredSettings, existingPlan?: CadPlan) {
   const apiKey = decryptSetting(settings.encryptedOpenAiKey);
   if (!apiKey) throw new Error("Bitte hinterlege zuerst in den Einstellungen deinen OpenAI API-Schlüssel.");
   const primitiveSchema = {
@@ -197,8 +197,7 @@ async function createPrintableCadPlan(prompt: string, settings: StoredSettings) 
     body: JSON.stringify({
       model: "gpt-5.6-sol",
       reasoning: { effort: "medium" },
-      input: `Create a printable constructive CAD plan for this request: ${prompt}
-Use only additive boxes, vertical cylinders and triangular-prism roofs. All coordinates and sizes are millimeters. Put the object on z=0, keep every feature connected or intersecting, use at least 1.2 mm thickness, prefer a stable flat base, and model requested windows/doors as raised frames or panels. Preserve exact requested counts. Keep it under 80 primitives.`,
+      input: buildCadPlanningRequest(prompt, existingPlan),
       text: {
         format: {
           type: "json_schema",
@@ -408,11 +407,14 @@ app.whenReady().then(async () => {
       dataUrl: `data:image/png;base64,${png.toString("base64")}`
     };
   });
-  ipcMain.handle("ai3d:create", async (_event, promptValue: string) => {
+  ipcMain.handle("ai3d:create", async (_event, promptValue: string, existingPlanValue?: unknown) => {
     const prompt = promptValue.trim();
-    if (prompt.length < 10 || prompt.length > 800) throw new Error("Beschreibe das Objekt bitte mit 10 bis 800 Zeichen.");
+    if (prompt.length < (existingPlanValue ? 3 : 10) || prompt.length > 800) {
+      throw new Error(existingPlanValue ? "Die Folgeanweisung muss 3 bis 800 Zeichen enthalten." : "Beschreibe das Objekt bitte mit 10 bis 800 Zeichen.");
+    }
     const settings = await readSettings();
-    const plan = await createPrintableCadPlan(prompt, settings);
+    const existingPlan = existingPlanValue ? validateCadPlan(existingPlanValue) : undefined;
+    const plan = await createPrintableCadPlan(prompt, settings, existingPlan);
     const outputDirectory = join(app.getPath("downloads"), "AI Print Studio");
     await mkdir(outputDirectory, { recursive: true });
     const stlPath = join(outputDirectory, `ki-${Date.now()}.stl`);

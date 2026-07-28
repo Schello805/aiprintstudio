@@ -69,6 +69,12 @@ Grundkörpern. `electron/cad.ts` validiert Bauteilzahl, Koordinaten, Gesamtgrö�
 und Mindestmaterialstärke und erzeugt die Binär-STL lokal. Beliebiger Modellcode
 wird nicht ausgeführt und fremde Mesh-Dateien werden nicht heruntergeladen.
 
+Der Renderer baut aus demselben Plan eine lokale Three.js-Vorschau auf. Eine
+Folgeanweisung überträgt den validierten Ausgangsplan zusammen mit der neuen
+Anweisung an OpenAI. Die Antwort ist stets ein vollständiger Ersatzplan, wird
+erneut validiert und als neue STL gespeichert. Vorherige Pläne bleiben während
+des geöffneten Dialogs für Rückgängig erhalten.
+
 Der Workflow ist für einfache konstruktive Modelle gedacht. Organische
 Text-zu-3D-Rekonstruktion ist nicht Teil der aktuellen Architektur.
 
