@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.3
+
+- Sofort sichtbare Tooltips für alle Verarbeitungsarten, Qualitätsprofile und Reliefparameter
+- Jeder Hinweis erklärt die Wirkung der Einstellung und nennt ein konkretes Anwendungsbeispiel
+- Tooltips funktionieren per Maus und Tastaturfokus und bleiben an den äußeren Karten vollständig sichtbar
+
 ## 0.6.2
 
 - Glättet die tatsächliche Außenkontur des Export- und Vorschaumeshes statt nur die Randhöhe

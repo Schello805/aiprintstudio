@@ -28,13 +28,31 @@ type HistoryEntry = {
   triangleCount: number; widthMm: number; heightMm: number; profile: QualityProfile; score: number;
 };
 
-const profileOptions: { id: QualityProfile; label: string; description: string; resolution: number }[] = [
-  { id: "fast", label: "Schnell", description: "Vorschau & Entwurf", resolution: 128 },
-  { id: "balanced", label: "Standard", description: "Gute Allround-Qualität", resolution: 256 },
-  { id: "fine", label: "Fein", description: "Maximale Oberflächendetails", resolution: 512 },
-  { id: "photo", label: "Foto", description: "Weiche Tiefenübergänge", resolution: 320 },
-  { id: "logo", label: "Logo", description: "Klare Kanten & Ebenen", resolution: 256 }
+const profileOptions: { id: QualityProfile; label: string; description: string; resolution: number; tooltip: string }[] = [
+  { id: "fast", label: "Schnell", description: "Vorschau & Entwurf", resolution: 128, tooltip: "Berechnet ein gröberes Mesh besonders schnell.\nBeispiel: Für einen ersten Formtest vor dem finalen Export." },
+  { id: "balanced", label: "Standard", description: "Gute Allround-Qualität", resolution: 256, tooltip: "Guter Kompromiss aus Detail, Dateigröße und Rechenzeit.\nBeispiel: Für die meisten Motive und normale FDM-Drucke." },
+  { id: "fine", label: "Fein", description: "Maximale Oberflächendetails", resolution: 512, tooltip: "Verwendet die höchste Auflösung und benötigt mehr Zeit.\nBeispiel: Für feine Gravuren oder große Resin-Drucke." },
+  { id: "photo", label: "Foto", description: "Weiche Tiefenübergänge", resolution: 320, tooltip: "Erhält sanfte Übergänge und vermeidet harte Höhenstufen.\nBeispiel: Für Gesichter, Tiere oder Landschaftsfotos." },
+  { id: "logo", label: "Logo", description: "Klare Kanten & Ebenen", resolution: 256, tooltip: "Trennt umrandete Flächen in klar definierte Höhenebenen.\nBeispiel: Beim Wappen werden Grundfläche, Rollen und Details gestaffelt." }
 ];
+
+const modeTooltips: Record<ProcessingMode, string> = {
+  auto: "Analysiert das Bild und wählt den passenden Reliefmodus.\nBeispiel: Ein Wappen wird als Kontur-Relief, ein Foto als Höhenbild verarbeitet.",
+  vector: "Erkennt geschlossene Flächen und ordnet ihnen feste Höhen zu.\nBeispiel: Schrift, Logos und die Rollen eines Wappens werden klar angehoben.",
+  depth: "Schätzt mit Depth Anything V2 die räumliche Tiefe eines Fotos.\nBeispiel: Eine Person wird vom Hintergrund räumlich getrennt.",
+  height: "Übernimmt die Helligkeit des Bildes direkt als Höhe.\nBeispiel: Weiß entspricht hoch und Schwarz niedrig – oder umgekehrt.",
+  scan: "Erzeugt aus vielen Blickwinkeln ein vollständiges 3D-Objekt.\nBeispiel: 40 Fotos rund um eine Figur ergeben einen USDZ-Scan."
+};
+
+const parameterTooltips = {
+  width: "Bestimmt die Gesamtbreite des fertigen Modells; die Höhe folgt dem Bildformat.\nBeispiel: 100 mm erzeugt ein etwa handgroßes Wappen.",
+  base: "Dicke der stabilen Platte unter dem Relief.\nBeispiel: 1,6 mm eignet sich meist für ein leichtes Wandschild.",
+  relief: "Maximaler Höhenunterschied zwischen tiefster und höchster Motivfläche.\nBeispiel: 4 mm lässt Rollen deutlich aus dem Wappen hervortreten.",
+  smoothing: "Glättet kleine Unebenheiten und Bildrauschen; hohe Werte entfernen Details.\nBeispiel: 2 glättet Kanten moderat, 4 eignet sich für unruhige Fotos.",
+  detail: "Führt feine Bildinformationen nach der Glättung wieder zurück.\nBeispiel: 1 ist neutral, 1,5 betont feine Linien stärker.",
+  dark: "Dunkle Bildbereiche werden höher als helle Bereiche ausgegeben.\nBeispiel: Schwarze Schrift steht erhaben auf weißem Grund.",
+  light: "Helle Bildbereiche werden höher als dunkle Bereiche ausgegeben.\nBeispiel: Ein weißes Motiv steht erhaben auf schwarzem Grund."
+};
 
 const navigation = [
   { id: "studio" as const, label: "Studio", icon: Sparkles },
@@ -197,20 +215,20 @@ export function App() {
               <div className="option-group">
                 <span className="option-label">VERARBEITUNG</span>
                 <div className="mode-grid">
-                  <button className={processingMode === "auto" ? "mode-option selected" : "mode-option"} onClick={() => setProcessingMode("auto")}>
-                    <Sparkles /><div><strong>Automatisch</strong><span>Wählt passend zu deinem Bild</span></div>
+                  <button className={processingMode === "auto" ? "mode-option has-tooltip selected" : "mode-option has-tooltip"} onClick={() => setProcessingMode("auto")} aria-description={modeTooltips.auto}>
+                    <Sparkles /><div><strong>Automatisch</strong><span>Wählt passend zu deinem Bild</span></div><SettingTooltip text={modeTooltips.auto} />
                   </button>
-                  <button className={processingMode === "vector" ? "mode-option selected" : "mode-option"} onClick={() => { setProcessingMode("vector"); setProfile("logo"); }}>
-                    <Layers3 /><div><strong>Kontur-Relief</strong><span>Logos, Wappen und Schrift</span></div>
+                  <button className={processingMode === "vector" ? "mode-option has-tooltip selected" : "mode-option has-tooltip"} onClick={() => { setProcessingMode("vector"); setProfile("logo"); }} aria-description={modeTooltips.vector}>
+                    <Layers3 /><div><strong>Kontur-Relief</strong><span>Logos, Wappen und Schrift</span></div><SettingTooltip text={modeTooltips.vector} />
                   </button>
-                  <button className={processingMode === "depth" ? "mode-option selected" : "mode-option"} onClick={() => { setProcessingMode("depth"); setProfile("photo"); }}>
-                    <Box /><div><strong>KI-Tiefe</strong><span>Depth Anything V2 · lokal</span></div>
+                  <button className={processingMode === "depth" ? "mode-option has-tooltip selected" : "mode-option has-tooltip"} onClick={() => { setProcessingMode("depth"); setProfile("photo"); }} aria-description={modeTooltips.depth}>
+                    <Box /><div><strong>KI-Tiefe</strong><span>Depth Anything V2 · lokal</span></div><SettingTooltip text={modeTooltips.depth} />
                   </button>
-                  <button className={processingMode === "height" ? "mode-option selected" : "mode-option"} onClick={() => setProcessingMode("height")}>
-                    <ImagePlus /><div><strong>Höhenkarte</strong><span>Helligkeit direkt übernehmen</span></div>
+                  <button className={processingMode === "height" ? "mode-option has-tooltip selected" : "mode-option has-tooltip"} onClick={() => setProcessingMode("height")} aria-description={modeTooltips.height}>
+                    <ImagePlus /><div><strong>Höhenkarte</strong><span>Helligkeit direkt übernehmen</span></div><SettingTooltip text={modeTooltips.height} />
                   </button>
-                  <button className={processingMode === "scan" ? "mode-option selected" : "mode-option"} onClick={() => setProcessingMode("scan")}>
-                    <Layers3 /><div><strong>Mehrfoto-Scan</strong><span>Apple Object Capture · 12–300 Fotos</span></div>
+                  <button className={processingMode === "scan" ? "mode-option has-tooltip selected" : "mode-option has-tooltip"} onClick={() => setProcessingMode("scan")} aria-description={modeTooltips.scan}>
+                    <Layers3 /><div><strong>Mehrfoto-Scan</strong><span>Apple Object Capture · 12–300 Fotos</span></div><SettingTooltip text={modeTooltips.scan} />
                   </button>
                 </div>
               </div>
@@ -225,25 +243,25 @@ export function App() {
                     <span className="option-label">QUALITÄTSPROFIL</span>
                     <div className="profile-grid">
                       {profileOptions.map((option) => (
-                        <button key={option.id} className={profile === option.id ? "profile-option selected" : "profile-option"} onClick={() => setProfile(option.id)}>
-                          <strong>{option.label}</strong><span>{option.description}</span>
+                        <button key={option.id} className={profile === option.id ? "profile-option has-tooltip selected" : "profile-option has-tooltip"} onClick={() => setProfile(option.id)} aria-description={option.tooltip}>
+                          <strong>{option.label}</strong><span>{option.description}</span><SettingTooltip text={option.tooltip} />
                         </button>
                       ))}
                     </div>
                   </div>
                   <div className="parameter-grid">
-                    <NumberField label="BREITE" value={widthMm} unit="mm" min={20} max={300} step={5} setValue={setWidthMm} />
-                    <NumberField label="GRUNDPLATTE" value={baseMm} unit="mm" min={0.8} max={10} step={0.2} setValue={setBaseMm} />
-                    <NumberField label="RELIEF" value={reliefMm} unit="mm" min={0.5} max={20} step={0.5} setValue={setReliefMm} />
-                    <NumberField label="GLÄTTUNG" value={smoothing} min={0} max={5} step={1} setValue={setSmoothing} />
-                    <NumberField label="DETAIL" value={detail} min={0} max={2} step={0.25} setValue={setDetail} />
+                    <NumberField label="BREITE" tooltip={parameterTooltips.width} value={widthMm} unit="mm" min={20} max={300} step={5} setValue={setWidthMm} />
+                    <NumberField label="GRUNDPLATTE" tooltip={parameterTooltips.base} value={baseMm} unit="mm" min={0.8} max={10} step={0.2} setValue={setBaseMm} />
+                    <NumberField label="RELIEF" tooltip={parameterTooltips.relief} value={reliefMm} unit="mm" min={0.5} max={20} step={0.5} setValue={setReliefMm} />
+                    <NumberField label="GLÄTTUNG" tooltip={parameterTooltips.smoothing} value={smoothing} min={0} max={5} step={1} setValue={setSmoothing} />
+                    <NumberField label="DETAIL" tooltip={parameterTooltips.detail} value={detail} min={0} max={2} step={0.25} setValue={setDetail} />
                   </div>
                   <div className="option-footer">
                     <div>
                       <span className="option-label">RELIEF-RICHTUNG</span>
                       <div className="segmented-control">
-                        <button className={!raiseLightAreas ? "selected" : ""} onClick={() => setRaiseLightAreas(false)}>Dunkles anheben</button>
-                        <button className={raiseLightAreas ? "selected" : ""} onClick={() => setRaiseLightAreas(true)}>Helles anheben</button>
+                        <button className={!raiseLightAreas ? "has-tooltip selected" : "has-tooltip"} onClick={() => setRaiseLightAreas(false)} aria-description={parameterTooltips.dark}>Dunkles anheben<SettingTooltip text={parameterTooltips.dark} /></button>
+                        <button className={raiseLightAreas ? "has-tooltip selected" : "has-tooltip"} onClick={() => setRaiseLightAreas(true)} aria-description={parameterTooltips.light}>Helles anheben<SettingTooltip text={parameterTooltips.light} /></button>
                       </div>
                     </div>
                     <div className="cost-estimate">
@@ -317,13 +335,24 @@ function ReliefPreview({ result }: { result: NonNullable<ReliefResult> }) {
   );
 }
 
-function NumberField({ label, value, unit, min, max, step, setValue }: {
-  label: string; value: number; unit?: string; min: number; max: number; step: number; setValue: (value: number) => void;
+function SettingTooltip({ text }: { text: string }) {
+  const [explanation, example] = text.split("\n");
+  return (
+    <span className="setting-tooltip" role="tooltip" aria-hidden="true">
+      <span>{explanation}</span>
+      {example && <em>{example}</em>}
+    </span>
+  );
+}
+
+function NumberField({ label, tooltip, value, unit, min, max, step, setValue }: {
+  label: string; tooltip: string; value: number; unit?: string; min: number; max: number; step: number; setValue: (value: number) => void;
 }) {
   return (
-    <label className="number-field">
+    <label className="number-field has-tooltip">
       <span>{label}</span>
-      <div><input type="number" value={value} min={min} max={max} step={step} onChange={(event) => setValue(Math.max(min, Math.min(max, Number(event.target.value))))} />{unit && <small>{unit}</small>}</div>
+      <div><input type="number" aria-description={tooltip} value={value} min={min} max={max} step={step} onChange={(event) => setValue(Math.max(min, Math.min(max, Number(event.target.value))))} />{unit && <small>{unit}</small>}</div>
+      <SettingTooltip text={tooltip} />
     </label>
   );
 }
