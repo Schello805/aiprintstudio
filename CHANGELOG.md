@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.4
+
+- Logos werden mit höherer Mesh-Auflösung verarbeitet, damit runde Außenkonturen weniger polygonal wirken.
+- Die Silhouetten-Glättung arbeitet mit zusätzlichen Konturpässen, ohne innere Schrift- und Motivdetails weichzuzeichnen.
+- Die 3D-Vorschau tastet Außenkanten feiner ab und zeigt Rundungen näher am exportierten Modell.
+- Ein geometrischer Regressionstest schützt kreisförmige Konturen vor erneutem Treppeneffekt.
+
 ## 0.7.3
 
 - Tooltips öffnen jetzt ausschließlich über gut sichtbare Info-Symbole statt beim Überfahren kompletter Felder.

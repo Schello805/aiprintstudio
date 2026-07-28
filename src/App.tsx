@@ -35,7 +35,7 @@ const optimalResolution: Record<QualityProfile, number> = {
   balanced: 320,
   fine: 512,
   photo: 384,
-  logo: 384
+  logo: 512
 };
 
 const modeTooltips: Record<ProcessingMode, string> = {

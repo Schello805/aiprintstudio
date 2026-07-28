@@ -251,7 +251,7 @@ function buildSmoothedBoundaryPositions(
   widthMm: number,
   heightMm: number,
   cells: boolean[],
-  passes = 4
+  passes = 8
 ): Map<number, readonly [number, number]> {
   const cellAt = (x: number, y: number) => x >= 0 && y >= 0 && x < columns - 1 && y < rows - 1 && cells[y * (columns - 1) + x];
   const gridIndex = (x: number, y: number) => y * columns + x;
@@ -548,7 +548,7 @@ function buildPreviewSurface(
   heights: number[],
   cellMask?: boolean[]
 ): { positions: number[]; indices: number[] } {
-  const stride = Math.max(1, Math.ceil(Math.max(columns, rows) / 180));
+  const stride = Math.max(1, Math.ceil(Math.max(columns, rows) / 300));
   const xs = Array.from(new Set([...Array(Math.ceil((columns - 1) / stride) + 1)].map((_, i) => Math.min(i * stride, columns - 1))));
   const ys = Array.from(new Set([...Array(Math.ceil((rows - 1) / stride) + 1)].map((_, i) => Math.min(i * stride, rows - 1))));
   const previewColumns = xs.length;

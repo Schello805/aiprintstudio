@@ -134,6 +134,22 @@ describe("relief mesh", () => {
     expect(corner?.[1]).not.toBeCloseTo(0);
   });
 
+  it("smooths a pixelated circular outline into an even radius", () => {
+    const columns = 25, rows = 25;
+    const cells = Array((columns - 1) * (rows - 1)).fill(false) as boolean[];
+    const center = (columns - 1) / 2;
+    for (let y = 0; y < rows - 1; y += 1) for (let x = 0; x < columns - 1; x += 1) {
+      const dx = x + 0.5 - center, dy = y + 0.5 - center;
+      cells[y * (columns - 1) + x] = Math.hypot(dx, dy) <= 9;
+    }
+    const positions = reliefInternals.buildSmoothedBoundaryPositions(columns, rows, 24, 24, cells);
+    const radii = [...positions.values()].map(([x, y]) => Math.hypot(x - 12, y - 12));
+    const average = radii.reduce((sum, radius) => sum + radius, 0) / radii.length;
+    const deviation = Math.sqrt(radii.reduce((sum, radius) => sum + (radius - average) ** 2, 0) / radii.length);
+    expect(radii.length).toBeGreaterThan(40);
+    expect(deviation).toBeLessThan(0.2);
+  });
+
   it("keeps preview boundary vertices on the base instead of creating spikes", () => {
     const cells = [
       false, true, false,
