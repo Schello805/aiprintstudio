@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.13.6
+
+- Mehrfarbige 3MF-Projekte heißen im Slicer einheitlich und kompakt
+  **AI Print Studio**.
+- Der lange Name der Bilddatei wird nicht mehr als sichtbarer Modell- oder
+  Profilname in den 3MF-Metadaten verwendet.
+
 ## 0.13.5
 
 - Sekundäre Aktionen wie **Alle Werkzeuge**, **Erweiterte Einstellungen** und

@@ -804,11 +804,11 @@ async function encodeThreeMf(mesh: Mesh, coloredMeshes?: ColoredMesh[]): Promise
   }).join("");
   const assemblyId = parts.length + 3;
   const componentsXml = parts.map((_, index) => `<component objectid="${index + 3}"/>`).join("");
-  const assemblyXml = `<object id="${assemblyId}" type="model" name="AI Print Studio Multicolor"><components>${componentsXml}</components></object>`;
+  const assemblyXml = `<object id="${assemblyId}" type="model" name="AI Print Studio"><components>${componentsXml}</components></object>`;
   const buildXml = `<item objectid="${assemblyId}"/>`;
   zip.folder("3D")?.file("3dmodel.model", `<?xml version="1.0" encoding="UTF-8"?>
 <model unit="millimeter" xml:lang="de-DE" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
-<metadata name="Title">AI Print Studio Relief</metadata>
+<metadata name="Title">AI Print Studio</metadata>
 <resources><basematerials id="2">${materialXml}</basematerials>${objectsXml}${assemblyXml}</resources>
 <build>${buildXml}</build></model>`);
   if (coloredMeshes?.length) {
@@ -828,7 +828,7 @@ async function encodeThreeMf(mesh: Mesh, coloredMeshes?: ColoredMesh[]): Promise
     zip.folder("Metadata")?.file("model_settings.config", `<?xml version="1.0" encoding="UTF-8"?>
 <config>
   <object id="${assemblyId}">
-    <metadata key="name" value="AI Print Studio Multicolor"/>
+    <metadata key="name" value="AI Print Studio"/>
     <metadata key="extruder" value="1"/>${partSettings}
   </object>
 </config>`);

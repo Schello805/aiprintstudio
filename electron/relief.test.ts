@@ -136,7 +136,9 @@ describe("relief mesh", () => {
     expect(model?.match(/<object /g)).toHaveLength(3);
     expect(model?.match(/<component /g)).toHaveLength(2);
     expect(model?.match(/<item /g)).toHaveLength(1);
-    expect(model).toContain('name="AI Print Studio Multicolor"');
+    expect(model).toContain('name="AI Print Studio"');
+    expect(model).toContain('<metadata name="Title">AI Print Studio</metadata>');
+    expect(modelSettings).toContain('<metadata key="name" value="AI Print Studio"/>');
     expect(modelSettings).toContain('<metadata key="extruder" value="1"/>');
     expect(modelSettings).toContain('<metadata key="extruder" value="2"/>');
     expect(JSON.parse(projectSettings ?? "{}").filament_colour).toEqual(["#FF0000", "#0000FF"]);
