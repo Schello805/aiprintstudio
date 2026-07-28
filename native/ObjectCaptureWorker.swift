@@ -15,7 +15,7 @@ struct ObjectCaptureWorker {
                 throw NSError(domain: "AIPrintStudio", code: 1, userInfo: [NSLocalizedDescriptionKey: "Object Capture wird auf diesem Mac nicht unterstützt."])
             }
             let session = try PhotogrammetrySession(input: input)
-            session.process(requests: [.modelFile(url: output, detail: .medium)])
+            try session.process(requests: [.modelFile(url: output, detail: .medium)])
             for try await event in session.outputs {
                 switch event {
                 case .requestError(_, let error):
