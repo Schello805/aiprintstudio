@@ -1,7 +1,7 @@
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, shell } from "electron";
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
-import { appendFile, copyFile, mkdir, mkdtemp, readFile, rename, rm, statfs, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, mkdtemp, readFile, rename, rm, statfs, writeFile } from "node:fs/promises";
 import { arch, platform, tmpdir, totalmem } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -14,6 +14,14 @@ import { buildCadPlanningRequest, encodeCadStl, validateCadPlan, type CadPlan } 
 import { checkSystemCompatibility } from "./system-check.js";
 import { decryptApiKey, encryptApiKey, type EncryptedApiKey } from "./api-key-vault.js";
 import { calculateAiCost, defaultOpenAiModel, estimateTokens, getOpenAiModel, listOpenAiModels, type OpenAiModelId } from "./openai-usage.js";
+import {
+  complex3dModel,
+  downloadComplex3dModel,
+  encodeMeshStl,
+  generateComplexMesh,
+  getComplex3dStatus,
+  removeComplex3dModel
+} from "./complex3d.js";
 
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
 const developmentUrl = process.env.VITE_DEV_SERVER_URL ?? "http://localhost:5173";
@@ -24,11 +32,13 @@ type StoredSettings = {
   encryptedOpenAiKey?: string;
   openAiVault?: EncryptedApiKey;
   modelSetupAccepted?: boolean;
+  complex3dLicenseAcceptedAt?: string;
 };
 
 const settingsDirectoryName = "de.michaelschellenberger.aiprintstudio";
 let sessionOpenAiKey: string | null = null;
 const reliefJobs = new Map<string, { controller: AbortController; worker?: Worker }>();
+const complex3dJobs = new Map<string, AbortController>();
 type Ai3dProgress = {
   phase: string;
   progress: number;
@@ -149,9 +159,13 @@ function depthResources() {
   const root = app.isPackaged ? process.resourcesPath : join(currentDirectory, "../resources");
   return {
     worker: join(root, "depth", "depth-worker"),
-    model: join(root, "depth", "DepthAnythingV2SmallF16P6.mlmodelc"),
-    objectCaptureWorker: join(root, "depth", "object-capture-worker")
+    model: join(root, "depth", "DepthAnythingV2SmallF16P6.mlmodelc")
   };
+}
+
+function complex3dWorkerPath(): string {
+  const root = app.isPackaged ? process.resourcesPath : join(currentDirectory, "../resources");
+  return join(root, "hunyuan", "hy3d");
 }
 
 function depthModelAvailable(): boolean {
@@ -161,7 +175,6 @@ function depthModelAvailable(): boolean {
 
 async function ensureCompatibleSystem(): Promise<boolean> {
   if (!app.isPackaged || process.argv.includes("--smoke-test")) return true;
-  const resources = depthResources();
   let freeDiskBytes = Number.POSITIVE_INFINITY;
   try {
     const disk = await statfs(app.getPath("downloads"));
@@ -175,8 +188,7 @@ async function ensureCompatibleSystem(): Promise<boolean> {
     macOsVersion: process.getSystemVersion(),
     totalMemoryBytes: totalmem(),
     freeDiskBytes,
-    depthModelAvailable: depthModelAvailable(),
-    objectCaptureAvailable: existsSync(resources.objectCaptureWorker)
+    depthModelAvailable: depthModelAvailable()
   });
   if (!result.supported) {
     dialog.showMessageBoxSync({
@@ -681,6 +693,90 @@ app.whenReady().then(async () => {
   });
   ipcMain.handle("ai3d:models", () => listOpenAiModels());
   ipcMain.handle("ai3d:lastDiagnostic", () => lastAi3dDiagnostic);
+  ipcMain.handle("complex3d:status", async () => {
+    const settings = await readSettings();
+    return getComplex3dStatus(app.getPath("userData"), complex3dWorkerPath(), settings.complex3dLicenseAcceptedAt);
+  });
+  ipcMain.handle("complex3d:acceptLicense", async (_event, accepted: boolean) => {
+    if (!accepted) throw new Error("Der Download wurde nicht bestätigt.");
+    const settings = await readSettings();
+    settings.complex3dLicenseAcceptedAt = new Date().toISOString();
+    await writeSettings(settings);
+    return getComplex3dStatus(app.getPath("userData"), complex3dWorkerPath(), settings.complex3dLicenseAcceptedAt);
+  });
+  ipcMain.handle("complex3d:download", async (event, jobId: string) => {
+    const settings = await readSettings();
+    if (!settings.complex3dLicenseAcceptedAt) throw new Error("Bitte lies und bestätige vor dem Download die Modell- und Lizenzhinweise.");
+    if (complex3dJobs.has(jobId)) throw new Error("Dieser Modelldownload läuft bereits.");
+    const disk = await statfs(app.getPath("userData"));
+    if (disk.bavail * disk.bsize < complex3dModel.requiredFreeBytes) throw new Error("Für Modell und temporäre Dateien werden mindestens 5,5 GB freier Speicher benötigt.");
+    const controller = new AbortController();
+    complex3dJobs.set(jobId, controller);
+    try {
+      await downloadComplex3dModel(app.getPath("userData"), controller.signal, (progress) => {
+        if (!event.sender.isDestroyed()) event.sender.send("complex3d:progress", jobId, progress);
+      });
+      return getComplex3dStatus(app.getPath("userData"), complex3dWorkerPath(), settings.complex3dLicenseAcceptedAt);
+    } finally {
+      complex3dJobs.delete(jobId);
+    }
+  });
+  ipcMain.handle("complex3d:remove", async () => {
+    await removeComplex3dModel(app.getPath("userData"));
+    const settings = await readSettings();
+    return getComplex3dStatus(app.getPath("userData"), complex3dWorkerPath(), settings.complex3dLicenseAcceptedAt);
+  });
+  ipcMain.handle("complex3d:cancel", (_event, jobId: string) => {
+    const controller = complex3dJobs.get(jobId);
+    controller?.abort();
+    return Boolean(controller);
+  });
+  ipcMain.handle("complex3d:createReference", async (_event, promptValue: string) => {
+    const prompt = promptValue.trim();
+    if (prompt.length < 10 || prompt.length > 800) throw new Error("Beschreibe das Objekt bitte mit 10 bis 800 Zeichen.");
+    if (!sessionOpenAiKey) throw new Error("Der OpenAI API-Schlüssel ist für diese Sitzung nicht entsperrt.");
+    const response = await fetch("https://api.openai.com/v1/images/generations", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${sessionOpenAiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "gpt-image-2",
+        size: "1024x1024",
+        quality: "high",
+        output_format: "png",
+        prompt: `Erzeuge eine einzelne, vollständige 3/4-Referenzansicht für eine spätere 3D-Rekonstruktion. Objekt vollständig im Bild, neutraler heller Hintergrund, keine Beschriftung, kein Sockel, keine abgeschnittenen Teile, klare Silhouette. Wunsch: ${prompt}`
+      })
+    });
+    const payload = await response.json() as { data?: Array<{ b64_json?: string }>; error?: { message?: string } };
+    const encoded = payload.data?.[0]?.b64_json;
+    if (!response.ok || !encoded) throw new Error(payload.error?.message || `OpenAI-Bildgenerierung fehlgeschlagen (HTTP ${response.status}).`);
+    const directory = join(app.getPath("temp"), "AI Print Studio Complex 3D");
+    await mkdir(directory, { recursive: true });
+    const path = join(directory, `reference-${Date.now()}.png`);
+    await writeFile(path, Buffer.from(encoded, "base64"));
+    return { path, dataUrl: `data:image/png;base64,${encoded}`, disclaimer: "KI-generierte Referenz – keine offizielle CAD- oder Herstellerdatei." };
+  });
+  ipcMain.handle("complex3d:createMesh", async (event, jobId: string, imagePath: string) => {
+    const settings = await readSettings();
+    const status = await getComplex3dStatus(app.getPath("userData"), complex3dWorkerPath(), settings.complex3dLicenseAcceptedAt);
+    if (!status.installed || !status.workerAvailable) throw new Error("Das lokale 3D-Modell ist noch nicht vollständig installiert.");
+    const controller = new AbortController();
+    complex3dJobs.set(jobId, controller);
+    const directory = await mkdtemp(join(tmpdir(), "ai-print-complex3d-"));
+    try {
+      if (!event.sender.isDestroyed()) event.sender.send("complex3d:progress", jobId, { phase: "Lokale 3D-Rekonstruktion läuft", progress: 20, loadedBytes: 0, totalBytes: 0 });
+      const glbPath = join(directory, "result.glb");
+      const mesh = await generateComplexMesh(complex3dWorkerPath(), app.getPath("userData"), imagePath, glbPath, controller.signal);
+      const outputDirectory = join(app.getPath("downloads"), "AI Print Studio");
+      await mkdir(outputDirectory, { recursive: true });
+      const stlPath = join(outputDirectory, `komplex-${Date.now()}.stl`);
+      await writeFile(stlPath, encodeMeshStl(mesh));
+      if (!event.sender.isDestroyed()) event.sender.send("complex3d:progress", jobId, { phase: "Fertig", progress: 100, loadedBytes: 0, totalBytes: 0 });
+      return { stlPath, preview: mesh, triangleCount: Math.floor(mesh.indices.length / 3) };
+    } finally {
+      complex3dJobs.delete(jobId);
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
   ipcMain.handle("ai3d:create", async (event, promptValue: string, existingPlanValue?: unknown, modelValue?: string) => {
     const prompt = promptValue.trim();
     if (prompt.length < (existingPlanValue ? 3 : 10) || prompt.length > 800) {
@@ -755,33 +851,6 @@ app.whenReady().then(async () => {
         logPath
       };
       throw new Error(`${lastAi3dDiagnostic.message} Diagnose-ID: ${diagnosticId}`);
-    }
-  });
-  ipcMain.handle("objectCapture:create", async () => {
-    const selection = await dialog.showOpenDialog({
-      title: "Fotoserie für den 3D-Scan auswählen",
-      properties: ["openFile", "multiSelections"],
-      filters: [{ name: "Fotos", extensions: ["png", "jpg", "jpeg", "heic", "webp"] }]
-    });
-    if (selection.canceled) return null;
-    if (selection.filePaths.length < 12) throw new Error("Für einen stabilen 3D-Scan werden mindestens 12 Fotos benötigt.");
-    if (selection.filePaths.length > 300) throw new Error("Bitte verwende höchstens 300 Fotos pro Scan.");
-    const resources = depthResources();
-    if (!existsSync(resources.objectCaptureWorker)) throw new Error("Object Capture ist in diesem Build nicht enthalten.");
-    const workspace = await mkdtemp(join(tmpdir(), "ai-print-capture-"));
-    const images = join(workspace, "images");
-    await mkdir(images);
-    try {
-      await Promise.all(selection.filePaths.map((source, index) =>
-        copyFile(source, join(images, `${String(index).padStart(4, "0")}-${basename(source)}`))
-      ));
-      const outputDirectory = join(app.getPath("downloads"), "AI Print Studio");
-      await mkdir(outputDirectory, { recursive: true });
-      const output = join(outputDirectory, `object-capture-${Date.now()}.usdz`);
-      await execFileAsync(resources.objectCaptureWorker, [images, output], { timeout: 30 * 60_000, maxBuffer: 4 * 1024 * 1024 });
-      return { usdzPath: output, photoCount: selection.filePaths.length };
-    } finally {
-      await rm(workspace, { recursive: true, force: true });
     }
   });
   ipcMain.handle("relief:cancel", async (_event, jobId: string) => {

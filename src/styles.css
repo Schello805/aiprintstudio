@@ -593,3 +593,14 @@ footer { padding:17px 36px; border-top:1px solid #1c2028; display:flex; justify-
 .consent input { accent-color:#a5f36d; margin-top:2px; }
 @media(max-width:1100px){.app-shell{grid-template-columns:200px 1fr}.workspace{width:calc(100% - 60px)}.topbar{padding-left:38px;padding-right:38px}}
 @media(max-width:760px){.ai3d-modal{width:calc(100vw - 24px);padding:22px}.cad-preview{height:300px}.ai3d-result-summary{align-items:flex-start;flex-direction:column}.ai3d-follow-up{grid-template-columns:1fr}.ai3d-follow-up .primary-button{min-width:0}.ai3d-result-actions{flex-wrap:wrap}.ai-model-detail{grid-template-columns:1fr}.ai-model-detail>div+div{padding:7px 0 0;border-left:0;border-top:1px solid #293326}}
+.ai-workflow-choice{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.ai-workflow-choice button{display:flex;align-items:center;gap:12px;padding:14px;color:var(--text);text-align:left;background:#0d131b;border:1px solid var(--border);border-radius:12px}
+.ai-workflow-choice button.selected{border-color:var(--accent);background:#142116}
+.ai-workflow-choice span{display:grid;gap:3px}.ai-workflow-choice small{color:var(--muted)}
+.complex-model-consent{display:grid;gap:10px;padding:16px;border:1px solid #a57b32;border-radius:12px;background:#1d180f}
+.complex-model-consent p{margin:0}.complex-license-links{display:flex;flex-wrap:wrap;gap:8px}
+.complex-license-links button{padding:7px 10px;color:#d7e5ff;background:#111923;border:1px solid #40516a;border-radius:8px}
+.license-confirm{display:flex;align-items:flex-start;gap:10px;line-height:1.45}.license-confirm input{width:18px;height:18px;margin-top:2px;accent-color:var(--accent)}
+.complex-reference{display:grid;grid-template-columns:190px 1fr;gap:14px;align-items:center;padding:12px;border:1px solid var(--border);border-radius:12px}
+.complex-reference img{width:190px;aspect-ratio:1;object-fit:contain;border-radius:8px;background:#fff}.complex-reference p{margin:6px 0 0;color:var(--muted)}
+@media(max-width:760px){.ai-workflow-choice,.complex-reference{grid-template-columns:1fr}.complex-reference img{width:100%;max-height:260px}}

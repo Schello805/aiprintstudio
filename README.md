@@ -23,7 +23,7 @@ Vor dem Download bitte kurz prüfen:
 | Mac | **Apple Silicon (M1 oder neuer)** | Intel-Macs werden vom ARM64-Build nicht unterstützt. |
 | Betriebssystem | **macOS 13 Ventura oder neuer** | Ein aktuelles macOS wird empfohlen. |
 | Arbeitsspeicher | **8 GB empfohlen**, 16 GB für große Modelle | Unter 8 GB startet die App mit einem Ressourcenhinweis. |
-| Freier Speicher | **mindestens 4 GB empfohlen** | Mehrfoto-Scans und große 3MF-Dateien benötigen zusätzlichen temporären Speicher. |
+| Freier Speicher | **mindestens 4 GB**, für komplexes lokales 3D **5,5 GB** | Das optionale Modell benötigt ca. 3,82 GB plus temporären Speicher. |
 | Grafik | In Apple Silicon integriert | Keine separate Grafikkarte erforderlich. |
 | Internet | Für Installation/Updates und optional Prompt zu 3D | Bild zu 3D, Schrift zu 3D und lokale Exporte funktionieren offline. |
 
@@ -44,7 +44,7 @@ grundsätzlich kompatibel.
 - Druckbarkeit vor künstlerischer Perfektion
 - keine Benutzerkonten, Telemetrie oder Cloud-Pflicht
 - lokal verschlüsselter OpenAI-Schlüssel mit eigenem App-Passwort
-- STL-, 3MF- und bei Mehrfoto-Scans USDZ-Export
+- STL- und mehrfarbiger 3MF-Export
 - interaktive 3D-Vorschau direkt neben der Eingabe
 - möglichst wenige notwendige Einstellungen und motivabhängige Automatik
 - konturgetreuer Export anhand von Transparenz oder erkanntem Hintergrund
@@ -126,11 +126,20 @@ Ausgabepreise sowie einen typischen Beispielbetrag auf Basis von 1.000 Eingabe-
 und 2.000 Ausgabetoken. Die tatsächliche Abrechnung richtet sich nach der
 Nutzung des eigenen OpenAI-Kontos.
 
-### Mehrfoto-Scan
+### Komplexe Prompt-Modelle
 
-Apple RealityKit Object Capture verarbeitet 12 bis 300 überlappende Fotos lokal
-zu einem vollständigen USDZ-Modell. Dieser Modus benötigt geeignete
-Aufnahmereihen und unterstützte Apple-Hardware.
+Für komplexere Außenformen erzeugt OpenAI zunächst ein sichtbares Referenzbild.
+Der Nutzer prüft dieses Bild; erst danach rekonstruiert das optionale lokale
+Hunyuan3D-Shape-Modell das Mesh auf Apple Silicon.
+
+Vor dem erstmaligen Download zeigt AI Print Studio Modellname, Quelle,
+Downloadgröße, Speicherbedarf und vollständige Lizenzlinks. Die ca. 3,82 GB
+großen Modellgewichte werden nur nach ausdrücklicher Zustimmung geladen und
+können wieder entfernt werden. Details: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+Komplexe Ergebnisse sind KI-Näherungen und keine maßhaltigen Hersteller-CAD-
+Dateien. Bei Markenprodukten müssen Bild-, Design-, Urheber- und Markenrechte
+vor Nutzung oder Verkauf eigenständig geprüft werden.
 
 ## Bild zu 3D ausprobieren
 
@@ -231,7 +240,7 @@ Repository stammt.
 | Oberfläche | React, TypeScript, Vite | Studio, Editor und Einstellungen |
 | 3D-Vorschau | Three.js, React Three Fiber | interaktive Mesh- und Farbvorschau |
 | Bildpipeline | Sharp, TypeScript | Masken, Höhenkarten, Farben und Meshaufbau |
-| Native Worker | Swift, Core ML, RealityKit | lokale Tiefe und Mehrfoto-Rekonstruktion |
+| Native Worker | Swift, Core ML, MLX | lokale Tiefe und optionale komplexe Formrekonstruktion |
 | CAD-Pipeline | OpenAI Structured Outputs, lokaler TypeScript-Generator | validierter Plan und Binär-STL |
 | Konfiguration | scrypt, AES-256-GCM, lokale JSON-Datei | verschlüsselter API-Schlüssel ohne macOS-Schlüsselbund |
 | Releases | Git-Tags, GitHub Actions | ARM64-DMG und App-Version |

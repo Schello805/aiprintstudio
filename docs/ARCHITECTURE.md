@@ -4,9 +4,10 @@
 
 Ein einzelnes Bild enthält keine vollständige Rückseiten- oder
 Tiefeninformation. **Bild zu 3D** erzeugt deshalb heute vor allem kontrollierte
-2,5D-Reliefs. Für vollständige Objekte stehen ein Mehrfoto-Scan sowie ein
-konstruktiver **Prompt zu 3D**-Workflow zur Verfügung. Externe KI-Planung wird
-strikt von lokaler, deterministischer Geometrieerzeugung und Prüfung getrennt.
+2,5D-Reliefs. Für vollständige Objekte steht **Prompt zu 3D** mit einem
+einfachen CAD-Weg und einer optionalen komplexen Formrekonstruktion zur
+Verfügung. Externe Referenzerzeugung wird strikt von lokaler Geometrieerzeugung
+und Prüfung getrennt.
 
 ## Komponenten
 
@@ -18,16 +19,16 @@ Electron Main Process
   ├── Einstellungen / lokaler AES-GCM-Tresor für OpenAI
   ├── Verlauf / Updateprüfung
   ├── Dateivalidierung
-  ├── OpenAI CAD-Planung (optional)
-  ├── Native Apple Worker
+  ├── OpenAI CAD-Planung oder Referenzbild (optional)
+  ├── Native Worker
   │     ├── Depth Anything V2 / Core ML
-  │     └── RealityKit Object Capture
+  │     └── Hunyuan3D Shape Small / MLX (optional)
   └── lokale 3D-Pipelines
         ├── Relief / Kontur / Höhenkarte
         ├── Flächen- und Farbeditor
-        ├── CAD-Körpergenerator
+        ├── CAD-Körpergenerator / GLB-zu-STL
         ├── Druckbarkeitsanalyse
-        └── STL / 3MF / USDZ
+        └── STL / 3MF
 ```
 
 Rechenintensive Relief- und Mehrfarben-Meshes laufen in einem separaten

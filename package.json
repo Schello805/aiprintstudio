@@ -1,6 +1,6 @@
 {
   "name": "ai-print-studio",
-  "version": "0.20.1",
+  "version": "0.21.0",
   "description": "Lokale Bild-zu-3D-Desktop-App für Apple Silicon",
   "author": "Michael Schellenberger",
   "license": "SEE LICENSE IN LICENSE.md",
@@ -14,8 +14,9 @@
     "verify": "npm run lint && npm run test && npm run build",
     "build:depth-worker": "zsh scripts/build-depth-worker.sh",
     "build:dmg-background": "node scripts/build-dmg-background.mjs",
+    "build:hunyuan-worker": "zsh scripts/build-hunyuan-worker.sh",
     "smoke:depth-worker": "node scripts/smoke-depth-worker.mjs",
-    "dist": "npm run build && npm run build:depth-worker && npm run build:dmg-background && electron-builder --mac dmg --publish never",
+    "dist": "npm run build && npm run build:depth-worker && npm run build:hunyuan-worker && npm run build:dmg-background && electron-builder --mac dmg --publish never",
     "revision": "node scripts/revision.mjs"
   },
   "dependencies": {
@@ -73,8 +74,8 @@
         "to": "depth/depth-worker"
       },
       {
-        "from": "resources/depth/object-capture-worker",
-        "to": "depth/object-capture-worker"
+        "from": "resources/hunyuan",
+        "to": "hunyuan"
       }
     ],
     "mac": {

@@ -92,7 +92,22 @@ interface Window {
       inputTokens: number;
       outputTokens: number;
     }) => void) => () => void;
-    createObjectCapture: () => Promise<{ usdzPath: string; photoCount: number } | null>;
+    getComplex3dStatus: () => Promise<{
+      id: string; name: string; version: string; sizeBytes: number; requiredFreeBytes: number;
+      sourceUrl: string; licenseUrl: string; codeUrl: string; weightsSha256: string; notice: string;
+      installed: boolean; workerAvailable: boolean; accepted: boolean; acceptedAt: string | null; installedBytes: number;
+    }>;
+    acceptComplex3dLicense: (accepted: boolean) => Promise<unknown>;
+    downloadComplex3dModel: (jobId: string) => Promise<unknown>;
+    removeComplex3dModel: () => Promise<unknown>;
+    createComplex3dReference: (prompt: string) => Promise<{ path: string; dataUrl: string; disclaimer: string }>;
+    createComplex3dMesh: (jobId: string, imagePath: string) => Promise<{
+      stlPath: string; triangleCount: number; preview: { positions: number[]; indices: number[] };
+    }>;
+    cancelComplex3d: (jobId: string) => Promise<boolean>;
+    onComplex3dProgress: (callback: (jobId: string, progress: {
+      phase: string; progress: number; loadedBytes: number; totalBytes: number;
+    }) => void) => () => void;
     createRelief: (jobId: string, imagePath: string, options: {
       widthMm: number;
       baseMm: number;

@@ -32,6 +32,17 @@ fachkundig geprüft werden.
   Empfänger, Zweck, übertragene Inhalte und mögliche API-Kosten erkennbar sein.
   Modellgrenzen und die notwendige Slicer-/Druckprüfung dürfen nicht als
   Erfolgsgarantie dargestellt werden.
+- **Optionales Hunyuan3D-Modell:** Vor dem ca. 3,82-GB-Download müssen Quelle,
+  Modellversion, Speicherbedarf und Tencent Hunyuan Community License sichtbar
+  sein. Die Zustimmung muss aktiv erfolgen. `THIRD_PARTY_NOTICES.md` und
+  „Über & Technik“ müssen mit dem ausgelieferten Build übereinstimmen.
+- **Keine nachgeladene Programmlogik:** Der signierte MLX-Worker wird mit der
+  App ausgeliefert. Nach Zustimmung lädt die App nur Modellgewichte und
+  Konfiguration. Dies vor der Einreichung nochmals gegen die dann geltenden
+  App-Review-Regeln prüfen.
+- **Marken-/Designrechte:** KI-Referenzen bekannter Produkte nicht als
+  offizielle oder maßhaltige Herstellerdateien bewerben. Nutzer auf Bild-,
+  Design-, Urheber- und Markenrechte hinweisen.
 - **Verträge, Steuern und Preise einrichten:** Für eine kostenpflichtige App
   müssen in App Store Connect die Verträge sowie Bank- und Steuerdaten
   vollständig sein. Zusätzliche digitale Funktionen innerhalb der App sind

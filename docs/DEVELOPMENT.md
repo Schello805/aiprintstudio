@@ -45,7 +45,7 @@ macOS-Version des jeweiligen Build-Macs zur Mindestversion des Releases.
 | `electron/main.ts` | Fenster, IPC, Dateien, Einstellungen, Updates und OpenAI |
 | `electron/relief.ts` | Relief-, Farb-, STL- und 3MF-Pipeline |
 | `electron/cad.ts` | validierter CAD-Plan und lokale Binär-STL-Erzeugung |
-| `native/` | Swift-Worker für Core ML und Object Capture |
+| `native/` | Swift-Worker für Core ML; der optionale MLX-Worker wird reproduzierbar über `scripts/build-hunyuan-worker.sh` gebaut |
 | `scripts/` | Build-, Revisions-, DMG- und Smoke-Test-Helfer |
 
 ## Exportregeln

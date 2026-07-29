@@ -16,12 +16,23 @@ contextBridge.exposeInMainWorld("desktop", Object.freeze({
   getAi3dModels: () => ipcRenderer.invoke("ai3d:models"),
   getLastAi3dDiagnostic: () => ipcRenderer.invoke("ai3d:lastDiagnostic"),
   createAi3d: (prompt, existingPlan, model) => ipcRenderer.invoke("ai3d:create", prompt, existingPlan, model),
+  getComplex3dStatus: () => ipcRenderer.invoke("complex3d:status"),
+  acceptComplex3dLicense: (accepted) => ipcRenderer.invoke("complex3d:acceptLicense", accepted),
+  downloadComplex3dModel: (jobId) => ipcRenderer.invoke("complex3d:download", jobId),
+  removeComplex3dModel: () => ipcRenderer.invoke("complex3d:remove"),
+  createComplex3dReference: (prompt) => ipcRenderer.invoke("complex3d:createReference", prompt),
+  createComplex3dMesh: (jobId, imagePath) => ipcRenderer.invoke("complex3d:createMesh", jobId, imagePath),
+  cancelComplex3d: (jobId) => ipcRenderer.invoke("complex3d:cancel", jobId),
+  onComplex3dProgress: (callback) => {
+    const listener = (_event, jobId, progress) => callback(jobId, progress);
+    ipcRenderer.on("complex3d:progress", listener);
+    return () => ipcRenderer.removeListener("complex3d:progress", listener);
+  },
   onAi3dProgress: (callback) => {
     const listener = (_event, progress) => callback(progress);
     ipcRenderer.on("ai3d:progress", listener);
     return () => ipcRenderer.removeListener("ai3d:progress", listener);
   },
-  createObjectCapture: () => ipcRenderer.invoke("objectCapture:create"),
   createRelief: (jobId, imagePath, options, editorHeightmapDataUrl, editorColorMapDataUrl) => ipcRenderer.invoke("relief:create", jobId, imagePath, options, editorHeightmapDataUrl, editorColorMapDataUrl),
   cancelRelief: (jobId) => ipcRenderer.invoke("relief:cancel", jobId),
   onReliefProgress: (callback) => {

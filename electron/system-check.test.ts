@@ -8,7 +8,6 @@ const supportedMac = {
   totalMemoryBytes: 16 * 1024 ** 3,
   freeDiskBytes: 20 * 1024 ** 3,
   depthModelAvailable: true,
-  objectCaptureAvailable: true
 };
 
 describe("system compatibility", () => {
@@ -23,16 +22,14 @@ describe("system compatibility", () => {
     expect(result.errors.join(" ")).toContain("macOS 13");
   });
 
-  it("warns about constrained resources and missing optional workers", () => {
+  it("warns about constrained resources and missing local depth model", () => {
     const result = checkSystemCompatibility({
       ...supportedMac,
       totalMemoryBytes: 4 * 1024 ** 3,
       freeDiskBytes: 2 * 1024 ** 3,
       depthModelAvailable: false,
-      objectCaptureAvailable: false
     });
     expect(result.supported).toBe(true);
-    expect(result.warnings).toHaveLength(4);
+    expect(result.warnings).toHaveLength(3);
   });
 });
-
