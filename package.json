@@ -81,6 +81,9 @@
       "icon": "build/icon.png",
       "category": "public.app-category.graphics-design",
       "minimumSystemVersion": "13.0.0",
+      "hardenedRuntime": true,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.inherit.plist",
       "target": [
         {
           "target": "dmg",

@@ -1,5 +1,16 @@
 # Changelog
 
+## Unveröffentlicht
+
+- Offizielle macOS-Releases verlangen jetzt zwingend eine echte
+  Developer-ID-Signatur und überschreiben sie nicht mehr versehentlich mit
+  einer Ad-hoc-Signatur.
+- Hardened Runtime und die benötigten Electron-Entitlements sind konfiguriert.
+- Die Release-Pipeline notarisiert das DMG bei Apple, heftet das Ticket an und
+  prüft Signatur sowie Gatekeeper vor der Veröffentlichung.
+- Fehlen Zertifikat oder Notarisierungszugang, wird kein unsicherer offizieller
+  Release mehr erzeugt.
+
 ## 0.15.1
 
 - Die 3D-Vorschau behält bei Logo-Modellen die volle Rasterauflösung bei,

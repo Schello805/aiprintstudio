@@ -59,6 +59,11 @@ Mac-App-Store-Paket ist ein eigener Auslieferungsweg:
 8. Kauf, Erststart, Dateizugriff, OpenAI-Netzwerkzugriff und Exporte in einem
    sandboxierten Store-Testbuild vollständig prüfen.
 
+Für die direkte DMG-Verteilung außerhalb des Stores ist inzwischen eine
+verpflichtende Developer-ID-/Notarisierungspipeline eingerichtet. Die
+einmalige, geheime GitHub-Konfiguration ist in
+[DEVELOPMENT.md](DEVELOPMENT.md#einmalige-apple-einrichtung) beschrieben.
+
 ## Offizielle Apple-Quellen
 
 - [App Review Guidelines](https://developer.apple.com/app-store/review/guidelines/)
@@ -67,4 +72,3 @@ Mac-App-Store-Paket ist ein eigener Auslieferungsweg:
 - [EU-DSA-Händleranforderungen](https://developer.apple.com/help/app-store-connect/manage-compliance-information/manage-european-union-digital-services-act-trader-requirements/)
 - [Privacy Manifest hinzufügen](https://developer.apple.com/documentation/bundleresources/adding-a-privacy-manifest-to-your-app-or-third-party-sdk)
 - [App Encryption Declarations](https://developer.apple.com/documentation/appstoreconnectapi/app-encryption-declarations)
-

@@ -84,9 +84,30 @@ AI_PRINT_STUDIO_SETTINGS_ROOT=/tmp/ai-print-studio-smoke \
 3. `npm run verify` ausführen.
 4. Änderungen committen und auf `main` pushen.
 5. Git-Tag `vX.Y.Z` erstellen und pushen.
-6. Der Release-Workflow baut und veröffentlicht das ARM64-DMG.
+6. Der Release-Workflow signiert die App mit Developer ID, aktiviert Hardened
+   Runtime, notarisiert das DMG, heftet das Ticket an und prüft Gatekeeper.
+7. Nur wenn alle Sicherheitsprüfungen erfolgreich sind, wird das DMG
+   veröffentlicht.
 
-Für eine Verteilung ohne Gatekeeper-Warnung werden ein gültiges
-Apple-Developer-ID-Zertifikat, Hardened Runtime und Apple-Notarisierung
-benötigt. Ohne diese Voraussetzungen bleibt das Artefakt funktional, muss aber
-gegebenenfalls unter **Datenschutz & Sicherheit** manuell freigegeben werden.
+Der Workflow benötigt die GitHub-Secrets `MACOS_CERTIFICATE` (Base64-P12),
+`MACOS_CERTIFICATE_PASSWORD`, `APPLE_API_KEY_P8`, `APPLE_API_KEY_ID` und
+`APPLE_API_ISSUER`. Fehlt ein Wert, bricht das Release absichtlich ab. Dadurch
+kann kein weiterer als „offiziell“ bezeichneter, aber lediglich ad hoc
+signierter Build veröffentlicht werden.
+
+### Einmalige Apple-Einrichtung
+
+1. Eine aktive Mitgliedschaft im Apple Developer Program sicherstellen.
+2. In Xcode unter **Settings → Accounts → Manage Certificates** ein
+   **Developer ID Application**-Zertifikat erstellen.
+3. Zertifikat und privaten Schlüssel in der Schlüsselbundverwaltung gemeinsam
+   als passwortgeschützte `.p12`-Datei exportieren. Weder P12 noch Passwort
+   werden in das Repository eingecheckt oder per Chat weitergegeben.
+4. Die P12-Datei Base64-kodiert als GitHub-Secret `MACOS_CERTIFICATE` und ihr
+   Exportpasswort als `MACOS_CERTIFICATE_PASSWORD` hinterlegen.
+5. In App Store Connect unter **Users and Access → Integrations** einen
+   API-Schlüssel erzeugen. Den unveränderten Inhalt der einmalig
+   herunterladbaren `.p8`-Datei als `APPLE_API_KEY_P8`, die Key-ID als
+   `APPLE_API_KEY_ID` und die Issuer-ID als `APPLE_API_ISSUER` hinterlegen.
+6. Erst danach den nächsten Release-Tag pushen. Der Workflow prüft alle Werte,
+   ohne sie in Logs auszugeben.

@@ -155,10 +155,16 @@ GitHub-Version suchen. Bei einem verfügbaren Update öffnet
 App aus dem DMG auf **Applications** gezogen werden. Eine automatische
 Hintergrundinstallation gibt es derzeit nicht.
 
-Nicht notarisierte Builds können von Gatekeeper zunächst blockiert werden. In
-diesem Fall die App unter **Systemeinstellungen → Datenschutz & Sicherheit**
-einmalig freigeben. Keine Sicherheitswarnung umgehen, wenn das DMG nicht aus dem
-offiziellen Repository stammt.
+Offizielle Releases werden mit **Developer ID Application**, Hardened Runtime
+und Apple-Notarisierung erstellt. Das Notarisierungsticket wird an das DMG
+angeheftet und vor der Veröffentlichung nochmals mit Gatekeeper geprüft.
+Dadurch erscheint bei korrekt erzeugten Releases nicht mehr die Meldung, Apple
+könne die App nicht auf Schadsoftware überprüfen. Ein Release ohne gültige
+Apple-Zugangsdaten wird von der Build-Pipeline abgebrochen.
+
+Ältere, nicht notarisierte Releases können weiterhin von Gatekeeper blockiert
+werden. Keine Sicherheitswarnung umgehen, wenn das DMG nicht aus dem offiziellen
+Repository stammt.
 
 ## Technischer Aufbau
 
@@ -209,8 +215,9 @@ AI_PRINT_STUDIO_SETTINGS_ROOT=/tmp/ai-print-studio-smoke \
   "release/mac-arm64/AI Print Studio.app/Contents/MacOS/AI Print Studio" --smoke-test
 ```
 
-Das Ergebnis liegt unter `release/`. Lokal erzeugte Builds sind nicht
-automatisch signiert und notarisiert.
+Das Ergebnis liegt unter `release/`. Lokal erzeugte Builds ohne
+Developer-ID-Zertifikat werden nur für Tests ad hoc signiert und sind nicht zur
+Weitergabe bestimmt.
 
 ## OpenAI-Konfiguration
 
