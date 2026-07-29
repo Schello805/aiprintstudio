@@ -553,4 +553,28 @@ describe("relief mesh", () => {
     expect(wordmarkMask[center]).toBe(false);
     expect(wordmarkMask[2 * width + 4]).toBe(true);
   });
+
+  it("keeps a smooth logo gradient on the base while raising the foreground", () => {
+    const width = 40, height = 40;
+    const rgba = Buffer.alloc(width * height * 4);
+    for (let y = 0; y < height; y += 1) for (let x = 0; x < width; x += 1) {
+      const background = Math.round(155 - y / (height - 1) * 115);
+      const offset = (y * width + x) * 4;
+      rgba[offset] = background;
+      rgba[offset + 1] = background + 3;
+      rgba[offset + 2] = background + 7;
+      rgba[offset + 3] = 255;
+    }
+    for (let y = 12; y < 28; y += 1) for (let x = 10; x < 30; x += 1) {
+      const offset = (y * width + x) * 4;
+      rgba[offset] = 120;
+      rgba[offset + 1] = 225;
+      rgba[offset + 2] = 170;
+    }
+    const mask = reliefInternals.buildWordmarkPixelMask(rgba, width, height);
+    expect(mask[2 * width + 20]).toBe(false);
+    expect(mask[20 * width + 2]).toBe(false);
+    expect(mask[37 * width + 20]).toBe(false);
+    expect(mask[20 * width + 20]).toBe(true);
+  });
 });

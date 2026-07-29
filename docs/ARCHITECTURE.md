@@ -65,6 +65,10 @@ gemeinsam; die Option ist in der Oberfläche vor der Berechnung abschaltbar.
 Bei aktiviertem Hintergrund wird die Vorschau aus dem vollständigen
 wasserdichten Höhenkörper aufgebaut, nicht nur aus dessen Deckfläche. Dadurch
 sind Boden, Seiten und erhabenes Motiv in Vorschau und Export identisch.
+Für nicht transparente Logos interpoliert die Motiverkennung die erwartete
+Hintergrundfarbe positionsabhängig aus den vier Bildecken. Gleichmäßige
+Farbverläufe bleiben so auf Grundhöhe, während Schrift und Signet auf die
+vollständige Reliefhöhe gesetzt werden.
 
 Schrift wird zunächst lokal als eng zugeschnittene transparente Vorlage
 gerendert und anschließend durch dieselbe Reliefpipeline verarbeitet. SVG wird

@@ -802,22 +802,32 @@ function buildWordmarkPixelMask(rgba: Buffer, width: number, height: number): bo
     return Array.from({ length: pixelCount }, (_, index) => rgba[index * 4 + 3] >= 64);
   }
 
-  const corners = [0, width - 1, (height - 1) * width, pixelCount - 1];
-  const background = [0, 1, 2].map((channel) =>
-    corners.reduce((sum, pixel) => sum + rgba[pixel * 4 + channel], 0) / corners.length
-  );
+  const cornerPixels = [0, width - 1, (height - 1) * width, pixelCount - 1];
+  const corners = cornerPixels.map((pixel) => [
+    rgba[pixel * 4],
+    rgba[pixel * 4 + 1],
+    rgba[pixel * 4 + 2]
+  ] as const);
   // Anders als beim Wappen wird nicht nur der von außen erreichbare
   // Hintergrund entfernt. Auch eingeschlossene, hintergrundfarbene Bereiche
-  // in a, e, d, o oder ö bleiben echte Löcher. Ein robuster Abstand von 48
-  // ignoriert typische Verläufe und Schatten eines Logo-Hintergrunds; die
-  // anschließende 0,4-mm-Düsenoptimierung stabilisiert dünne Konturränder.
+  // in a, e, d, o oder ö bleiben echte Löcher. Die Hintergrundfarbe wird für
+  // jede Position aus den vier Bildecken interpoliert. Dadurch bleibt ein
+  // vertikaler oder diagonaler Verlauf eine Grundfläche, statt großflächig als
+  // erhabenes Motiv fehlinterpretiert zu werden.
   return Array.from({ length: pixelCount }, (_, index) => {
+    const x = index % width, y = Math.floor(index / width);
+    const tx = x / Math.max(1, width - 1), ty = y / Math.max(1, height - 1);
+    const background = [0, 1, 2].map((channel) => {
+      const top = corners[0][channel] * (1 - tx) + corners[1][channel] * tx;
+      const bottom = corners[2][channel] * (1 - tx) + corners[3][channel] * tx;
+      return top * (1 - ty) + bottom * ty;
+    });
     const offset = index * 4;
     return Math.hypot(
       rgba[offset] - background[0],
       rgba[offset + 1] - background[1],
       rgba[offset + 2] - background[2]
-    ) >= 48;
+    ) >= 42;
   });
 }
 

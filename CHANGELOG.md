@@ -2,6 +2,8 @@
 
 ## Unveröffentlicht
 
+- Ein positionsabhängiges Hintergrundmodell trennt Logo-Motive jetzt auch bei
+  vertikalen und diagonalen Farbverläufen klar von der Grundfläche.
 - Logos mit aktiviertem Hintergrund werden auch in der 3D-Vorschau als
   vollständiger massiver Körper mit Boden und Seitenwänden dargestellt.
 - Eine robustere Vordergrundschwelle trennt Schrift und Signet klarer von
