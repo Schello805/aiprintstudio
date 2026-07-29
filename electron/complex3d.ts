@@ -50,11 +50,24 @@ async function downloadFile(url: string, target: string, expectedBytes: number |
   const temporary = `${target}.part`;
   let offset = 0;
   try { offset = (await stat(temporary)).size; } catch { /* neuer Download */ }
-  const response = await fetch(url, { signal, headers: offset ? { Range: `bytes=${offset}-` } : undefined });
+  const headers: Record<string, string> = { "Accept-Encoding": "identity" };
+  if (offset) headers.Range = `bytes=${offset}-`;
+  const response = await fetch(url, { signal, headers });
   if (!response.ok || !response.body) throw new Error(`Modelldownload fehlgeschlagen (HTTP ${response.status}).`);
   if (offset && response.status !== 206) {
     await rm(temporary, { force: true });
     return downloadFile(url, target, expectedBytes, signal, progress);
+  }
+  if (offset) {
+    const range = /^bytes (\d+)-(\d+)\/(\d+)$/.exec(response.headers.get("content-range") ?? "");
+    const validRange = range
+      && Number(range[1]) === offset
+      && (!expectedBytes || Number(range[3]) === expectedBytes);
+    if (!validRange) {
+      await response.body.cancel();
+      await rm(temporary, { force: true });
+      return downloadFile(url, target, expectedBytes, signal, progress);
+    }
   }
   const output = createWriteStream(temporary, { flags: offset ? "a" : "w", mode: 0o600 });
   let loaded = offset;
@@ -75,16 +88,22 @@ export async function downloadComplex3dModel(
   const configPath = join(directory, "config.yaml");
   const weightsPath = join(directory, "model.fp16.safetensors");
   await downloadFile(`${base}/config.yaml`, configPath, 1628, signal, () => undefined);
-  await downloadFile(`${base}/model.fp16.safetensors`, weightsPath, complex3dModel.sizeBytes, signal, (loadedBytes) => {
-    onProgress({ phase: "Lokales 3D-Modell wird geladen", loadedBytes, totalBytes: complex3dModel.sizeBytes, progress: loadedBytes / complex3dModel.sizeBytes * 100 });
-  });
-  onProgress({ phase: "Prüfsumme wird kontrolliert", loadedBytes: complex3dModel.sizeBytes, totalBytes: complex3dModel.sizeBytes, progress: 99 });
-  const digest = await sha256(weightsPath);
-  if (digest !== complex3dModel.weightsSha256) {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    await downloadFile(`${base}/model.fp16.safetensors`, weightsPath, complex3dModel.sizeBytes, signal, (loadedBytes) => {
+      onProgress({ phase: attempt ? "Beschädigten Download sauber neu laden" : "Lokales 3D-Modell wird geladen", loadedBytes, totalBytes: complex3dModel.sizeBytes, progress: loadedBytes / complex3dModel.sizeBytes * 100 });
+    });
+    onProgress({ phase: "Prüfsumme wird kontrolliert", loadedBytes: complex3dModel.sizeBytes, totalBytes: complex3dModel.sizeBytes, progress: 99 });
+    const digest = await sha256(weightsPath);
+    if (digest === complex3dModel.weightsSha256) return directory;
     await rm(weightsPath, { force: true });
-    throw new Error("Die SHA-256-Prüfsumme der Modellgewichte stimmt nicht. Die Datei wurde entfernt.");
+    await rm(`${weightsPath}.part`, { force: true });
+    if (attempt === 0) {
+      onProgress({ phase: "Download beschädigt – sauberer Neuversuch", loadedBytes: 0, totalBytes: complex3dModel.sizeBytes, progress: 0 });
+      continue;
+    }
+    throw new Error(`Die Modellgewichte waren auch nach einem vollständigen Neuversuch beschädigt (erhalten ${digest.slice(0, 12)}…, erwartet ${complex3dModel.weightsSha256.slice(0, 12)}…).`);
   }
-  return directory;
+  throw new Error("Der Modelldownload konnte nicht verifiziert werden.");
 }
 
 export async function removeComplex3dModel(userData: string) {
