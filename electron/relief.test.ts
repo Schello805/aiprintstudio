@@ -383,7 +383,7 @@ describe("relief mesh", () => {
       await writeFile(imagePath, await sharp(svg).png().toBuffer());
       const result = await createRelief(imagePath, directory, {
         widthMm: 100, baseMm: 1.6, reliefMm: 4, resolution: 256, invert: false,
-        profile: "logo", smoothing: 2, detail: 1, processingMode: "vector",
+        profile: "logo", smoothing: 2, detail: 1, processingMode: "wordmark",
         sourceColors: [], colors: [], sideColorIndex: 0
       });
       const usedVertices = new Set(result.preview.indices);
@@ -395,5 +395,24 @@ describe("relief mesh", () => {
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
+  });
+
+  it("removes enclosed background from wordmark letters but preserves it for emblems", () => {
+    const width = 9, height = 9;
+    const rgba = Buffer.alloc(width * height * 4, 255);
+    for (let y = 2; y <= 6; y += 1) for (let x = 2; x <= 6; x += 1) {
+      if (x === 2 || x === 6 || y === 2 || y === 6) {
+        const offset = (y * width + x) * 4;
+        rgba[offset] = 55;
+        rgba[offset + 1] = 85;
+        rgba[offset + 2] = 115;
+      }
+    }
+    const center = 4 * width + 4;
+    const emblemMask = reliefInternals.buildSubjectPixelMask(rgba, width, height);
+    const wordmarkMask = reliefInternals.buildWordmarkPixelMask(rgba, width, height);
+    expect(emblemMask[center]).toBe(true);
+    expect(wordmarkMask[center]).toBe(false);
+    expect(wordmarkMask[2 * width + 4]).toBe(true);
   });
 });

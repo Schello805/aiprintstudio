@@ -33,7 +33,7 @@ type Ai3dResult = Awaited<ReturnType<NonNullable<typeof window.desktop>["createA
 type CadPlan = Ai3dResult["plan"];
 type CadPrimitive = CadPlan["primitives"][number];
 type QualityProfile = "fast" | "balanced" | "fine" | "photo" | "logo";
-type ProcessingMode = "auto" | "vector" | "depth" | "height" | "scan";
+type ProcessingMode = "auto" | "vector" | "wordmark" | "depth" | "height" | "scan";
 type HistoryEntry = {
   id: string; name: string; createdAt: string; stlPath: string; threeMfPath: string;
   triangleCount: number; widthMm: number; heightMm: number; profile: QualityProfile; score: number;
@@ -49,7 +49,8 @@ const optimalResolution: Record<QualityProfile, number> = {
 
 const modeTooltips: Record<ProcessingMode, string> = {
   auto: "Analysiert das Bild und verwendet automatisch die hochwertigste passende Methode.\nBeispiel: Ein Wappen nutzt saubere Flächen, ein Foto die lokale KI-Tiefenschätzung.",
-  vector: "Erkennt geschlossene Flächen und ordnet ihnen feste Höhen zu.\nBeispiel: Schrift, Logos und die Rollen eines Wappens werden klar angehoben.",
+  vector: "Bewahrt geschlossene Innenflächen und ordnet Motivbereichen feste Höhen zu.\nBeispiel: Weiße Felder und Rollen innerhalb eines Wappens bleiben erhalten.",
+  wordmark: "Entfernt den Hintergrund auch aus geschlossenen Buchstaben und setzt das Motiv auf eine ruhige gemeinsame Höhe.\nBeispiel: Die Innenräume von a, e, d, o und ö bleiben offen.",
   depth: "Schätzt mit Depth Anything V2 die räumliche Tiefe eines Fotos.\nBeispiel: Eine Person wird vom Hintergrund räumlich getrennt.",
   height: "Übernimmt die Helligkeit des Bildes direkt als Höhe.\nBeispiel: Weiß entspricht hoch und Schwarz niedrig – oder umgekehrt.",
   scan: "Erzeugt aus vielen Blickwinkeln ein vollständiges 3D-Objekt.\nBeispiel: 40 Fotos rund um eine Figur ergeben einen USDZ-Scan."
@@ -176,7 +177,7 @@ export function App() {
     setBusy(true); setFileError(null); setResult(null);
     try {
       if (!window.desktop) throw new Error("Die lokale 3D-Engine ist nicht erreichbar. Bitte starte die App neu.");
-      const effectiveMode = processingMode === "auto" ? (file.suggestedProfile === "logo" ? "vector" : "depth") : processingMode;
+      const effectiveMode = processingMode === "auto" ? (file.suggestedProfile === "logo" ? "auto" : "depth") : processingMode;
       const next = await window.desktop.createRelief(file.path, {
         widthMm, baseMm, reliefMm,
         resolution: optimalResolution[profile],
@@ -350,7 +351,10 @@ export function App() {
                     <Sparkles /><div><strong>Automatisch</strong><span>Beste Methode wird gewählt</span></div><SettingTooltip text={modeTooltips.auto} />
                   </button>
                   <button className={processingMode === "vector" ? "mode-option has-tooltip selected" : "mode-option has-tooltip"} onClick={() => { setProcessingMode("vector"); setProfile("logo"); }} aria-description={modeTooltips.vector}>
-                    <Layers3 /><div><strong>Logo & Wappen</strong><span>Klare Flächen und Kanten</span></div><SettingTooltip text={modeTooltips.vector} />
+                    <Layers3 /><div><strong>Wappen & Emblem</strong><span>Innenflächen bleiben erhalten</span></div><SettingTooltip text={modeTooltips.vector} />
+                  </button>
+                  <button className={processingMode === "wordmark" ? "mode-option has-tooltip selected" : "mode-option has-tooltip"} onClick={() => { setProcessingMode("wordmark"); setProfile("logo"); }} aria-description={modeTooltips.wordmark}>
+                    <Type /><div><strong>Logo mit Text</strong><span>Offene Buchstabenräume</span></div><SettingTooltip text={modeTooltips.wordmark} />
                   </button>
                   <button className={processingMode === "depth" ? "mode-option has-tooltip selected" : "mode-option has-tooltip"} onClick={() => { setProcessingMode("depth"); setProfile("photo"); }} aria-description={modeTooltips.depth}>
                     <Box /><div><strong>Foto & 3D-Tiefe</strong><span>Lokale KI-Tiefenschätzung</span></div><SettingTooltip text={modeTooltips.depth} />

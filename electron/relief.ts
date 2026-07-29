@@ -12,7 +12,7 @@ export type ReliefOptions = {
   profile: "fast" | "balanced" | "fine" | "photo" | "logo";
   smoothing: number;
   detail: number;
-  processingMode: "auto" | "vector" | "depth" | "height";
+  processingMode: "auto" | "vector" | "wordmark" | "depth" | "height";
   sourceColors: string[];
   colors: string[];
   sideColorIndex: number;
@@ -87,18 +87,26 @@ export async function createRelief(
     .toBuffer({ resolveWithObject: true });
   const rawSubjectPixels = buildSubjectPixelMask(rgba, gridWidth, gridHeight);
   const hasTransparency = hasUsefulTransparency(rgba);
+  const rawSubjectCoverage = rawSubjectPixels.reduce((sum, occupied) => sum + Number(occupied), 0)
+    / Math.max(1, rawSubjectPixels.length);
+  const useWordmarkMask = options.processingMode === "wordmark"
+    || (options.processingMode === "auto" && options.profile === "logo" && rawSubjectCoverage < 0.42);
   // Bei Wortmarken und filigranen Logos würde die normale Maskenbereinigung
   // dünne Buchstaben und geschwungene Linien teilweise wegerodieren. Einzelne
   // Pixelartefakte entfernt anschließend bereits die strengere Zellmaske.
   const preserveThinVectorStrokes = options.profile === "logo"
     || options.processingMode === "vector";
-  const subjectPixels = hasTransparency || preserveThinVectorStrokes
-    ? rawSubjectPixels
+  const subjectPixels = useWordmarkMask
+    ? buildWordmarkPixelMask(rgba, gridWidth, gridHeight)
+    : hasTransparency || preserveThinVectorStrokes
+      ? rawSubjectPixels
     : cleanSubjectPixelMask(rawSubjectPixels, gridWidth, gridHeight);
   const cellMask = buildCellMask(subjectPixels, gridWidth, gridHeight, hasTransparency ? 1 : 2);
   const heightMm = options.widthMm * gridHeight / gridWidth;
   const profile = profileSettings(options.profile);
-  const activeMode = options.processingMode === "auto"
+  const activeMode = options.processingMode === "wordmark"
+    ? "vector"
+    : options.processingMode === "auto"
     ? (options.profile === "logo" ? "vector" : "height")
     : options.processingMode;
   let rawLevels: number[];
@@ -153,7 +161,7 @@ export async function createRelief(
     // verwendet; die Farbauflösung für AMS bleibt davon unberührt.
     const subjectCoverage = subjectPixels.reduce((sum, occupied) => sum + Number(occupied), 0)
       / Math.max(1, subjectPixels.length);
-    if (options.profile === "logo" && subjectCoverage < 0.42) flatVectorSurface = true;
+    if (options.profile === "logo" && (useWordmarkMask || subjectCoverage < 0.42)) flatVectorSurface = true;
   }
   const smoothed = editorHeightmap ? rawLevels : smoothHeightField(rawLevels, gridWidth, gridHeight, activeMode === "vector" ? Math.min(1, options.smoothing) : options.smoothing);
   const detailed = editorHeightmap ? smoothed : smoothed.map((value, index) =>
@@ -245,7 +253,7 @@ function validateOptions(options: ReliefOptions): ReliefOptions {
   if (!["fast", "balanced", "fine", "photo", "logo"].includes(options.profile)) throw new Error("Unbekanntes Qualitätsprofil.");
   if (options.smoothing < 0 || options.smoothing > 5) throw new Error("Die Glättung muss zwischen 0 und 5 liegen.");
   if (options.detail < 0 || options.detail > 2) throw new Error("Die Detailstärke muss zwischen 0 und 2 liegen.");
-  if (!["auto", "vector", "depth", "height"].includes(options.processingMode)) throw new Error("Unbekannter Verarbeitungsmodus.");
+  if (!["auto", "vector", "wordmark", "depth", "height"].includes(options.processingMode)) throw new Error("Unbekannter Verarbeitungsmodus.");
   if (!Array.isArray(options.colors) || options.colors.length > 16 || options.colors.some((color) => !/^#[0-9a-fA-F]{6}$/.test(color))) {
     throw new Error("Die Farbpalette enthält ungültige Farben.");
   }
@@ -719,6 +727,29 @@ function buildSubjectPixelMask(rgba: Buffer, width: number, height: number): boo
   return Array.from({ length: pixelCount }, (_, i) => outside[i] === 0);
 }
 
+function buildWordmarkPixelMask(rgba: Buffer, width: number, height: number): boolean[] {
+  const pixelCount = width * height;
+  if (hasUsefulTransparency(rgba)) {
+    return Array.from({ length: pixelCount }, (_, index) => rgba[index * 4 + 3] >= 64);
+  }
+
+  const corners = [0, width - 1, (height - 1) * width, pixelCount - 1];
+  const background = [0, 1, 2].map((channel) =>
+    corners.reduce((sum, pixel) => sum + rgba[pixel * 4 + channel], 0) / corners.length
+  );
+  // Anders als beim Wappen wird nicht nur der von außen erreichbare
+  // Hintergrund entfernt. Auch eingeschlossene, hintergrundfarbene Bereiche
+  // in a, e, d, o oder ö bleiben echte Löcher.
+  return Array.from({ length: pixelCount }, (_, index) => {
+    const offset = index * 4;
+    return Math.hypot(
+      rgba[offset] - background[0],
+      rgba[offset + 1] - background[1],
+      rgba[offset + 2] - background[2]
+    ) >= 26;
+  });
+}
+
 function buildCellMask(pixels: boolean[], columns: number, rows: number, threshold = 2): boolean[] {
   const cells: boolean[] = [];
   for (let y = 0; y < rows - 1; y += 1) {
@@ -991,7 +1022,7 @@ function buildPreviewSurface(
 }
 
 export const reliefInternals = {
-  buildCellMask, buildSubjectPixelMask, cleanSubjectPixelMask, applyBoundaryRim,
+  buildCellMask, buildSubjectPixelMask, buildWordmarkPixelMask, cleanSubjectPixelMask, applyBoundaryRim,
   buildVectorLevels, buildSmoothedBoundaryPositions, buildColorCellAssignments, buildColoredMeshes, mergeMeshes,
   enforceUniformEdgeColor,
   buildWatertightHeightMesh, buildPreviewSurface, encodeBinaryStl, encodeThreeMf,

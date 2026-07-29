@@ -2,6 +2,10 @@
 
 ## Unveröffentlicht
 
+- **Wappen & Emblem** und **Logo mit Text** sind getrennte Ergebnisarten:
+  Wappen behalten eingeschlossene Flächen, Textlogos öffnen Buchstabenräume.
+- Hintergrundfarbene Innenräume von a, e, d, o, ö und ähnlichen Zeichen werden
+  im Textlogo-Modus zuverlässig aus dem Mesh entfernt.
 - Filigrane Wort- und Signet-Logos werden als gemeinsame ebene Reliefhöhe
   rekonstruiert; Kantenglättungsfarben erzeugen keine Spitzen mehr.
 - Dünne Buchstaben und geschwungene Linien bleiben in der Logo-Maske erhalten.

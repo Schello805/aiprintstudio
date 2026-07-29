@@ -59,7 +59,7 @@ interface Window {
       profile: "fast" | "balanced" | "fine" | "photo" | "logo";
       smoothing: number;
       detail: number;
-      processingMode: "auto" | "vector" | "depth" | "height";
+      processingMode: "auto" | "vector" | "wordmark" | "depth" | "height";
       sourceColors: string[];
       colors: string[];
       sideColorIndex: number;
@@ -73,7 +73,7 @@ interface Window {
       options: {
         widthMm: number; baseMm: number; reliefMm: number; resolution: number; invert: boolean;
         profile: "fast" | "balanced" | "fine" | "photo" | "logo"; smoothing: number; detail: number;
-        processingMode: "auto" | "vector" | "depth" | "height";
+        processingMode: "auto" | "vector" | "wordmark" | "depth" | "height";
         sourceColors: string[];
         colors: string[];
         sideColorIndex: number;

@@ -118,7 +118,7 @@ h1,h2,h3 { font-family:Manrope, sans-serif; margin:0; }
 .conversion-options { position:relative; display:grid; gap:10px; margin:0 0 12px; padding:13px; border:1px solid #222832; border-radius:13px; background:#0e1218; }
 .profile-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:7px; }
 .mode-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:7px; }
-.mode-grid.primary-modes { grid-template-columns:repeat(3,1fr); }
+.mode-grid.primary-modes { grid-template-columns:repeat(4,1fr); }
 .mode-option { display:flex; gap:9px; align-items:center; border:1px solid #29313b; border-radius:10px; padding:10px; text-align:left; background:#11151b; color:#7f8996; cursor:pointer; }
 .mode-option svg { width:18px; flex:0 0 auto; }
 .mode-option strong,.mode-option span { display:block; }
