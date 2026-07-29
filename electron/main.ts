@@ -13,6 +13,7 @@ import { renderTextImage, type TextImageOptions } from "./text-image.js";
 import { buildCadPlanningRequest, encodeCadStl, validateCadPlan, type CadPlan } from "./cad.js";
 import { checkSystemCompatibility } from "./system-check.js";
 import { decryptApiKey, encryptApiKey, type EncryptedApiKey } from "./api-key-vault.js";
+import { calculateAiCost, estimateTokens, openAiPricing } from "./openai-usage.js";
 
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
 const developmentUrl = process.env.VITE_DEV_SERVER_URL ?? "http://localhost:5173";
@@ -28,6 +29,14 @@ type StoredSettings = {
 const settingsDirectoryName = "de.michaelschellenberger.aiprintstudio";
 let sessionOpenAiKey: string | null = null;
 const reliefJobs = new Map<string, { controller: AbortController; worker?: Worker }>();
+type Ai3dProgress = {
+  phase: string;
+  progress: number;
+  estimatedCostEur: number;
+  exactTokenUsage: boolean;
+  inputTokens: number;
+  outputTokens: number;
+};
 
 function isNewerVersion(candidate: string, current: string): boolean {
   const candidateParts = candidate.split(".").map(Number);
@@ -241,7 +250,11 @@ async function removeLegacyStoredOpenAiKey(): Promise<void> {
   await writeSettings(settings);
 }
 
-async function createPrintableCadPlan(prompt: string, existingPlan?: CadPlan) {
+async function createPrintableCadPlan(
+  prompt: string,
+  existingPlan?: CadPlan,
+  onProgress: (progress: Ai3dProgress) => void = () => undefined
+) {
   const apiKey = sessionOpenAiKey;
   if (!apiKey) {
     const settings = await readSettings();
@@ -261,13 +274,24 @@ async function createPrintableCadPlan(prompt: string, existingPlan?: CadPlan) {
       size: { type: "array", minItems: 3, maxItems: 3, items: { type: "number", minimum: 1.2, maximum: 300 } }
     }
   };
+  const planningInput = buildCadPlanningRequest(prompt, existingPlan);
+  const estimatedInputTokens = estimateTokens(JSON.stringify(planningInput));
+  onProgress({
+    phase: "Sichere Verbindung wird aufgebaut",
+    progress: 8,
+    estimatedCostEur: calculateAiCost(estimatedInputTokens, 0),
+    exactTokenUsage: false,
+    inputTokens: estimatedInputTokens,
+    outputTokens: 0
+  });
   const response = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: "gpt-5.6-sol",
+      model: openAiPricing.model,
       reasoning: { effort: "medium" },
-      input: buildCadPlanningRequest(prompt, existingPlan),
+      input: planningInput,
+      stream: true,
       text: {
         format: {
           type: "json_schema",
@@ -290,10 +314,93 @@ async function createPrintableCadPlan(prompt: string, existingPlan?: CadPlan) {
     })
   });
   if (!response.ok) throw new Error(`OpenAI konnte den CAD-Bauplan nicht erzeugen (${response.status}). Prüfe API-Key und Guthaben.`);
-  const body = await response.json() as { output?: Array<{ content?: Array<{ type?: string; text?: string }> }> };
-  const output = body.output?.flatMap((item) => item.content ?? []).find((item) => item.type === "output_text")?.text;
+  if (!response.body) throw new Error("OpenAI hat keinen lesbaren Antwortstrom geliefert.");
+  onProgress({
+    phase: "OpenAI konstruiert den CAD-Bauplan",
+    progress: 24,
+    estimatedCostEur: calculateAiCost(estimatedInputTokens, 0),
+    exactTokenUsage: false,
+    inputTokens: estimatedInputTokens,
+    outputTokens: 0
+  });
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let output = "";
+  let usage = { inputTokens: estimatedInputTokens, outputTokens: 0, cachedTokens: 0 };
+  let completedResponse: {
+    output?: Array<{ content?: Array<{ type?: string; text?: string }> }>;
+    usage?: {
+      input_tokens?: number;
+      output_tokens?: number;
+      input_tokens_details?: { cached_tokens?: number };
+    };
+  } | undefined;
+  const processEvent = (payload: string) => {
+    if (!payload || payload === "[DONE]") return;
+    const event = JSON.parse(payload) as {
+      type?: string;
+      delta?: string;
+      response?: typeof completedResponse;
+      error?: { message?: string };
+    };
+    if (event.type === "response.output_text.delta" && event.delta) {
+      output += event.delta;
+      usage.outputTokens = Math.max(usage.outputTokens, estimateTokens(output));
+      onProgress({
+        phase: "CAD-Bauteile werden ausgearbeitet",
+        progress: Math.min(86, 30 + Math.round(usage.outputTokens / 18)),
+        estimatedCostEur: calculateAiCost(usage.inputTokens, usage.outputTokens),
+        exactTokenUsage: false,
+        inputTokens: usage.inputTokens,
+        outputTokens: usage.outputTokens
+      });
+    } else if (event.type === "response.completed" && event.response) {
+      completedResponse = event.response;
+      usage = {
+        inputTokens: event.response.usage?.input_tokens ?? usage.inputTokens,
+        outputTokens: event.response.usage?.output_tokens ?? usage.outputTokens,
+        cachedTokens: event.response.usage?.input_tokens_details?.cached_tokens ?? 0
+      };
+    } else if (event.type === "error" || event.type === "response.failed") {
+      throw new Error(event.error?.message ?? "OpenAI konnte den CAD-Bauplan nicht erzeugen.");
+    }
+  };
+  while (true) {
+    const chunk = await reader.read();
+    if (chunk.done) break;
+    buffer += decoder.decode(chunk.value, { stream: true });
+    const blocks = buffer.split(/\r?\n\r?\n/);
+    buffer = blocks.pop() ?? "";
+    for (const block of blocks) {
+      const data = block.split(/\r?\n/).filter((line) => line.startsWith("data:")).map((line) => line.slice(5).trim()).join("");
+      processEvent(data);
+    }
+  }
+  if (buffer.trim()) {
+    const data = buffer.split(/\r?\n/).filter((line) => line.startsWith("data:")).map((line) => line.slice(5).trim()).join("");
+    processEvent(data);
+  }
+  output ||= completedResponse?.output?.flatMap((item) => item.content ?? []).find((item) => item.type === "output_text")?.text ?? "";
   if (!output) throw new Error("OpenAI hat keinen CAD-Bauplan zurückgegeben.");
-  return validateCadPlan(JSON.parse(output));
+  onProgress({
+    phase: "Bauplan validieren und STL lokal erzeugen",
+    progress: 94,
+    estimatedCostEur: calculateAiCost(usage.inputTokens, usage.outputTokens, usage.cachedTokens),
+    exactTokenUsage: true,
+    inputTokens: usage.inputTokens,
+    outputTokens: usage.outputTokens
+  });
+  return {
+    plan: validateCadPlan(JSON.parse(output)),
+    billing: {
+      model: openAiPricing.model,
+      inputTokens: usage.inputTokens,
+      outputTokens: usage.outputTokens,
+      cachedTokens: usage.cachedTokens,
+      estimatedCostEur: calculateAiCost(usage.inputTokens, usage.outputTokens, usage.cachedTokens)
+    }
+  };
 }
 
 function createWindow(): void {
@@ -539,18 +646,30 @@ app.whenReady().then(async () => {
       dataUrl: `data:image/png;base64,${png.toString("base64")}`
     };
   });
-  ipcMain.handle("ai3d:create", async (_event, promptValue: string, existingPlanValue?: unknown) => {
+  ipcMain.handle("ai3d:create", async (event, promptValue: string, existingPlanValue?: unknown) => {
     const prompt = promptValue.trim();
     if (prompt.length < (existingPlanValue ? 3 : 10) || prompt.length > 800) {
       throw new Error(existingPlanValue ? "Die Folgeanweisung muss 3 bis 800 Zeichen enthalten." : "Beschreibe das Objekt bitte mit 10 bis 800 Zeichen.");
     }
     const existingPlan = existingPlanValue ? validateCadPlan(existingPlanValue) : undefined;
-    const plan = await createPrintableCadPlan(prompt, existingPlan);
+    const { plan, billing } = await createPrintableCadPlan(prompt, existingPlan, (progress) => {
+      if (!event.sender.isDestroyed()) event.sender.send("ai3d:progress", progress);
+    });
     const outputDirectory = join(app.getPath("downloads"), "AI Print Studio");
     await mkdir(outputDirectory, { recursive: true });
     const stlPath = join(outputDirectory, `ki-${Date.now()}.stl`);
     await writeFile(stlPath, encodeCadStl(plan));
-    return { stlPath, plan };
+    if (!event.sender.isDestroyed()) {
+      event.sender.send("ai3d:progress", {
+        phase: "Fertig",
+        progress: 100,
+        estimatedCostEur: billing.estimatedCostEur,
+        exactTokenUsage: true,
+        inputTokens: billing.inputTokens,
+        outputTokens: billing.outputTokens
+      } satisfies Ai3dProgress);
+    }
+    return { stlPath, plan, billing };
   });
   ipcMain.handle("objectCapture:create", async () => {
     const selection = await dialog.showOpenDialog({

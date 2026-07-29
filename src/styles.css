@@ -541,6 +541,24 @@ footer { padding:17px 36px; border-top:1px solid #1c2028; display:flex; justify-
 .api-cost-notice { display:flex; gap:10px; align-items:flex-start; margin-top:8px; padding:10px 12px; border:1px solid #3d344b; border-radius:9px; background:#17131d; font-size:9px; line-height:1.45; }
 .api-cost-notice strong { flex:0 0 auto; color:#d8b7f4; }
 .api-cost-notice span { color:#9c8da8; }
+.ai-live-progress { display:grid; gap:11px; margin-top:10px; padding:15px; border:1px solid #496d38; border-radius:11px; background:linear-gradient(145deg,#101b0e,#11171a); box-shadow:0 14px 38px #0006; }
+.ai-progress-heading,.ai-cost-live { display:flex; align-items:center; justify-content:space-between; gap:18px; }
+.ai-progress-heading strong,.ai-progress-heading small { display:block; }
+.ai-progress-heading strong { color:#e9f9df; font-size:13px; }
+.ai-progress-heading small { margin-top:3px; color:#8c9b87; font-size:9px; }
+.ai-progress-heading>span { color:#a5f36d; font-size:14px; font-weight:850; font-variant-numeric:tabular-nums; }
+.ai-progress-track { height:9px; overflow:hidden; border:1px solid #34432e; border-radius:99px; background:#080d08; }
+.ai-progress-track>span { display:block; height:100%; border-radius:inherit; background:linear-gradient(90deg,#73dc50,#b6ff7e); box-shadow:0 0 14px #91ed6177; transition:width .28s ease; }
+.ai-cost-live { padding-top:2px; }
+.ai-cost-live div small,.ai-cost-live div strong { display:block; }
+.ai-cost-live div small { color:#86947f; font-size:8px; font-weight:800; letter-spacing:.12em; }
+.ai-cost-live div strong { margin-top:2px; color:#a5f36d; font-size:20px; font-variant-numeric:tabular-nums; }
+.ai-cost-live>span { color:#a4aea0; font-size:9px; }
+.ai-live-progress>p { margin:0; color:#778274; font-size:8px; line-height:1.45; }
+.ai-cost-result { display:grid; grid-template-columns:auto auto 1fr; align-items:center; gap:9px; margin-top:9px; padding:9px 12px; border:1px solid #35452f; border-radius:9px; background:#111810; }
+.ai-cost-result span,.ai-cost-result small { color:#879382; font-size:9px; }
+.ai-cost-result strong { color:#a5f36d; font-size:13px; font-variant-numeric:tabular-nums; }
+.ai-cost-result small { text-align:right; }
 .ai-unlock-panel { display:grid; grid-template-columns:38px minmax(0,1fr); gap:12px; margin:14px 0; padding:14px; border:1px solid #49693b; border-radius:11px; background:#111b10; color:#dcebd6; }
 .ai-unlock-panel>svg { width:24px; color:#9bef6e; }
 .ai-unlock-panel strong { display:block; margin-bottom:4px; }

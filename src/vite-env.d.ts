@@ -56,7 +56,22 @@ interface Window {
         title: string; widthMm: number; depthMm: number; heightMm: number;
         primitives: Array<{ type: "box" | "cylinder" | "roof"; name: string; position: [number, number, number]; size: [number, number, number] }>;
       };
+      billing: {
+        model: string;
+        inputTokens: number;
+        outputTokens: number;
+        cachedTokens: number;
+        estimatedCostEur: number;
+      };
     }>;
+    onAi3dProgress: (callback: (progress: {
+      phase: string;
+      progress: number;
+      estimatedCostEur: number;
+      exactTokenUsage: boolean;
+      inputTokens: number;
+      outputTokens: number;
+    }) => void) => () => void;
     createObjectCapture: () => Promise<{ usdzPath: string; photoCount: number } | null>;
     createRelief: (jobId: string, imagePath: string, options: {
       widthMm: number;

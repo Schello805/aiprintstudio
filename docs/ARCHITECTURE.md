@@ -113,6 +113,14 @@ Anweisung an OpenAI. Die Antwort ist stets ein vollständiger Ersatzplan, wird
 erneut validiert und als neue STL gespeichert. Vorherige Pläne bleiben während
 des geöffneten Dialogs für Rückgängig erhalten.
 
+Die Responses-API wird gestreamt. Der Main-Prozess leitet Phasen- und
+Tokenereignisse per IPC an den Renderer weiter. Während des Streams werden
+Texttoken näherungsweise erfasst; `response.completed.usage` ersetzt diese
+Schätzung am Ende durch die gemeldeten Eingabe-, Cache- und Ausgabetoken. Der
+angezeigte Prozentwert beschreibt den Arbeitsabschnitt und nicht die unbekannte
+Restlaufzeit. Die Euroanzeige verwendet die hinterlegte Modellpreisliste und
+einen ausdrücklich als Schätzung gekennzeichneten USD/EUR-Kurs.
+
 Der Workflow ist für einfache konstruktive Modelle gedacht. Organische
 Text-zu-3D-Rekonstruktion ist nicht Teil der aktuellen Architektur.
 

@@ -38,6 +38,16 @@ type ReliefResult = Awaited<ReturnType<NonNullable<typeof window.desktop>["creat
 type Ai3dResult = Awaited<ReturnType<NonNullable<typeof window.desktop>["createAi3d"]>>;
 type CadPlan = Ai3dResult["plan"];
 type CadPrimitive = CadPlan["primitives"][number];
+
+function formatApiCost(value: number): string {
+  return new Intl.NumberFormat("de-DE", {
+    style: "currency",
+    currency: "EUR",
+    minimumFractionDigits: value < 0.01 ? 4 : 2,
+    maximumFractionDigits: value < 0.01 ? 4 : 2
+  }).format(value);
+}
+
 type QualityProfile = "fast" | "balanced" | "fine" | "photo" | "logo";
 type ProcessingMode = "auto" | "vector" | "wordmark" | "depth" | "height" | "scan";
 type HistoryEntry = {
@@ -1028,6 +1038,14 @@ function Ai3dDialog({ close }: { close: () => void }) {
   const [apiStatus, setApiStatus] = useState<SettingsStatus | null>(null);
   const [unlockPassword, setUnlockPassword] = useState("");
   const [unlockBusy, setUnlockBusy] = useState(false);
+  const [progress, setProgress] = useState({
+    phase: "Anfrage vorbereiten",
+    progress: 0,
+    estimatedCostEur: 0,
+    exactTokenUsage: false,
+    inputTokens: 0,
+    outputTokens: 0
+  });
 
   const refreshApiStatus = useCallback(async () => {
     if (!window.desktop) return;
@@ -1035,6 +1053,7 @@ function Ai3dDialog({ close }: { close: () => void }) {
   }, []);
 
   useEffect(() => { void refreshApiStatus(); }, [refreshApiStatus]);
+  useEffect(() => window.desktop?.onAi3dProgress((nextProgress) => setProgress(nextProgress)), []);
 
   async function unlockApiKey() {
     setUnlockBusy(true); setError(null);
@@ -1048,6 +1067,14 @@ function Ai3dDialog({ close }: { close: () => void }) {
     } finally { setUnlockBusy(false); }
   }
   async function submit(instruction: string, existing?: Ai3dResult) {
+    setProgress({
+      phase: "Anfrage vorbereiten",
+      progress: 2,
+      estimatedCostEur: 0,
+      exactTokenUsage: false,
+      inputTokens: 0,
+      outputTokens: 0
+    });
     setBusy(true); setError(null);
     try {
       if (!window.desktop) throw new Error("Prompt zu 3D ist nur in der installierten App verfügbar.");
@@ -1136,9 +1163,33 @@ function Ai3dDialog({ close }: { close: () => void }) {
         <div className="notice">{result ? "Für Änderungen werden deine Folgeanweisung und der aktuelle CAD-Bauplan an OpenAI übertragen. Vorschau, Geometrie und STL werden lokal erzeugt." : "Nur deine Beschreibung wird an OpenAI übertragen. Geometrie und STL werden anschließend lokal auf deinem Mac erzeugt."}</div>
         <div className="api-cost-notice">
           <strong>OpenAI-API-Kosten</strong>
-          <span>OpenAI rechnet jede Erstellung und Folgeänderung direkt über deinen eigenen API-Account ab. Der genaue Betrag hängt vom verwendeten Modell sowie von Prompt- und Bauplanlänge ab; AI Print Studio erhebt keine zusätzlichen Gebühren.</span>
+          <span>OpenAI rechnet jede Erstellung und Folgeänderung direkt über deinen eigenen API-Account ab. Während der Erstellung zeigt AI Print Studio eine laufende Schätzung in Euro; der Tokenverbrauch wird nach Abschluss korrigiert. AI Print Studio erhebt keine zusätzlichen Gebühren.</span>
         </div>
-        {busy && <div className="ai-progress"><span /><div><strong>{result ? "OpenAI überarbeitet den CAD-Bauplan …" : "OpenAI konstruiert den CAD-Bauplan …"}</strong><small>Danach aktualisiert die App Vorschau und STL lokal.</small></div></div>}
+        {busy && <div className="ai-live-progress" aria-live="polite">
+          <div className="ai-progress-heading">
+            <div>
+              <strong>{progress.phase}</strong>
+              <small>Phasenfortschritt · geschätzt</small>
+            </div>
+            <span>{Math.round(progress.progress)} %</span>
+          </div>
+          <div className="ai-progress-track" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(progress.progress)}>
+            <span style={{ width: `${Math.max(2, progress.progress)}%` }} />
+          </div>
+          <div className="ai-cost-live">
+            <div>
+              <small>AKTUELLE API-KOSTEN</small>
+              <strong>ca. {formatApiCost(progress.estimatedCostEur)}</strong>
+            </div>
+            <span>{progress.exactTokenUsage ? "Tokenverbrauch vollständig" : `${progress.inputTokens + progress.outputTokens} Token · laufende Schätzung`}</span>
+          </div>
+          <p>Der Balken zeigt den Arbeitsabschnitt, da OpenAI keinen exakten Gesamtfortschritt liefert. Die Euro-Anzeige nutzt die gemeldeten bzw. während des Streams geschätzten Token und einen festen USD/EUR-Schätzkurs.</p>
+        </div>}
+        {!busy && result?.billing && <div className="ai-cost-result">
+          <span>Letzte OpenAI-Anfrage</span>
+          <strong>ca. {formatApiCost(result.billing.estimatedCostEur)}</strong>
+          <small>{result.billing.inputTokens.toLocaleString("de-DE")} Eingabe-Token · {result.billing.outputTokens.toLocaleString("de-DE")} Ausgabe-Token</small>
+        </div>}
         {error && <div className="notice error">{error}</div>}
         <div className="modal-actions">
           <button className="secondary-button" onClick={close} disabled={busy}>{result ? "Schließen" : "Abbrechen"}</button>

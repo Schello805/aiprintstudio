@@ -9,7 +9,7 @@ CAD-Pläne und Mesh-Dateien bleiben standardmäßig auf dem eigenen Mac.
 
 [![Quality](https://github.com/Schello805/aiprintstudio/actions/workflows/quality.yml/badge.svg)](https://github.com/Schello805/aiprintstudio/actions/workflows/quality.yml)
 
-> Aktueller Stand: Version 0.18.1. Bild- und Schrift-Reliefs, mehrfarbige
+> Aktueller Stand: Version 0.19.0. Bild- und Schrift-Reliefs, mehrfarbige
 > AMS-3MF-Dateien sowie einfache, per OpenAI geplante und lokal konstruierte
 > Prompt-zu-3D-Modelle sind testbar. Die vollständige Rundum-Rekonstruktion aus
 > einem einzelnen Bild bleibt eine spätere Ausbaustufe.
@@ -106,8 +106,11 @@ erhalten, jede Revision erzeugt lokal eine neue STL und die letzte Änderung kan
 im Dialog zurückgenommen werden.
 
 Jede Erstellung und Folgeänderung nutzt den eigenen OpenAI-API-Account. Die App
-zeigt diesen Kostenhinweis direkt im Prompt-Dialog und erhebt selbst keine
-zusätzlichen API-Gebühren.
+zeigt während der gestreamten Antwort den geschätzten Arbeitsabschnitt und eine
+laufende Kostenschätzung in Euro. Nach Abschluss wird der Betrag mit den von
+OpenAI gemeldeten Token aktualisiert. Der Fortschritt ist keine exakte
+Zeitprognose und der Eurobetrag verwendet einen festen USD/EUR-Schätzkurs. Die
+App erhebt selbst keine zusätzlichen API-Gebühren.
 
 ### Mehrfoto-Scan
 

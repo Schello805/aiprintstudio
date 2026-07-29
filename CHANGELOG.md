@@ -2,6 +2,15 @@
 
 ## Unveröffentlicht
 
+- **Prompt zu 3D** verarbeitet OpenAI-Antworten jetzt als Stream. Ein
+  Fortschrittsbalken zeigt den geschätzten Arbeitsabschnitt von Verbindung,
+  Konstruktion, Validierung und lokalem STL-Export.
+- Die laufende Kostenanzeige schätzt den Eurobetrag während der Antwort aus
+  Eingabe- und Ausgabetoken. Nach Abschluss wird sie mit den von OpenAI
+  gemeldeten Token korrigiert und zeigt die Werte neben dem Ergebnis.
+- Fortschritt und Kosten sind bewusst als Schätzwerte gekennzeichnet: OpenAI
+  liefert keinen exakten Gesamtfortschritt, und die Euroanzeige verwendet einen
+  festen USD/EUR-Schätzkurs.
 - **Prompt zu 3D** erkennt einen gespeicherten, nach dem App-Neustart noch
   gesperrten OpenAI-Schlüssel und zeigt das Passwortfeld jetzt direkt im
   Prompt-Dialog. Nach dem Entsperren kann das Modell ohne Umweg erstellt werden.
