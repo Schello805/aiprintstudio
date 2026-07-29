@@ -2,6 +2,10 @@
 
 ## Unveröffentlicht
 
+- Freigestellte Textlogos sind insgesamt exakt so hoch wie der eingestellte
+  Reliefwert; die Grundplattendicke wird ohne vorhandene Platte nicht addiert.
+- Die 3D-Vorschau zeigt bei flachen Logos jetzt Deckfläche, Seiten und Boden,
+  sodass das Modell sichtbar auf dem Raster steht statt zu schweben.
 - STL und 3MF spiegeln die Bild-Y-Achse beim Export korrekt, sodass Schrift und
   Logos im Slicer genauso aufrecht liegen wie in der 3D-Vorschau.
 - Die Dreiecksorientierung wird bei der Achsenkorrektur mitgedreht; Ober- und

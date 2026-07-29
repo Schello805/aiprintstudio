@@ -175,7 +175,12 @@ export async function createRelief(
     : applyBoundaryRim(profiledLevels, subjectPixels, gridWidth, gridHeight, options.profile === "logo" ? 2 : 1);
   const heights = levels.map((value) => options.baseMm + value * options.reliefMm);
   if (flatVectorSurface) {
-    const flatHeight = options.baseMm + options.reliefMm;
+    // Ein freigestelltes Textlogo besitzt keine durchgehende Grundplatte.
+    // Deshalb entspricht seine gesamte Körperhöhe exakt der eingestellten
+    // Reliefhöhe. Wappen behalten weiterhin Grundplatte + Relief.
+    const flatHeight = useWordmarkMask
+      ? options.reliefMm
+      : options.baseMm + options.reliefMm;
     for (let y = 0; y < gridHeight - 1; y += 1) {
       for (let x = 0; x < gridWidth - 1; x += 1) {
         if (!cellMask[y * (gridWidth - 1) + x]) continue;
@@ -939,6 +944,23 @@ function buildPreviewSurface(
   sideColorIndex = 0,
   preserveBoundaryHeights = false
 ): { positions: number[]; indices: number[]; colorParts: Array<{ color: string; indices: number[] }> } {
+  // Flache einfarbige Wort-/Schriftlogos benötigen in der Vorschau nicht nur
+  // ihre Deckfläche, sondern auch Boden und Seitenwände. Andernfalls liegt die
+  // einzige sichtbare Fläche auf ihrer Z-Höhe über dem Raster und wirkt
+  // fälschlich schwebend.
+  if (preserveBoundaryHeights && cellMask && !colors.length) {
+    const solid = buildWatertightHeightMesh(columns, rows, widthMm, heightMm, heights, cellMask);
+    return {
+      positions: solid.vertices.flatMap(([x, y, z]) => [
+        x - widthMm / 2,
+        z,
+        y - heightMm / 2
+      ]),
+      indices: solid.triangles.flatMap(([a, b, c]) => [a, b, c]),
+      colorParts: []
+    };
+  }
+
   // Die Vorschau darf die geglättete Exportkontur nicht durch erneutes grobes
   // Downsampling wieder gezackt darstellen.
   // Logo-Modelle werden mit bis zu 512 Rasterpunkten erzeugt. Die frühere

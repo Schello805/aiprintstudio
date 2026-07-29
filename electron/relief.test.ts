@@ -307,7 +307,7 @@ describe("relief mesh", () => {
     for (const index of boundary.keys()) expect(preview.positions[index * 3 + 1]).toBe(1);
   });
 
-  it("keeps monochrome text previews perfectly level up to their boundary", () => {
+  it("shows monochrome text previews as grounded solids", () => {
     const columns = 4, rows = 4;
     const preview = reliefInternals.buildPreviewSurface(
       columns,
@@ -322,7 +322,8 @@ describe("relief mesh", () => {
       true
     );
     const heights = preview.positions.filter((_, index) => index % 3 === 1);
-    expect(new Set(heights)).toEqual(new Set([5]));
+    expect(new Set(heights)).toEqual(new Set([0, 5]));
+    expect(preview.indices.length).toBeGreaterThan((columns - 1) * (rows - 1) * 6);
   });
 
   it("builds a high-resolution preview without overflowing the call stack", () => {
@@ -349,7 +350,7 @@ describe("relief mesh", () => {
       0,
       true
     );
-    expect(preview.positions).toHaveLength(columns * rows * 3);
+    expect(preview.positions).toHaveLength(columns * rows * 2 * 3);
   });
 
   it("uses a manually edited heightmap without renormalizing its levels", async () => {
@@ -394,7 +395,7 @@ describe("relief mesh", () => {
       });
       const usedVertices = new Set(result.preview.indices);
       const topHeights = new Set([...usedVertices].map((index) => result.preview.positions[index * 3 + 1]));
-      expect(topHeights).toEqual(new Set([5.6]));
+      expect(topHeights).toEqual(new Set([0, 5.6]));
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
@@ -422,7 +423,8 @@ describe("relief mesh", () => {
       const topHeights = new Set([...usedVertices].map((index) =>
         Number(result.preview.positions[index * 3 + 1].toFixed(4))
       ));
-      expect(topHeights).toEqual(new Set([5.6]));
+      expect(topHeights).toEqual(new Set([0, 4]));
+      expect(Math.max(...topHeights)).toBe(4);
       expect(result.triangleCount).toBeGreaterThan(1_000);
     } finally {
       await rm(directory, { recursive: true, force: true });
