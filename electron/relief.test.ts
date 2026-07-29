@@ -367,4 +367,33 @@ describe("relief mesh", () => {
       await rm(directory, { recursive: true, force: true });
     }
   });
+
+  it("keeps a sparse multicolor word logo level instead of creating height spikes", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "ai-print-wordmark-test-"));
+    try {
+      const imagePath = join(directory, "wordmark.png");
+      const svg = Buffer.from(`
+        <svg xmlns="http://www.w3.org/2000/svg" width="320" height="160">
+          <rect width="320" height="160" fill="white"/>
+          <path d="M35 55 C70 10 95 85 140 40 C170 18 205 52 250 42" fill="none" stroke="#315979" stroke-width="7"/>
+          <text x="35" y="105" font-family="Helvetica" font-size="40" fill="#8492a4">Frauenärzte</text>
+          <text x="120" y="137" font-family="Helvetica" font-size="24" font-style="italic" fill="#315979">im Seenland</text>
+        </svg>
+      `);
+      await writeFile(imagePath, await sharp(svg).png().toBuffer());
+      const result = await createRelief(imagePath, directory, {
+        widthMm: 100, baseMm: 1.6, reliefMm: 4, resolution: 256, invert: false,
+        profile: "logo", smoothing: 2, detail: 1, processingMode: "vector",
+        sourceColors: [], colors: [], sideColorIndex: 0
+      });
+      const usedVertices = new Set(result.preview.indices);
+      const topHeights = new Set([...usedVertices].map((index) =>
+        Number(result.preview.positions[index * 3 + 1].toFixed(4))
+      ));
+      expect(topHeights).toEqual(new Set([5.6]));
+      expect(result.triangleCount).toBeGreaterThan(1_000);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
 });

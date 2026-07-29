@@ -87,7 +87,14 @@ export async function createRelief(
     .toBuffer({ resolveWithObject: true });
   const rawSubjectPixels = buildSubjectPixelMask(rgba, gridWidth, gridHeight);
   const hasTransparency = hasUsefulTransparency(rgba);
-  const subjectPixels = hasTransparency ? rawSubjectPixels : cleanSubjectPixelMask(rawSubjectPixels, gridWidth, gridHeight);
+  // Bei Wortmarken und filigranen Logos würde die normale Maskenbereinigung
+  // dünne Buchstaben und geschwungene Linien teilweise wegerodieren. Einzelne
+  // Pixelartefakte entfernt anschließend bereits die strengere Zellmaske.
+  const preserveThinVectorStrokes = options.profile === "logo"
+    || options.processingMode === "vector";
+  const subjectPixels = hasTransparency || preserveThinVectorStrokes
+    ? rawSubjectPixels
+    : cleanSubjectPixelMask(rawSubjectPixels, gridWidth, gridHeight);
   const cellMask = buildCellMask(subjectPixels, gridWidth, gridHeight, hasTransparency ? 1 : 2);
   const heightMm = options.widthMm * gridHeight / gridWidth;
   const profile = profileSettings(options.profile);
@@ -139,6 +146,14 @@ export async function createRelief(
     // graue Randpixel. Diese sind Kantenglättung, keine semantischen Farbebenen.
     flatVectorSurface = Number.isFinite(minimum)
       && (maximum - minimum < 0.001 || (hasTransparency && maximumChroma <= 8));
+
+    // Schmale Wort-/Signet-Logos enthalten durch Kantenglättung oft zahlreiche
+    // Grau- und Blautöne. Diese sind Druckfarben, aber keine Tiefenstufen. Bei
+    // geringer Flächenbelegung wird deshalb eine gemeinsame, ruhige Oberhöhe
+    // verwendet; die Farbauflösung für AMS bleibt davon unberührt.
+    const subjectCoverage = subjectPixels.reduce((sum, occupied) => sum + Number(occupied), 0)
+      / Math.max(1, subjectPixels.length);
+    if (options.profile === "logo" && subjectCoverage < 0.42) flatVectorSurface = true;
   }
   const smoothed = editorHeightmap ? rawLevels : smoothHeightField(rawLevels, gridWidth, gridHeight, activeMode === "vector" ? Math.min(1, options.smoothing) : options.smoothing);
   const detailed = editorHeightmap ? smoothed : smoothed.map((value, index) =>

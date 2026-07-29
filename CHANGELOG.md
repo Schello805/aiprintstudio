@@ -2,6 +2,11 @@
 
 ## Unveröffentlicht
 
+- Filigrane Wort- und Signet-Logos werden als gemeinsame ebene Reliefhöhe
+  rekonstruiert; Kantenglättungsfarben erzeugen keine Spitzen mehr.
+- Dünne Buchstaben und geschwungene Linien bleiben in der Logo-Maske erhalten.
+- Ein Regressionstest bildet ein mehrfarbiges medizinisches Wortlogo mit
+  dünner Schreibschrift und Signet nach.
 - Offizielle macOS-Releases verlangen jetzt zwingend eine echte
   Developer-ID-Signatur und überschreiben sie nicht mehr versehentlich mit
   einer Ad-hoc-Signatur.
