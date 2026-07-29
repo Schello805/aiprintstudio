@@ -30,6 +30,8 @@ interface Window {
       suggestedProfile: "logo" | "photo";
       dataUrl: string;
     } | null>;
+    saveProject: (project: unknown) => Promise<string | null>;
+    openProject: () => Promise<unknown | null>;
     createTextImage: (options: {
       text: string;
       fontFamily: string;
@@ -91,6 +93,7 @@ interface Window {
         sideColorIndex: number;
       };
       printability: { score: number; status: "ready" | "warning" | "critical"; issues: string[]; estimatedVolumeCm3: number; checks: Array<{ label: string; status: "ok" | "warning" | "error"; detail: string }> };
+      slicer: { layerHeightMm: number; layerCount: number; estimatedMinutes: number; filamentMeters: number; materialGrams: number; colorChanges: number };
       heightmapDataUrl: string;
       preview: {
         positions: number[];

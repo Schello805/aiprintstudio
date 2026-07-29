@@ -465,6 +465,58 @@ app.whenReady().then(async () => {
       dataUrl: `data:${mime};base64,${previewBytes.toString("base64")}`
     };
   });
+  ipcMain.handle("project:save", async (_event, project: unknown) => {
+    const serialized = JSON.stringify(project, null, 2);
+    if (serialized.length > 35 * 1024 * 1024) throw new Error("Das Projekt ist größer als 35 MB.");
+    const parsed = JSON.parse(serialized) as { schemaVersion?: number; source?: { name?: string }; settings?: unknown };
+    if (parsed.schemaVersion !== 1 || !parsed.source?.name || !parsed.settings || typeof parsed.settings !== "object") {
+      throw new Error("Der Projektstand ist unvollständig.");
+    }
+    const suggested = `${parsed.source.name.replace(/\.[^.]+$/, "").replace(/[^a-zA-Z0-9äöüÄÖÜß_-]+/g, "-") || "AI-Print-Projekt"}.aips`;
+    const result = await dialog.showSaveDialog({
+      title: "AI-Print-Studio-Projekt speichern",
+      defaultPath: join(app.getPath("documents"), suggested),
+      filters: [{ name: "AI Print Studio Projekt", extensions: ["aips"] }]
+    });
+    if (result.canceled || !result.filePath) return null;
+    await writeFile(result.filePath, serialized, "utf8");
+    return result.filePath;
+  });
+  ipcMain.handle("project:open", async () => {
+    const result = await dialog.showOpenDialog({
+      title: "AI-Print-Studio-Projekt öffnen",
+      properties: ["openFile"],
+      filters: [{ name: "AI Print Studio Projekt", extensions: ["aips"] }]
+    });
+    if (result.canceled || !result.filePaths[0]) return null;
+    const bytes = await readFile(result.filePaths[0]);
+    if (!bytes.length || bytes.length > 35 * 1024 * 1024) throw new Error("Die Projektdatei ist leer oder zu groß.");
+    const project = JSON.parse(bytes.toString("utf8")) as {
+      schemaVersion?: number;
+      source?: { name?: string; dataUrl?: string; path?: string };
+      settings?: unknown;
+      tool?: string;
+    };
+    if (
+      project.schemaVersion !== 1 ||
+      !project.source?.name ||
+      !project.settings ||
+      typeof project.settings !== "object" ||
+      !["image", "text"].includes(project.tool ?? "") ||
+      !/^data:image\/[a-z+.-]+;base64,/.test(project.source.dataUrl ?? "")
+    ) {
+      throw new Error("Die Datei ist kein gültiges AI-Print-Studio-Projekt.");
+    }
+    const match = /^data:image\/[a-z+.-]+;base64,([A-Za-z0-9+/=]+)$/.exec(project.source.dataUrl ?? "");
+    if (!match) throw new Error("Das eingebettete Projektbild ist ungültig.");
+    const directory = join(app.getPath("temp"), "AI Print Studio Projects");
+    await mkdir(directory, { recursive: true });
+    const extension = project.source.dataUrl?.startsWith("data:image/png") ? "png" : "jpg";
+    const restoredPath = join(directory, `project-${Date.now()}.${extension}`);
+    await writeFile(restoredPath, Buffer.from(match[1], "base64"));
+    project.source.path = restoredPath;
+    return project;
+  });
   ipcMain.handle("text:createImage", async (_event, options: TextImageOptions) => {
     const { png, text, width, height } = await renderTextImage(options);
     const directory = join(app.getPath("temp"), "AI Print Studio Text");

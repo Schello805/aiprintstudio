@@ -38,6 +38,14 @@ export type ReliefResult = {
   heightMm: number;
   options: ReliefOptions;
   printability: PrintabilityReport;
+  slicer: {
+    layerHeightMm: number;
+    layerCount: number;
+    estimatedMinutes: number;
+    filamentMeters: number;
+    materialGrams: number;
+    colorChanges: number;
+  };
   heightmapDataUrl: string;
   preview: {
     positions: number[];
@@ -273,6 +281,15 @@ export async function createRelief(
     flatVectorSurface || (useWordmarkMask && options.includeBackground)
   );
   const printability = analysePrintability(mesh, heights, options, cellMask, gridWidth);
+  const layerHeightMm = 0.2;
+  const maximumHeight = heights.reduce((maximum, height) => Math.max(maximum, height), 0);
+  const materialVolumeMm3 = printability.estimatedVolumeCm3 * 1_000;
+  const filamentAreaMm2 = Math.PI * (1.75 / 2) ** 2;
+  const filamentMeters = materialVolumeMm3 / filamentAreaMm2 / 1_000;
+  const materialGrams = printability.estimatedVolumeCm3 * 1.24;
+  const layerCount = Math.max(1, Math.ceil(maximumHeight / layerHeightMm));
+  const colorChanges = Math.max(0, options.colors.length - 1) * Math.max(1, Math.ceil(options.reliefMm / layerHeightMm));
+  const estimatedMinutes = Math.ceil(materialVolumeMm3 / 7.5 / 60 + layerCount * 0.12 + colorChanges * 0.35);
   onProgress({ phase: "Druckbarkeit prüfen", detail: "Zusammenhalt, Mindestbreiten und Volumen werden bewertet …", progress: 84 });
   const heightmapPng = await sharp(Buffer.from(levels.map((value) => Math.round(value * 255))), {
     raw: { width: gridWidth, height: gridHeight, channels: 1 }
@@ -309,6 +326,7 @@ export async function createRelief(
     heightMm,
     options,
     printability,
+    slicer: { layerHeightMm, layerCount, estimatedMinutes, filamentMeters, materialGrams, colorChanges },
     heightmapDataUrl: `data:image/png;base64,${heightmapPng.toString("base64")}`,
     preview
   };

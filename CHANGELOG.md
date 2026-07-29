@@ -2,6 +2,15 @@
 
 ## Unveröffentlicht
 
+- Studio-Stände lassen sich als portable `.aips`-Projektdateien speichern und
+  mit Quelle, Einstellungen, AMS-Farben und manuellen Korrekturen wieder öffnen.
+- Der Druckscore bietet eine bestätigungspflichtige automatische Reparatur:
+  Mindestbreiten werden auf 0,8 mm optimiert, die Grundplatte stabilisiert,
+  zusammengehörige Logo-Elemente verbunden und übergroße Meshes reduziert.
+- Eine lokale Schichtsimulation zeigt Schichtzahl, geschätzte Druckzeit,
+  Filamentlänge, Materialgewicht und Farbwechsel ohne Cloud- oder API-Aufruf.
+- Der Flächeneditor besitzt freie Pinsel- und Radierwerkzeuge für Höhe und
+  AMS-Farbe sowie sichtbare Aktionen zum Verbinden und Trennen von Bereichen.
 - **Automatisch** erkennt Verlaufslogos jetzt selbstständig als Logo mit
   Hintergrund, aktiviert die 0,8-mm-Mindestbreite und verwendet eine
   slicerfreundliche Logoauflösung. Beim Referenzlogo sinkt das Mesh von rund

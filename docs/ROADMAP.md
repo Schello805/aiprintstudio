@@ -1,6 +1,6 @@
 # Roadmap
 
-## Aktueller Stand 0.14.3
+## Aktueller Stand 0.17.0
 
 - Bild zu 3D mit Kontur-, Höhenkarten- und lokaler KI-Tiefe
 - Schrift zu 3D mit gemeinsamem Relief- und AMS-Workflow
@@ -10,14 +10,17 @@
 - mehrfarbiger 3MF-Export als slicer-kompatibles Assembly mit einheitlichen
   Seiten- und Übergangskanten
 - SVG-Import, Druckscore, Verlauf und Updateprüfung
+- `.aips`-Projektdateien mit eingebetteter Quelle und Bearbeitungsstand
+- automatische Druckreparatur für 0,4-mm-Düsen
+- lokale Schicht-, Zeit- und Materialschätzung
+- freier Höhen-/Farbpinsel und Radierer im Flächeneditor
 
-## Als Nächstes: erweiterte Druckanalyse und Bearbeitung
+## Als Nächstes: präzisere Slicer- und Druckerprofile
 
 - zu dünne Motivflächen und Wandstärken direkt im Modell farbig markieren
 - problematische Überhänge und sehr steile Höhenübergänge anzeigen
 - druckerspezifische Mindestwerte für FDM und Resin
-- konkrete Reparaturvorschläge pro markierter Stelle
-- Vorschau der zu erwartenden Slicer-Schichten
+- echte Werkzeugpfade und Zeitmodelle über eine optionale lokale Slicer-Engine
 
 Diese Prüfungen sollen unmittelbar im Flächeneditor erscheinen, damit eine
 problematische Auswahl direkt angehoben, verbreitert, geglättet oder auf die

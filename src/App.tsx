@@ -8,6 +8,7 @@ import {
   ChevronRight,
   Clock3,
   Cpu,
+  FolderOpen,
   Github,
   History,
   ImagePlus,
@@ -16,11 +17,13 @@ import {
   LoaderCircle,
   MemoryStick,
   Palette,
+  Save,
   Settings2,
   ShieldCheck,
   Sparkles,
   Type,
   UploadCloud,
+  Wrench,
   X
 } from "lucide-react";
 import { RegionEditor } from "./RegionEditor";
@@ -40,6 +43,20 @@ type ProcessingMode = "auto" | "vector" | "wordmark" | "depth" | "height" | "sca
 type HistoryEntry = {
   id: string; name: string; createdAt: string; stlPath: string; threeMfPath: string;
   triangleCount: number; widthMm: number; heightMm: number; profile: QualityProfile; score: number;
+};
+type StudioProject = {
+  schemaVersion: 1;
+  savedAt: string;
+  source: SelectedImage;
+  tool: "image" | "text";
+  settings: {
+    widthMm: number; baseMm: number; reliefMm: number; smoothing: number; detail: number;
+    processingMode: ProcessingMode; profile: QualityProfile; raiseLightAreas: boolean;
+    multicolorEnabled: boolean; colorCount: number; sourceColors: string[]; colors: string[];
+    sideColorIndex: number; includeLogoBackground: boolean; optimizeForStandardNozzle: boolean;
+  };
+  editorHeightmap: string | null;
+  editorColorMap: string | null;
 };
 
 const optimalResolution: Record<QualityProfile, number> = {
@@ -197,7 +214,7 @@ export function App() {
     setTextDialogOpen(false);
   }
 
-  async function generateRelief() {
+  async function generateRelief(repair = false) {
     if (!file) return;
     const jobId = crypto.randomUUID();
     activeReliefJob.current = jobId;
@@ -205,18 +222,20 @@ export function App() {
     setBusy(true); setFileError(null); setResult(null);
     try {
       if (!window.desktop) throw new Error("Die lokale 3D-Engine ist nicht erreichbar. Bitte starte die App neu.");
-      const effectiveMode = processingMode === "auto" ? (file.suggestedProfile === "logo" ? "auto" : "depth") : processingMode;
+      const effectiveMode = repair && file.suggestedProfile === "logo"
+        ? "wordmark"
+        : processingMode === "auto" ? (file.suggestedProfile === "logo" ? "auto" : "depth") : processingMode;
       const effectiveResolution = effectiveMode === "auto" && file.suggestedProfile === "logo"
         ? 384
-        : optimalResolution[profile];
+        : repair ? Math.min(384, optimalResolution[profile]) : optimalResolution[profile];
       const next = await window.desktop.createRelief(jobId, file.path, {
-        widthMm, baseMm, reliefMm,
+        widthMm, baseMm: repair ? Math.max(1.6, baseMm) : baseMm, reliefMm,
         resolution: effectiveResolution,
         invert: raiseLightAreas, profile, smoothing, detail,
         processingMode: effectiveMode === "scan" ? "auto" : effectiveMode,
-        includeBackground: effectiveMode === "wordmark" && includeLogoBackground,
+        includeBackground: effectiveMode === "wordmark" && (repair || includeLogoBackground),
         nozzleMm: 0.4,
-        minimumFeatureMm: optimizeForStandardNozzle && (effectiveMode === "wordmark" || (effectiveMode === "auto" && file.suggestedProfile === "logo")) ? 0.8 : 0,
+        minimumFeatureMm: repair || (optimizeForStandardNozzle && (effectiveMode === "wordmark" || (effectiveMode === "auto" && file.suggestedProfile === "logo"))) ? 0.8 : 0,
         sourceColors: multicolorEnabled ? sourceColors : [],
         colors: multicolorEnabled ? colors : [],
         sideColorIndex: multicolorEnabled ? sideColorIndex : 0
@@ -241,6 +260,65 @@ export function App() {
     } finally {
       if (activeReliefJob.current === jobId) activeReliefJob.current = null;
       setBusy(false);
+    }
+  }
+
+  async function repairAndRegenerate() {
+    if (!window.confirm("Druckprobleme automatisch korrigieren?\n\nDie App verstärkt Details auf 0,8 mm, verbindet Logo und Hintergrund, reduziert die Meshgröße und stellt mindestens 1,6 mm Grundplatte sicher.")) return;
+    setOptimizeForStandardNozzle(true);
+    setBaseMm((current) => Math.max(1.6, current));
+    if (file?.suggestedProfile === "logo") {
+      setProcessingMode("wordmark");
+      setIncludeLogoBackground(true);
+    }
+    await generateRelief(true);
+  }
+
+  function currentProject(): StudioProject | null {
+    if (!file || studioTool === "prompt" || studioTool === "home") return null;
+    return {
+      schemaVersion: 1,
+      savedAt: new Date().toISOString(),
+      source: file,
+      tool: studioTool,
+      settings: {
+        widthMm, baseMm, reliefMm, smoothing, detail, processingMode, profile, raiseLightAreas,
+        multicolorEnabled, colorCount, sourceColors, colors, sideColorIndex,
+        includeLogoBackground, optimizeForStandardNozzle
+      },
+      editorHeightmap,
+      editorColorMap
+    };
+  }
+
+  async function saveProject() {
+    const project = currentProject();
+    if (!project || !window.desktop) return;
+    try {
+      const path = await window.desktop.saveProject(project);
+      if (path) setUploadStatus(`Projekt gespeichert: ${path.split("/").at(-1)}`);
+    } catch (error) {
+      setFileError(error instanceof Error ? error.message : "Das Projekt konnte nicht gespeichert werden.");
+    }
+  }
+
+  async function openProject() {
+    if (!window.desktop) return;
+    try {
+      const loaded = await window.desktop.openProject() as StudioProject | null;
+      if (!loaded?.source || loaded.schemaVersion !== 1) return;
+      const settings = loaded.settings;
+      setView("studio"); setStudioTool(loaded.tool); setFile(loaded.source); setPreview(loaded.source.dataUrl);
+      setWidthMm(settings.widthMm); setBaseMm(settings.baseMm); setReliefMm(settings.reliefMm);
+      setSmoothing(settings.smoothing); setDetail(settings.detail); setProcessingMode(settings.processingMode);
+      setProfile(settings.profile); setRaiseLightAreas(settings.raiseLightAreas);
+      setMulticolorEnabled(settings.multicolorEnabled); setColorCount(settings.colorCount);
+      setSourceColors(settings.sourceColors); setColors(settings.colors); setSideColorIndex(settings.sideColorIndex);
+      setIncludeLogoBackground(settings.includeLogoBackground); setOptimizeForStandardNozzle(settings.optimizeForStandardNozzle);
+      setEditorHeightmap(loaded.editorHeightmap); setEditorColorMap(loaded.editorColorMap);
+      setResult(null); setEditorOpen(false); setFileError(null); setUploadStatus("Projekt vollständig wiederhergestellt.");
+    } catch (error) {
+      setFileError(error instanceof Error ? error.message : "Das Projekt konnte nicht geöffnet werden.");
     }
   }
 
@@ -332,6 +410,7 @@ export function App() {
             openImage={() => void selectFile()}
             openText={() => { setStudioTool("text"); setTextDialogOpen(true); }}
             openPrompt={() => { setStudioTool("prompt"); setAi3dDialogOpen(true); }}
+            openProject={() => void openProject()}
           />
         )}
 
@@ -340,6 +419,10 @@ export function App() {
             <div className="tool-context">
               <button onClick={returnToToolSelection}>← Alle Werkzeuge</button>
               <span>{studioTool === "image" ? <ImagePlus /> : studioTool === "text" ? <Type /> : <Sparkles />}{studioTool === "image" ? "Bild zu 3D" : studioTool === "text" ? "Schrift zu 3D" : "Prompt zu 3D"}</span>
+              {studioTool !== "prompt" && <div className="project-actions">
+                <button onClick={() => void openProject()}><FolderOpen /> Projekt öffnen</button>
+                <button disabled={!file} onClick={() => void saveProject()}><Save /> Projekt speichern</button>
+              </div>}
             </div>
             <div className="intro">
               <h2>{studioTool === "text" ? "Von Schrift zum druckbaren Objekt." : studioTool === "prompt" ? "Von deiner Idee zum vollständigen 3D-Modell." : "Vom Bild zum druckbaren Objekt."}</h2>
@@ -384,7 +467,10 @@ export function App() {
                 <button className="cancel-job-button" onClick={() => void cancelRelief()}><X /> Abbrechen</button>
               </div>
             )}
-            {result && !busy && <ReliefResultCard result={result} />}
+            {result && !busy && <>
+              <ReliefResultCard result={result} optimize={() => void repairAndRegenerate()} />
+              <SlicerAnalysisCard result={result} />
+            </>}
             </div>
             {file && !editorOpen && (
               <button className={editorHeightmap ? "editor-launch has-tooltip active" : "editor-launch has-tooltip"} onClick={() => setEditorOpen(true)}>
@@ -657,11 +743,13 @@ function InfoView({ version }: { version: string }) {
 function StudioHub({
   openImage,
   openText,
-  openPrompt
+  openPrompt,
+  openProject
 }: {
   openImage: () => void;
   openText: () => void;
   openPrompt: () => void;
+  openProject: () => void;
 }) {
   const tools = [
     {
@@ -716,6 +804,7 @@ function StudioHub({
         <span><ShieldCheck /> Lokale Werkzeuge bleiben auf deinem Mac</span>
         <span><Palette /> AMS-fähiger 3MF-Export</span>
         <span><CheckCircle2 /> Druckbarkeit wird automatisch geprüft</span>
+        <button onClick={openProject}><FolderOpen /> Projekt öffnen</button>
       </div>
     </section>
   );
@@ -759,7 +848,7 @@ function ReliefPreview({ result }: { result: NonNullable<ReliefResult> }) {
   );
 }
 
-function ReliefResultCard({ result }: { result: NonNullable<ReliefResult> }) {
+function ReliefResultCard({ result, optimize }: { result: NonNullable<ReliefResult>; optimize: () => void }) {
   return (
     <div className={`result-card preview-result ${result.printability.status}`}>
       <div className="result-check"><CheckCircle2 /></div>
@@ -770,8 +859,33 @@ function ReliefResultCard({ result }: { result: NonNullable<ReliefResult> }) {
         <div className="print-checks">{result.printability.checks.map((check) => <span className={check.status} key={check.label} title={check.detail}>{check.status === "ok" ? "✓" : "!"} {check.label}</span>)}</div>
       </div>
       <img className="heightmap-preview" src={result.heightmapDataUrl} alt="Berechnete Höhenkarte" title="Berechnete Höhenkarte" />
+      {result.printability.score < 100 && <button className="optimize-button" onClick={optimize}><Wrench /> Automatisch optimieren</button>}
       <button className="secondary-button" onClick={() => void window.desktop?.showItemInFolder(result.stlPath)}>Im Finder zeigen</button>
     </div>
+  );
+}
+
+function SlicerAnalysisCard({ result }: { result: NonNullable<ReliefResult> }) {
+  const [layer, setLayer] = useState(result.slicer.layerCount);
+  const height = layer * result.slicer.layerHeightMm;
+  const visibleRatio = Math.min(1, height / Math.max(0.1, result.options.baseMm + result.options.reliefMm));
+  return (
+    <section className="slicer-card">
+      <div className="slicer-summary">
+        <div><strong>Lokale Schichtsimulation</strong><span>0,4-mm-Düse · {result.slicer.layerHeightMm.toFixed(1).replace(".", ",")} mm Schichthöhe</span></div>
+        <dl>
+          <div><dt>Druckzeit</dt><dd>ca. {Math.floor(result.slicer.estimatedMinutes / 60)} h {result.slicer.estimatedMinutes % 60} min</dd></div>
+          <div><dt>Material</dt><dd>{result.slicer.materialGrams.toFixed(1)} g · {result.slicer.filamentMeters.toFixed(1)} m</dd></div>
+          <div><dt>Schichten</dt><dd>{result.slicer.layerCount}</dd></div>
+          <div><dt>Farbwechsel</dt><dd>{result.slicer.colorChanges}</dd></div>
+        </dl>
+      </div>
+      <div className="layer-inspector">
+        <div className="layer-image"><img src={result.heightmapDataUrl} alt="Schichtvorschau" style={{ opacity: 0.3 + visibleRatio * 0.7, filter: `contrast(${1 + visibleRatio}) brightness(${0.55 + visibleRatio * 0.7})` }} /><span>{height.toFixed(1)} mm</span></div>
+        <label><span>Schicht {layer} / {result.slicer.layerCount}</span><input type="range" min={1} max={result.slicer.layerCount} value={layer} onChange={(event) => setLayer(Number(event.target.value))} /></label>
+      </div>
+      <small>Geometriebasierte lokale Schätzung – die endgültige Druckzeit hängt vom Druckerprofil im Slicer ab.</small>
+    </section>
   );
 }
 

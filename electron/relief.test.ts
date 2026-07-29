@@ -501,6 +501,11 @@ describe("relief mesh", () => {
       expect(topHeights).toEqual(new Set([0, 4]));
       expect(Math.max(...topHeights)).toBe(4);
       expect(result.triangleCount).toBeGreaterThan(1_000);
+      expect(result.slicer.layerHeightMm).toBe(0.2);
+      expect(result.slicer.layerCount).toBe(20);
+      expect(result.slicer.estimatedMinutes).toBeGreaterThan(0);
+      expect(result.slicer.materialGrams).toBeGreaterThan(0);
+      expect(result.slicer.filamentMeters).toBeGreaterThan(0);
     } finally {
       await rm(directory, { recursive: true, force: true });
     }

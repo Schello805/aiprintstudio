@@ -9,7 +9,7 @@ CAD-Pläne und Mesh-Dateien bleiben standardmäßig auf dem eigenen Mac.
 
 [![Quality](https://github.com/Schello805/aiprintstudio/actions/workflows/quality.yml/badge.svg)](https://github.com/Schello805/aiprintstudio/actions/workflows/quality.yml)
 
-> Aktueller Stand: Version 0.15.1. Bild- und Schrift-Reliefs, mehrfarbige
+> Aktueller Stand: Version 0.17.0. Bild- und Schrift-Reliefs, mehrfarbige
 > AMS-3MF-Dateien sowie einfache, per OpenAI geplante und lokal konstruierte
 > Prompt-zu-3D-Modelle sind testbar. Die vollständige Rundum-Rekonstruktion aus
 > einem einzelnen Bild bleibt eine spätere Ausbaustufe.
@@ -50,6 +50,9 @@ grundsätzlich kompatibel.
 - konturgetreuer Export anhand von Transparenz oder erkanntem Hintergrund
 - lokaler Verlauf, Druckscore und Materialschätzung
 - Live-Anzeige für App-CPU und App-RAM in der festen Seitenleiste
+- speicherbare `.aips`-Projekte einschließlich Quelle, Parametern, Farben und
+  manuellen Korrekturen
+- automatische Reparaturvorschläge und lokale Schicht-/Materialsimulation
 
 ## Studio-Workflows
 
@@ -64,6 +67,21 @@ Der Flächeneditor erlaubt Mehrfachauswahl, angrenzendes Erweitern oder
 Reduzieren, Auswahl ähnlicher Farben, Höhenkorrekturen, Glättung,
 Kantenabrundung und manuelle AMS-Farbzuweisung. Änderungen erscheinen in der
 Live-3D-Vorschau und werden beim nächsten Export übernommen.
+
+Zusätzlich besitzt er Pinsel, Radierer und eine direkte Höhen- und
+AMS-Farbzuweisung. Damit lassen sich Bereiche frei nachzeichnen, entfernen,
+verbinden oder trennen, ohne zuerst eine perfekt erkannte Bildfläche treffen zu
+müssen.
+
+Nach einer Berechnung zeigt die App eine lokale Schichtsimulation mit
+Schichtzahl, Materialmenge, grober Druckzeit und Farbwechseln. Diese Angaben
+sind geometriebasierte Schätzwerte; verbindlich bleibt das konkrete
+Druckerprofil im Slicer. Bei erkannten Druckproblemen bietet
+**Automatisch optimieren** eine Reparatur für die übliche 0,4-mm-Düse an.
+
+Über **Projekt speichern** wird der komplette bearbeitbare Studio-Stand als
+`.aips`-Datei gesichert. **Projekt öffnen** stellt Bild, Abmessungen,
+Verarbeitungsmodus, AMS-Farben und manuelle Höhen-/Farbanpassungen wieder her.
 
 ### Schrift zu 3D
 

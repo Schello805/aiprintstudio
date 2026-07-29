@@ -10,6 +10,8 @@ contextBridge.exposeInMainWorld("desktop", Object.freeze({
   removeOpenAiKey: () => ipcRenderer.invoke("settings:removeOpenAiKey"),
   acceptModelSetup: () => ipcRenderer.invoke("settings:acceptModelSetup"),
   selectImage: () => ipcRenderer.invoke("image:select"),
+  saveProject: (project) => ipcRenderer.invoke("project:save", project),
+  openProject: () => ipcRenderer.invoke("project:open"),
   createTextImage: (options) => ipcRenderer.invoke("text:createImage", options),
   createAi3d: (prompt, existingPlan) => ipcRenderer.invoke("ai3d:create", prompt, existingPlan),
   createObjectCapture: () => ipcRenderer.invoke("objectCapture:create"),

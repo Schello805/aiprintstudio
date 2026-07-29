@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Canvas } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
-import { ChevronDown, ChevronUp, Minus, Palette, Plus, Redo2, RotateCcw, Scissors, Undo2, WandSparkles, X } from "lucide-react";
+import { Brush, ChevronDown, ChevronUp, Eraser, Link2, Minus, MousePointer2, Palette, Plus, Redo2, RotateCcw, Scissors, Undo2, Unlink2, WandSparkles, X } from "lucide-react";
 import {
   expandRegionSelection,
   initialRegionLevels,
@@ -59,6 +59,11 @@ export function RegionEditor({
   const [undoStack, setUndoStack] = useState<Uint8ClampedArray[]>([]);
   const [redoStack, setRedoStack] = useState<Uint8ClampedArray[]>([]);
   const [colorAssignments, setColorAssignments] = useState<Uint8ClampedArray | null>(null);
+  const [tool, setTool] = useState<"select" | "brush" | "eraser">("select");
+  const [brushSize, setBrushSize] = useState(12);
+  const [brushLevel, setBrushLevel] = useState(210);
+  const [brushColor, setBrushColor] = useState(0);
+  const paintingRef = useRef(false);
 
   useEffect(() => {
     let active = true;
@@ -133,6 +138,12 @@ export function RegionEditor({
     if (!context) return;
     const display = data.source.slice();
     for (let index = 0; index < data.segmentation.regionIds.length; index += 1) {
+      if (levels) {
+        const offset = index * 4;
+        display[offset] = Math.round(display[offset] * 0.82 + levels[index] * 0.18);
+        display[offset + 1] = Math.round(display[offset + 1] * 0.82 + levels[index] * 0.18);
+        display[offset + 2] = Math.round(display[offset + 2] * 0.82 + levels[index] * 0.18);
+      }
       const assigned = colorAssignments?.[index] ?? 255;
       if (assigned < colors.length) {
         const [r, g, b] = hexToRgb(colors[assigned]);
@@ -149,7 +160,7 @@ export function RegionEditor({
       display[offset + 3] = 255;
     }
     context.putImageData(new ImageData(display, canvas.width, canvas.height), 0, 0);
-  }, [colorAssignments, colors, data, selection]);
+  }, [colorAssignments, colors, data, levels, selection]);
 
   const commitLevels = (next: Uint8ClampedArray) => {
     if (!levels) return;
@@ -203,11 +214,44 @@ export function RegionEditor({
     setUndoStack((current) => [...current, levels.slice()]);
     setLevels(next);
   };
-  const selectCanvasRegion = (event: React.PointerEvent<HTMLCanvasElement>) => {
+  const pointerPixel = (event: React.PointerEvent<HTMLCanvasElement>) => {
     if (!data || !canvasRef.current) return;
     const bounds = canvasRef.current.getBoundingClientRect();
     const x = Math.min(data.segmentation.width - 1, Math.max(0, Math.floor((event.clientX - bounds.left) / bounds.width * data.segmentation.width)));
     const y = Math.min(data.segmentation.height - 1, Math.max(0, Math.floor((event.clientY - bounds.top) / bounds.height * data.segmentation.height)));
+    return { x, y };
+  };
+  const paintAt = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    const point = pointerPixel(event);
+    if (!point || !data || !levels) return;
+    const next = levels.slice();
+    const nextColors = colorAssignments?.slice();
+    const radius = Math.max(1, Math.round(brushSize / 2));
+    for (let offsetY = -radius; offsetY <= radius; offsetY += 1) for (let offsetX = -radius; offsetX <= radius; offsetX += 1) {
+      if (offsetX * offsetX + offsetY * offsetY > radius * radius) continue;
+      const x = point.x + offsetX, y = point.y + offsetY;
+      if (x < 0 || y < 0 || x >= data.segmentation.width || y >= data.segmentation.height) continue;
+      const index = y * data.segmentation.width + x;
+      next[index] = tool === "eraser" ? 0 : brushLevel;
+      if (tool === "brush" && nextColors && colors.length) nextColors[index] = brushColor;
+      if (tool === "eraser" && nextColors) nextColors[index] = 255;
+    }
+    setLevels(next);
+    if (nextColors) setColorAssignments(nextColors);
+  };
+  const handleCanvasDown = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!data || !levels) return;
+    if (tool !== "select") {
+      paintingRef.current = true;
+      setUndoStack((current) => [...current.slice(-29), levels.slice()]);
+      setRedoStack([]);
+      event.currentTarget.setPointerCapture(event.pointerId);
+      paintAt(event);
+      return;
+    }
+    const point = pointerPixel(event);
+    if (!point) return;
+    const { x, y } = point;
     const id = data.segmentation.regionIds[y * data.segmentation.width + x];
     setSelection((current) => {
       if (!event.shiftKey) return new Set([id]);
@@ -233,10 +277,25 @@ export function RegionEditor({
           <button onClick={onClose} title="Editor schließen"><X /></button>
         </div>
       </div>
+      <div className="editor-tool-palette">
+        <button className={tool === "select" ? "selected" : ""} onClick={() => setTool("select")}><MousePointer2 /> Flächen</button>
+        <button className={tool === "brush" ? "selected" : ""} onClick={() => setTool("brush")}><Brush /> Pinsel</button>
+        <button className={tool === "eraser" ? "selected" : ""} onClick={() => setTool("eraser")}><Eraser /> Radierer</button>
+        <label><span>Größe {brushSize}px</span><input type="range" min={2} max={60} value={brushSize} onChange={(event) => setBrushSize(Number(event.target.value))} /></label>
+        <label><span>Pinselhöhe {(brushLevel / 255 * reliefMm).toFixed(1)} mm</span><input type="range" min={0} max={255} value={brushLevel} onChange={(event) => setBrushLevel(Number(event.target.value))} /></label>
+        {colors.length > 0 && <label><span>Pinsel-Farbe</span><select value={brushColor} onChange={(event) => setBrushColor(Number(event.target.value))}>{colors.map((color, index) => <option value={index} key={color}>AMS {index + 1}</option>)}</select></label>}
+      </div>
       <div className="region-editor-grid">
         <div className="region-canvas-panel">
           <span className="panel-label">2D-AUSWAHL · GRÜN MARKIERT</span>
-          {data ? <canvas ref={canvasRef} onPointerDown={selectCanvasRegion} /> : <div className="editor-loading">Flächen werden erkannt …</div>}
+          {data ? <canvas
+            ref={canvasRef}
+            className={`editor-canvas tool-${tool}`}
+            onPointerDown={handleCanvasDown}
+            onPointerMove={(event) => paintingRef.current && paintAt(event)}
+            onPointerUp={() => { paintingRef.current = false; }}
+            onPointerCancel={() => { paintingRef.current = false; }}
+          /> : <div className="editor-loading">Flächen werden erkannt …</div>}
         </div>
         <EditorReliefPreview segmentation={data?.segmentation ?? null} levels={levels} />
       </div>
@@ -246,6 +305,12 @@ export function RegionEditor({
         <button className="has-tooltip" disabled={selection.size !== 1 || !data} onClick={() => data && setSelection(selectSimilarRegions([...selection][0], data.segmentation.regions))}><WandSparkles /> Ähnliche Farbe<SettingTooltip text={editorTooltips.similar} /></button>
         <button className="has-tooltip" disabled={!data} onClick={() => data && setSelection(new Set(data.segmentation.regions.map((region) => region.id).filter((id) => !selection.has(id))))}><RotateCcw /> Umkehren<SettingTooltip text={editorTooltips.invert} /></button>
         <button className="has-tooltip" disabled={!selection.size} onClick={() => setSelection(new Set())}><X /> Auswahl aufheben<SettingTooltip text={editorTooltips.clear} /></button>
+        <button disabled={selection.size < 2 || !data || !levels} onClick={() => {
+          if (!data || !levels || selection.size < 2) return;
+          const value = Math.max(...[...selection].map((id) => levels[data.segmentation.regions[id]?.pixels[0] ?? 0]));
+          commitLevels(setSelectedRegionLevel(levels, selection, data.segmentation.regions, value));
+        }}><Link2 /> Verbinden</button>
+        <button disabled={!selection.size} onClick={() => setLevel(0)}><Unlink2 /> Trennen</button>
       </div>
       {colors.length > 0 && (
         <div className="editor-color-toolbar">
