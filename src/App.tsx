@@ -1006,6 +1006,15 @@ type Complex3dStatus = {
   installed: boolean; workerAvailable: boolean; accepted: boolean; acceptedAt: string | null;
   installedBytes: number; version: string; weightsSha256: string; notice: string;
 };
+type ComplexReference = {
+  path: string;
+  dataUrl: string;
+  disclaimer: string;
+  billing: {
+    model: string; textTokens: number; imageTokens: number; outputTokens: number;
+    costUsd: number; estimatedCostEur: number; exactUsageAvailable: boolean;
+  };
+};
 
 function Ai3dDialog({ close, openSettings }: { close: () => void; openSettings: () => void }) {
   const [prompt, setPrompt] = useState("Ein kleines Haus mit vier Fenstern, einem Stockwerk und einem Spitzdach");
@@ -1021,7 +1030,11 @@ function Ai3dDialog({ close, openSettings }: { close: () => void; openSettings: 
   const [models, setModels] = useState<Ai3dModel[]>([]);
   const [complexMode, setComplexMode] = useState(true);
   const [complexStatus, setComplexStatus] = useState<Complex3dStatus | null>(null);
-  const [complexReference, setComplexReference] = useState<{ path: string; dataUrl: string; disclaimer: string } | null>(null);
+  const [complexReference, setComplexReference] = useState<ComplexReference | null>(null);
+  const [previousReferences, setPreviousReferences] = useState<ComplexReference[]>([]);
+  const [referenceInstruction, setReferenceInstruction] = useState("");
+  const [referenceCostsEur, setReferenceCostsEur] = useState(0);
+  const [complexStage, setComplexStage] = useState<"idle" | "reference" | "mesh">("idle");
   const [complexResult, setComplexResult] = useState<{ stlPath: string; triangleCount: number; preview: { positions: number[]; indices: number[] } } | null>(null);
   const [complexProgress, setComplexProgress] = useState({ phase: "", progress: 0, loadedBytes: 0, totalBytes: 0 });
   const complexJob = useRef<string | null>(null);
@@ -1065,25 +1078,41 @@ function Ai3dDialog({ close, openSettings }: { close: () => void; openSettings: 
       setError(nextError instanceof Error ? nextError.message : "Der API-Schlüssel konnte nicht entsperrt werden.");
     } finally { setUnlockBusy(false); }
   }
-  async function createComplexReference() {
+  async function createComplexReference(editExisting = false) {
     if (!window.desktop) return;
-    setBusy(true); setError(null); setComplexResult(null);
+    setBusy(true); setComplexStage("reference"); setError(null); setComplexResult(null);
     try {
-      setComplexReference(await window.desktop.createComplex3dReference(prompt));
+      const next = await window.desktop.createComplex3dReference(
+        prompt,
+        editExisting ? complexReference?.path : undefined,
+        editExisting ? referenceInstruction : undefined
+      );
+      if (complexReference) setPreviousReferences((current) => [...current, complexReference]);
+      setComplexReference(next);
+      setReferenceCostsEur((current) => current + next.billing.estimatedCostEur);
+      setReferenceInstruction("");
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : "Die Referenz konnte nicht erzeugt werden.");
-    } finally { setBusy(false); }
+    } finally { setBusy(false); setComplexStage("idle"); }
+  }
+  function undoReference() {
+    setPreviousReferences((current) => {
+      const previous = current.at(-1);
+      if (previous) setComplexReference(previous);
+      return current.slice(0, -1);
+    });
+    setComplexResult(null);
   }
   async function createComplexModel() {
     if (!window.desktop || !complexReference) return;
-    setBusy(true); setError(null);
+    setBusy(true); setComplexStage("mesh"); setError(null);
     const jobId = crypto.randomUUID();
     complexJob.current = jobId;
     try {
       setComplexResult(await window.desktop.createComplex3dMesh(jobId, complexReference.path));
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : "Die lokale 3D-Rekonstruktion ist fehlgeschlagen.");
-    } finally { complexJob.current = null; setBusy(false); }
+    } finally { complexJob.current = null; setBusy(false); setComplexStage("idle"); }
   }
   async function cancelComplex() {
     if (complexJob.current) await window.desktop?.cancelComplex3d(complexJob.current);
@@ -1180,9 +1209,33 @@ function Ai3dDialog({ close, openSettings }: { close: () => void; openSettings: 
           </div>}
           <label htmlFor="ai3d-prompt">OBJEKT BESCHREIBEN</label>
           <textarea id="ai3d-prompt" rows={5} maxLength={800} value={prompt} onChange={(event) => setPrompt(event.target.value)} disabled={busy} />
-          {complexMode && complexReference && <div className="complex-reference">
-            <img src={complexReference.dataUrl} alt="Von OpenAI erzeugte 3D-Referenz" />
-            <div><strong>Referenz vor der lokalen Rekonstruktion prüfen</strong><p>{complexReference.disclaimer} Form, Proportionen, Markenmerkmale und Details können abweichen. Verwende das Ergebnis nur, wenn du die nötigen Bild-, Design- und Markenrechte besitzt.</p></div>
+          {complexMode && complexReference && <div className="complex-reference-workspace">
+            <div className="complex-reference">
+              <img src={complexReference.dataUrl} alt="Von OpenAI erzeugte 3D-Referenz" />
+              <div>
+                <strong>Referenz prüfen und bei Bedarf verbessern</strong>
+                <p>{complexReference.disclaimer} Form, Proportionen, Markenmerkmale und Details können abweichen. Verwende das Ergebnis nur, wenn du die nötigen Bild-, Design- und Markenrechte besitzt.</p>
+                <div className="reference-cost-summary">
+                  <span>Diese Referenz: <b>{formatApiCost(complexReference.billing.estimatedCostEur)}{complexReference.billing.exactUsageAvailable ? "" : " geschätzt"}</b></span>
+                  <span>Referenzrunde gesamt: <b>{formatApiCost(referenceCostsEur)}</b></span>
+                </div>
+                <small className="reference-usage">
+                  {complexReference.billing.exactUsageAvailable
+                    ? `${(complexReference.billing.textTokens + complexReference.billing.imageTokens).toLocaleString("de-DE")} Eingabe-Token · ${complexReference.billing.outputTokens.toLocaleString("de-DE")} Ausgabe-Token · aus OpenAI-Nutzung berechnet`
+                    : "OpenAI hat für diese Antwort keine Token-Nutzung geliefert; angezeigt wird deshalb die Vorabschätzung."}
+                </small>
+              </div>
+            </div>
+            {!complexResult && <div className="reference-editor">
+              <label htmlFor="reference-instruction">REFERENZ GEZIELT ÄNDERN</label>
+              <textarea id="reference-instruction" rows={3} maxLength={600} value={referenceInstruction} onChange={(event) => setReferenceInstruction(event.target.value)} placeholder="Zum Beispiel: Verwende die Kombi-Karosserie, mache die Räder größer und behalte den Blickwinkel bei." disabled={busy} />
+              <div className="reference-actions">
+                <button className="primary-button" disabled={busy || referenceInstruction.trim().length < 3} onClick={() => void createComplexReference(true)}>Änderung anwenden</button>
+                <button className="secondary-button" disabled={busy} onClick={() => void createComplexReference(false)}>Komplett neu erzeugen</button>
+                {previousReferences.length > 0 && <button className="secondary-button" disabled={busy} onClick={undoReference}>Letzte Referenz zurück</button>}
+              </div>
+              <small>Jede Änderung oder Neuerzeugung ist eine neue kostenpflichtige OpenAI-Bildanfrage. Vor dem Start voraussichtlich ca. 0,12–0,18 €.</small>
+            </div>}
           </div>}
           {complexMode && complexResult && <div className="ai3d-workspace">
             <ComplexMeshPreview mesh={complexResult.preview} />
@@ -1217,9 +1270,9 @@ function Ai3dDialog({ close, openSettings }: { close: () => void; openSettings: 
         <div className="notice">{complexMode ? "An OpenAI wird nur deine Beschreibung übertragen. OpenAI erzeugt daraus ein Referenzbild. Dieses Bild wird erst nach deiner Bestätigung lokal in 3D rekonstruiert." : result ? "Für Änderungen werden deine Folgeanweisung und der aktuelle CAD-Bauplan an OpenAI übertragen. Vorschau, Geometrie und STL werden lokal erzeugt." : "Nur deine Beschreibung wird an OpenAI übertragen. Geometrie und STL werden anschließend lokal auf deinem Mac erzeugt."}</div>
         <div className="api-cost-notice">
           <strong>OpenAI-API-Kosten</strong>
-          <span>OpenAI rechnet jede Erstellung und Folgeänderung direkt über deinen eigenen API-Account ab. Während der Erstellung zeigt AI Print Studio eine laufende Schätzung in Euro; der Tokenverbrauch wird nach Abschluss korrigiert. AI Print Studio erhebt keine zusätzlichen Gebühren.</span>
+          <span>{complexMode ? "Eine hochwertige GPT-Image-2-Referenz kostet vorab geschätzt etwa 0,12–0,18 €. Jede Änderung ist eine neue kostenpflichtige Bildanfrage. Nach der Antwort zeigt die App die von OpenAI gemeldete Nutzung und die daraus berechneten Kosten." : "OpenAI rechnet jede Erstellung und Folgeänderung direkt über deinen eigenen API-Account ab. Während der Erstellung zeigt AI Print Studio eine laufende Schätzung in Euro; der Tokenverbrauch wird nach Abschluss korrigiert. AI Print Studio erhebt keine zusätzlichen Gebühren."}</span>
         </div>
-        {busy && <div className="ai-live-progress" aria-live="polite">
+        {busy && !complexMode && <div className="ai-live-progress" aria-live="polite">
           <div className="ai-progress-heading">
             <div>
               <strong>{progress.phase}</strong>
@@ -1239,7 +1292,8 @@ function Ai3dDialog({ close, openSettings }: { close: () => void; openSettings: 
           </div>
           <p>Der Balken zeigt den Arbeitsabschnitt, da OpenAI keinen exakten Gesamtfortschritt liefert. Die Euro-Anzeige nutzt die gemeldeten bzw. während des Streams geschätzten Token und einen festen USD/EUR-Schätzkurs.</p>
         </div>}
-        {busy && complexMode && complexProgress.phase && <div className="ai-live-progress"><strong>{complexProgress.phase}</strong><div className="ai-progress-track"><span style={{ width: `${Math.max(2, complexProgress.progress)}%` }} /></div><span>{Math.round(complexProgress.progress)} %</span><button className="secondary-button" onClick={() => void cancelComplex()}>Abbrechen</button></div>}
+        {busy && complexMode && complexStage === "reference" && <div className="ai-live-progress" aria-live="polite"><div className="ai-progress-heading"><div><strong>OpenAI erzeugt die Referenz …</strong><small>GPT Image 2 · hohe Qualität</small></div><span>ca. 0,12–0,18 €</span></div><div className="indeterminate-progress"><span /></div><p>OpenAI liefert bei der Bilderzeugung keinen verlässlichen Prozentfortschritt. Die tatsächliche gemeldete Nutzung wird direkt nach Abschluss angezeigt.</p></div>}
+        {busy && complexMode && complexStage === "mesh" && complexProgress.phase && <div className="ai-live-progress"><strong>{complexProgress.phase}</strong><div className="ai-progress-track"><span style={{ width: `${Math.max(2, complexProgress.progress)}%` }} /></div><span>{Math.round(complexProgress.progress)} %</span><button className="secondary-button" onClick={() => void cancelComplex()}>Abbrechen</button></div>}
         {!busy && result?.billing && <div className="ai-cost-result">
           <span>Letzte OpenAI-Anfrage</span>
           <strong>ca. {formatApiCost(result.billing.estimatedCostEur)}</strong>
@@ -1265,7 +1319,7 @@ function Ai3dDialog({ close, openSettings }: { close: () => void; openSettings: 
         </div>}
         <div className="modal-actions">
           <button className="secondary-button" onClick={close} disabled={busy}>{result ? "Schließen" : "Abbrechen"}</button>
-          {!result && complexMode && !complexReference && <button className="primary-button" disabled={busy || apiStatus?.openAiConfigured !== true || complexStatus?.installed !== true || prompt.trim().length < 10} onClick={() => void createComplexReference()}>{busy ? "Referenz wird erstellt …" : "KI-Referenz erstellen"} <ChevronRight /></button>}
+          {!result && complexMode && !complexReference && <button className="primary-button" disabled={busy || apiStatus?.openAiConfigured !== true || prompt.trim().length < 10} onClick={() => void createComplexReference(false)}>{busy ? "Referenz wird erstellt …" : "KI-Referenz erstellen · ca. 0,12–0,18 €"} <ChevronRight /></button>}
           {!result && complexMode && complexReference && !complexResult && <button className="primary-button" disabled={busy || complexStatus?.installed !== true} onClick={() => void createComplexModel()}>{busy ? "Lokal wird rekonstruiert …" : "Referenz lokal in 3D umwandeln"} <ChevronRight /></button>}
           {!result && !complexMode && <button className="primary-button" disabled={busy || apiStatus?.openAiConfigured !== true || prompt.trim().length < 10} onClick={() => void submit(prompt)}>{busy ? "OpenAI konstruiert …" : "3D-Modell erstellen"} <ChevronRight /></button>}
         </div>

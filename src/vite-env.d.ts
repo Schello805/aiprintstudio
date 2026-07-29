@@ -100,7 +100,15 @@ interface Window {
     acceptComplex3dLicense: (accepted: boolean) => Promise<unknown>;
     downloadComplex3dModel: (jobId: string) => Promise<unknown>;
     removeComplex3dModel: () => Promise<unknown>;
-    createComplex3dReference: (prompt: string) => Promise<{ path: string; dataUrl: string; disclaimer: string }>;
+    createComplex3dReference: (prompt: string, existingImagePath?: string, editInstruction?: string) => Promise<{
+      path: string;
+      dataUrl: string;
+      disclaimer: string;
+      billing: {
+        model: string; textTokens: number; imageTokens: number; outputTokens: number;
+        costUsd: number; estimatedCostEur: number; exactUsageAvailable: boolean;
+      };
+    }>;
     createComplex3dMesh: (jobId: string, imagePath: string) => Promise<{
       stlPath: string; triangleCount: number; preview: { positions: number[]; indices: number[] };
     }>;

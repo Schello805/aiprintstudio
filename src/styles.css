@@ -603,6 +603,13 @@ footer { padding:17px 36px; border-top:1px solid #1c2028; display:flex; justify-
 .license-confirm{display:flex;align-items:flex-start;gap:10px;line-height:1.45}.license-confirm input{width:18px;height:18px;margin-top:2px;accent-color:var(--accent)}
 .complex-reference{display:grid;grid-template-columns:190px 1fr;gap:14px;align-items:center;padding:12px;border:1px solid var(--border);border-radius:12px}
 .complex-reference img{width:190px;aspect-ratio:1;object-fit:contain;border-radius:8px;background:#fff}.complex-reference p{margin:6px 0 0;color:var(--muted)}
+.complex-reference-workspace{display:grid;gap:10px}.reference-editor{display:grid;gap:8px;padding:13px;border:1px solid #344050;border-radius:11px;background:#0c1118}
+.reference-editor label{font-size:10px;font-weight:800;color:#9aa5b4;letter-spacing:.07em}.reference-editor textarea{width:100%;resize:vertical}
+.reference-actions{display:flex;flex-wrap:wrap;gap:8px}.reference-editor>small{color:var(--muted);line-height:1.45}
+.reference-cost-summary{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}.reference-cost-summary span{padding:6px 8px;border:1px solid #344050;border-radius:7px;background:#111923;font-size:10px;color:#aeb8c6}
+.reference-usage{display:block;margin-top:7px;color:#8793a3;line-height:1.4}
+.indeterminate-progress{height:8px;overflow:hidden;border-radius:999px;background:#242b34}.indeterminate-progress span{display:block;width:35%;height:100%;border-radius:inherit;background:#9af461;animation:reference-progress 1.25s ease-in-out infinite}
+@keyframes reference-progress{0%{transform:translateX(-110%)}100%{transform:translateX(320%)}}
 .complex-model-compact,.complex-model-ready{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:11px 13px;border:1px solid #394251;border-radius:11px;background:#0d131b}
 .complex-model-compact>div{display:grid;gap:2px}.complex-model-compact span{color:var(--muted);font-size:11px}.complex-model-compact button{display:flex;align-items:center;gap:7px;white-space:nowrap}
 .complex-model-ready{justify-content:flex-start;color:#bdf99a;border-color:#3e6334;background:#122015}

@@ -731,29 +731,75 @@ app.whenReady().then(async () => {
     controller?.abort();
     return Boolean(controller);
   });
-  ipcMain.handle("complex3d:createReference", async (_event, promptValue: string) => {
+  ipcMain.handle("complex3d:createReference", async (_event, promptValue: string, existingImagePath?: string, editInstructionValue?: string) => {
     const prompt = promptValue.trim();
     if (prompt.length < 10 || prompt.length > 800) throw new Error("Beschreibe das Objekt bitte mit 10 bis 800 Zeichen.");
     if (!sessionOpenAiKey) throw new Error("Der OpenAI API-Schlüssel ist für diese Sitzung nicht entsperrt.");
-    const response = await fetch("https://api.openai.com/v1/images/generations", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${sessionOpenAiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "gpt-image-2",
-        size: "1024x1024",
-        quality: "high",
-        output_format: "png",
-        prompt: `Erzeuge eine einzelne, vollständige 3/4-Referenzansicht für eine spätere 3D-Rekonstruktion. Objekt vollständig im Bild, neutraler heller Hintergrund, keine Beschriftung, kein Sockel, keine abgeschnittenen Teile, klare Silhouette. Wunsch: ${prompt}`
-      })
-    });
-    const payload = await response.json() as { data?: Array<{ b64_json?: string }>; error?: { message?: string } };
+    const editInstruction = editInstructionValue?.trim();
+    let response: Response;
+    if (existingImagePath && editInstruction) {
+      if (editInstruction.length < 3 || editInstruction.length > 600) throw new Error("Die Änderung muss 3 bis 600 Zeichen enthalten.");
+      const form = new FormData();
+      form.set("model", "gpt-image-2");
+      form.set("size", "1024x1024");
+      form.set("quality", "high");
+      form.set("output_format", "png");
+      form.set("input_fidelity", "high");
+      form.set("prompt", `Bearbeite die vorhandene 3D-Referenz gezielt. Behalte Blickwinkel, vollständige Darstellung, neutralen Hintergrund und alle nicht genannten Eigenschaften möglichst unverändert. Ursprünglicher Objektwunsch: ${prompt}. Gewünschte Änderung: ${editInstruction}`);
+      form.append("image[]", new Blob([await readFile(existingImagePath)], { type: "image/png" }), basename(existingImagePath));
+      response = await fetch("https://api.openai.com/v1/images/edits", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${sessionOpenAiKey}` },
+        body: form
+      });
+    } else {
+      response = await fetch("https://api.openai.com/v1/images/generations", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${sessionOpenAiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "gpt-image-2",
+          size: "1024x1024",
+          quality: "high",
+          output_format: "png",
+          prompt: `Erzeuge eine einzelne, vollständige 3/4-Referenzansicht für eine spätere 3D-Rekonstruktion. Objekt vollständig im Bild, neutraler heller Hintergrund, keine Beschriftung, kein Sockel, keine abgeschnittenen Teile, klare Silhouette. Wunsch: ${prompt}`
+        })
+      });
+    }
+    const payload = await response.json() as {
+      data?: Array<{ b64_json?: string }>;
+      error?: { message?: string };
+      usage?: {
+        input_tokens?: number;
+        output_tokens?: number;
+        input_tokens_details?: { text_tokens?: number; image_tokens?: number };
+      };
+    };
     const encoded = payload.data?.[0]?.b64_json;
     if (!response.ok || !encoded) throw new Error(payload.error?.message || `OpenAI-Bildgenerierung fehlgeschlagen (HTTP ${response.status}).`);
     const directory = join(app.getPath("temp"), "AI Print Studio Complex 3D");
     await mkdir(directory, { recursive: true });
     const path = join(directory, `reference-${Date.now()}.png`);
     await writeFile(path, Buffer.from(encoded, "base64"));
-    return { path, dataUrl: `data:image/png;base64,${encoded}`, disclaimer: "KI-generierte Referenz – keine offizielle CAD- oder Herstellerdatei." };
+    const textTokens = payload.usage?.input_tokens_details?.text_tokens ?? payload.usage?.input_tokens ?? 0;
+    const imageTokens = payload.usage?.input_tokens_details?.image_tokens ?? 0;
+    const outputTokens = payload.usage?.output_tokens ?? 0;
+    const exactUsageAvailable = Boolean(payload.usage);
+    const calculatedCostUsd = textTokens / 1_000_000 * 5 + imageTokens / 1_000_000 * 8 + outputTokens / 1_000_000 * 30;
+    const costUsd = exactUsageAvailable ? calculatedCostUsd : 0.163;
+    return {
+      path,
+      dataUrl: `data:image/png;base64,${encoded}`,
+      disclaimer: "KI-generierte Referenz – keine offizielle CAD- oder Herstellerdatei.",
+      billing: {
+        model: "gpt-image-2",
+        textTokens,
+        imageTokens,
+        outputTokens,
+        costUsd,
+        estimatedCostEur: costUsd * 0.92,
+        exactUsageAvailable
+      }
+    };
   });
   ipcMain.handle("complex3d:createMesh", async (event, jobId: string, imagePath: string) => {
     const settings = await readSettings();

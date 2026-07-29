@@ -20,7 +20,7 @@ contextBridge.exposeInMainWorld("desktop", Object.freeze({
   acceptComplex3dLicense: (accepted) => ipcRenderer.invoke("complex3d:acceptLicense", accepted),
   downloadComplex3dModel: (jobId) => ipcRenderer.invoke("complex3d:download", jobId),
   removeComplex3dModel: () => ipcRenderer.invoke("complex3d:remove"),
-  createComplex3dReference: (prompt) => ipcRenderer.invoke("complex3d:createReference", prompt),
+  createComplex3dReference: (prompt, existingImagePath, editInstruction) => ipcRenderer.invoke("complex3d:createReference", prompt, existingImagePath, editInstruction),
   createComplex3dMesh: (jobId, imagePath) => ipcRenderer.invoke("complex3d:createMesh", jobId, imagePath),
   cancelComplex3d: (jobId) => ipcRenderer.invoke("complex3d:cancel", jobId),
   onComplex3dProgress: (callback) => {
