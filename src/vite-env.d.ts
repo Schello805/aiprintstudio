@@ -8,6 +8,10 @@ interface Window {
       ramMb: number;
       totalMemoryMb: number;
       processCount: number;
+      freeStorageBytes: number;
+      totalStorageBytes: number;
+      requiredDownloadBytes: number;
+      downloadStorageSufficient: boolean;
     }>;
     checkForUpdate: () => Promise<{ currentVersion: string; latestVersion: string; available: boolean; url: string; directDownload: boolean }>;
     getSettingsStatus: () => Promise<{

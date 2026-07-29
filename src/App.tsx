@@ -10,6 +10,7 @@ import {
   Cpu,
   FolderOpen,
   Github,
+  HardDrive,
   History,
   ImagePlus,
   Info,
@@ -47,6 +48,10 @@ function formatApiCost(value: number): string {
     minimumFractionDigits: value < 0.01 ? 4 : 2,
     maximumFractionDigits: value < 0.01 ? 4 : 2
   }).format(value);
+}
+
+function formatStorage(bytes: number): string {
+  return `${new Intl.NumberFormat("de-DE", { maximumFractionDigits: 1 }).format(bytes / 1_000_000_000)} GB`;
 }
 
 type QualityProfile = "fast" | "balanced" | "fine" | "photo" | "logo";
@@ -109,7 +114,16 @@ export function App() {
   const [studioTool, setStudioTool] = useState<StudioTool>("home");
   const [legalPage, setLegalPage] = useState<LegalPage>(null);
   const [version, setVersion] = useState("0.1.0");
-  const [appMetrics, setAppMetrics] = useState<{ cpuPercent: number; ramMb: number; totalMemoryMb: number; processCount: number } | null>(null);
+  const [appMetrics, setAppMetrics] = useState<{
+    cpuPercent: number;
+    ramMb: number;
+    totalMemoryMb: number;
+    processCount: number;
+    freeStorageBytes: number;
+    totalStorageBytes: number;
+    requiredDownloadBytes: number;
+    downloadStorageSufficient: boolean;
+  } | null>(null);
   const [file, setFile] = useState<SelectedImage | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
@@ -411,6 +425,15 @@ export function App() {
           <div className="monitor-metric">
             <div><MemoryStick /><span>APP RAM</span><strong>{appMetrics ? `${Math.round(appMetrics.ramMb)} MB` : "–"}</strong></div>
             <span className="monitor-track memory"><span style={{ width: `${Math.min(100, appMetrics ? appMetrics.ramMb / appMetrics.totalMemoryMb * 100 : 0)}%` }} /></span>
+          </div>
+          <div className={`monitor-metric storage ${appMetrics && !appMetrics.downloadStorageSufficient ? "insufficient" : ""}`}>
+            <div><HardDrive /><span>FREIER SPEICHER</span><strong>{appMetrics?.freeStorageBytes ? formatStorage(appMetrics.freeStorageBytes) : "–"}</strong></div>
+            <span className="monitor-track storage"><span style={{ width: `${Math.min(100, appMetrics?.totalStorageBytes ? appMetrics.freeStorageBytes / appMetrics.totalStorageBytes * 100 : 0)}%` }} /></span>
+            {appMetrics?.freeStorageBytes ? (
+              <em>{appMetrics.downloadStorageSufficient
+                ? `Bereit für Downloads · mindestens ${formatStorage(appMetrics.requiredDownloadBytes)} benötigt`
+                : `Zu wenig für das 3D-Modell · ${formatStorage(appMetrics.requiredDownloadBytes)} benötigt`}</em>
+            ) : <em>Speicherprüfung nicht verfügbar</em>}
           </div>
           <small>{appMetrics ? `${appMetrics.processCount} App-Prozesse · Live` : "Messung wird gestartet …"}</small>
         </div>

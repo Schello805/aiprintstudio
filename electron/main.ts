@@ -504,13 +504,26 @@ app.whenReady().then(async () => {
   await removeLegacyStoredOpenAiKey();
   nativeTheme.themeSource = "dark";
   ipcMain.handle("app:version", () => app.getVersion());
-  ipcMain.handle("app:metrics", () => {
+  ipcMain.handle("app:metrics", async () => {
     const metrics = app.getAppMetrics();
+    let freeStorageBytes = 0;
+    let totalStorageBytes = 0;
+    try {
+      const storage = await statfs(app.getPath("userData"));
+      freeStorageBytes = storage.bavail * storage.bsize;
+      totalStorageBytes = storage.blocks * storage.bsize;
+    } catch {
+      // CPU und RAM bleiben auch dann sichtbar, wenn macOS den Speicherwert nicht liefert.
+    }
     return {
       cpuPercent: metrics.reduce((sum, metric) => sum + metric.cpu.percentCPUUsage, 0),
       ramMb: metrics.reduce((sum, metric) => sum + metric.memory.workingSetSize, 0) / 1024,
       totalMemoryMb: totalmem() / 1024 / 1024,
-      processCount: metrics.length
+      processCount: metrics.length,
+      freeStorageBytes,
+      totalStorageBytes,
+      requiredDownloadBytes: complex3dModel.requiredFreeBytes,
+      downloadStorageSufficient: freeStorageBytes >= complex3dModel.requiredFreeBytes
     };
   });
   ipcMain.handle("app:checkUpdate", async () => {
