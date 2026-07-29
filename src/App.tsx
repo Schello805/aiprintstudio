@@ -95,6 +95,7 @@ export function App() {
   const [smoothing, setSmoothing] = useState(2);
   const [detail, setDetail] = useState(1);
   const [processingMode, setProcessingMode] = useState<ProcessingMode>("auto");
+  const [includeLogoBackground, setIncludeLogoBackground] = useState(true);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editorHeightmap, setEditorHeightmap] = useState<string | null>(null);
@@ -193,6 +194,7 @@ export function App() {
         resolution: optimalResolution[profile],
         invert: raiseLightAreas, profile, smoothing, detail,
         processingMode: effectiveMode === "scan" ? "auto" : effectiveMode,
+        includeBackground: effectiveMode === "wordmark" && includeLogoBackground,
         sourceColors: multicolorEnabled ? sourceColors : [],
         colors: multicolorEnabled ? colors : [],
         sideColorIndex: multicolorEnabled ? sideColorIndex : 0
@@ -411,6 +413,21 @@ export function App() {
                     <NumberField label="GRUNDPLATTE" tooltip={parameterTooltips.base} value={baseMm} unit="mm" min={0.8} max={10} step={0.2} setValue={setBaseMm} />
                     <NumberField label="RELIEF" tooltip={parameterTooltips.relief} value={reliefMm} unit="mm" min={0.5} max={20} step={0.5} setValue={setReliefMm} />
                   </div>
+                  {processingMode === "wordmark" && (
+                    <button
+                      className={includeLogoBackground ? "background-toggle selected" : "background-toggle"}
+                      onClick={() => setIncludeLogoBackground((current) => !current)}
+                      aria-pressed={includeLogoBackground}
+                    >
+                      <Layers3 />
+                      <div>
+                        <strong>Hintergrund mitdrucken</strong>
+                        <span>{includeLogoBackground ? "Grundfläche bleibt in Vorschau, STL und 3MF erhalten" : "Nur Signet und Schrift werden freigestellt exportiert"}</span>
+                      </div>
+                      <SettingTooltip text={"Legt fest, ob die Bildfläche als zusammenhängende Grundplatte Teil des Modells bleibt.\nBeispiel: Aktiv für ein quadratisches App-Logo; deaktiviert für einen freistehenden Schriftzug."} />
+                      <span className="toggle-track"><span /></span>
+                    </button>
+                  )}
                   <div className={multicolorEnabled ? "multicolor-panel active" : "multicolor-panel"}>
                     <button className="multicolor-toggle" onClick={() => setMulticolorEnabled((current) => !current)} aria-pressed={multicolorEnabled}>
                       <Palette />

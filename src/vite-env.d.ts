@@ -60,6 +60,7 @@ interface Window {
       smoothing: number;
       detail: number;
       processingMode: "auto" | "vector" | "wordmark" | "depth" | "height";
+      includeBackground: boolean;
       sourceColors: string[];
       colors: string[];
       sideColorIndex: number;
@@ -74,6 +75,7 @@ interface Window {
         widthMm: number; baseMm: number; reliefMm: number; resolution: number; invert: boolean;
         profile: "fast" | "balanced" | "fine" | "photo" | "logo"; smoothing: number; detail: number;
         processingMode: "auto" | "vector" | "wordmark" | "depth" | "height";
+        includeBackground: boolean;
         sourceColors: string[];
         colors: string[];
         sideColorIndex: number;

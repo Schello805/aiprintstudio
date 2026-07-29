@@ -494,6 +494,35 @@ describe("relief mesh", () => {
     }
   });
 
+  it("exports a word logo background as a flat base with a clearly raised motif", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "ai-print-wordmark-background-test-"));
+    try {
+      const imagePath = join(directory, "logo.png");
+      const svg = Buffer.from(`
+        <svg xmlns="http://www.w3.org/2000/svg" width="160" height="160">
+          <rect width="160" height="160" fill="#28313d"/>
+          <rect x="28" y="35" width="104" height="40" rx="10" fill="#9eeab4"/>
+          <text x="30" y="125" font-family="Helvetica" font-size="35" font-weight="bold" fill="white">AI Print</text>
+        </svg>
+      `);
+      await writeFile(imagePath, await sharp(svg).png().toBuffer());
+      const result = await createRelief(imagePath, directory, {
+        widthMm: 80, baseMm: 1.6, reliefMm: 4, resolution: 128, invert: false,
+        profile: "logo", smoothing: 2, detail: 1, processingMode: "wordmark",
+        includeBackground: true, sourceColors: [], colors: [], sideColorIndex: 0
+      });
+      const usedVertices = new Set(result.preview.indices);
+      const heights = new Set([...usedVertices].map((index) =>
+        Number(result.preview.positions[index * 3 + 1].toFixed(4))
+      ));
+      expect(heights).toEqual(new Set([1.6, 5.6]));
+      expect(result.preview.positions.some((_, index) => index % 3 === 1 && result.preview.positions[index] === 1.6)).toBe(true);
+      expect(result.preview.positions.some((_, index) => index % 3 === 1 && result.preview.positions[index] === 5.6)).toBe(true);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
   it("removes enclosed background from wordmark letters but preserves it for emblems", () => {
     const width = 9, height = 9;
     const rgba = Buffer.alloc(width * height * 4, 255);

@@ -2,6 +2,12 @@
 
 ## Unveröffentlicht
 
+- **Logo mit Text** bietet jetzt den Schalter **Hintergrund mitdrucken**.
+  Vorschau, STL und 3MF verwenden gemeinsam entweder eine geschlossene
+  Grundplatte oder ein freigestelltes Motiv.
+- Einfarbige Textlogos mit Hintergrund erhalten klare, binäre Höhen: Die
+  Grundfläche bleibt auf der eingestellten Plattendicke, Signet und Schrift
+  werden um die vollständige Reliefhöhe angehoben.
 - Die AMS-Vorschau zeigt bei Wappen für Nicht-Trägerfarben nur noch die
   tatsächlichen Deckflächen. Unterseiten und innere Seitenwände bleiben dadurch
   vollständig in der gewählten Trägerfarbe geschlossen.

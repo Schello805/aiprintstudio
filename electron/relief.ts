@@ -13,6 +13,7 @@ export type ReliefOptions = {
   smoothing: number;
   detail: number;
   processingMode: "auto" | "vector" | "wordmark" | "depth" | "height";
+  includeBackground: boolean;
   sourceColors: string[];
   colors: string[];
   sideColorIndex: number;
@@ -64,6 +65,7 @@ const safeDefaults: ReliefOptions = {
   smoothing: 2,
   detail: 1
   ,processingMode: "auto",
+  includeBackground: false,
   sourceColors: [],
   colors: [],
   sideColorIndex: 0
@@ -100,13 +102,18 @@ export async function createRelief(
     / Math.max(1, rawSubjectPixels.length);
   const useWordmarkMask = options.processingMode === "wordmark"
     || (options.processingMode === "auto" && options.profile === "logo" && rawSubjectCoverage < 0.42);
+  const wordmarkPixels = useWordmarkMask
+    ? buildWordmarkPixelMask(rgba, gridWidth, gridHeight)
+    : undefined;
   // Bei Wortmarken und filigranen Logos würde die normale Maskenbereinigung
   // dünne Buchstaben und geschwungene Linien teilweise wegerodieren. Einzelne
   // Pixelartefakte entfernt anschließend bereits die strengere Zellmaske.
   const preserveThinVectorStrokes = options.profile === "logo"
     || options.processingMode === "vector";
   const subjectPixels = useWordmarkMask
-    ? buildWordmarkPixelMask(rgba, gridWidth, gridHeight)
+    ? options.includeBackground
+      ? Array(gridWidth * gridHeight).fill(true) as boolean[]
+      : wordmarkPixels as boolean[]
     : hasTransparency || preserveThinVectorStrokes
       ? rawSubjectPixels
     : cleanSubjectPixelMask(rawSubjectPixels, gridWidth, gridHeight);
@@ -120,7 +127,9 @@ export async function createRelief(
     : options.processingMode;
   let rawLevels: number[];
   if (activeMode === "vector") {
-    rawLevels = buildVectorLevels(rgba, subjectPixels, gridWidth, gridHeight, options.invert);
+    rawLevels = useWordmarkMask && options.includeBackground && wordmarkPixels
+      ? wordmarkPixels.map((occupied) => Number(options.invert ? !occupied : occupied))
+      : buildVectorLevels(rgba, subjectPixels, gridWidth, gridHeight, options.invert);
   } else if (editorHeightmap && depthMapPath) {
     const { data } = await sharp(depthMapPath)
       .resize(gridWidth, gridHeight, { fit: "fill" })
@@ -170,9 +179,11 @@ export async function createRelief(
     // verwendet; die Farbauflösung für AMS bleibt davon unberührt.
     const subjectCoverage = subjectPixels.reduce((sum, occupied) => sum + Number(occupied), 0)
       / Math.max(1, subjectPixels.length);
-    if (options.profile === "logo" && (useWordmarkMask || subjectCoverage < 0.42)) flatVectorSurface = true;
+    if (options.profile === "logo" && !options.includeBackground && (useWordmarkMask || subjectCoverage < 0.42)) flatVectorSurface = true;
   }
-  const smoothed = editorHeightmap ? rawLevels : smoothHeightField(rawLevels, gridWidth, gridHeight, activeMode === "vector" ? Math.min(1, options.smoothing) : options.smoothing);
+  const smoothed = editorHeightmap || (useWordmarkMask && options.includeBackground)
+    ? rawLevels
+    : smoothHeightField(rawLevels, gridWidth, gridHeight, activeMode === "vector" ? Math.min(1, options.smoothing) : options.smoothing);
   onProgress({ phase: "Höhen berechnen", detail: "Reliefstufen und Oberflächen werden aufgebaut …", progress: 38 });
   const detailed = editorHeightmap ? smoothed : smoothed.map((value, index) =>
     Math.max(0, Math.min(1, value + (rawLevels[index] - value) * options.detail * profile.detail))
@@ -283,6 +294,7 @@ function validateOptions(options: ReliefOptions): ReliefOptions {
   if (options.smoothing < 0 || options.smoothing > 5) throw new Error("Die Glättung muss zwischen 0 und 5 liegen.");
   if (options.detail < 0 || options.detail > 2) throw new Error("Die Detailstärke muss zwischen 0 und 2 liegen.");
   if (!["auto", "vector", "wordmark", "depth", "height"].includes(options.processingMode)) throw new Error("Unbekannter Verarbeitungsmodus.");
+  if (typeof options.includeBackground !== "boolean") throw new Error("Die Hintergrundeinstellung ist ungültig.");
   if (!Array.isArray(options.colors) || options.colors.length > 16 || options.colors.some((color) => !/^#[0-9a-fA-F]{6}$/.test(color))) {
     throw new Error("Die Farbpalette enthält ungültige Farben.");
   }
