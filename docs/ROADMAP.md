@@ -1,12 +1,12 @@
 # Roadmap
 
-## Aktueller Stand 0.19.0
+## Aktueller Stand 0.20.0
 
 - Bild zu 3D mit Kontur-, Höhenkarten- und lokaler KI-Tiefe
 - Schrift zu 3D mit gemeinsamem Relief- und AMS-Workflow
 - Prompt zu 3D über OpenAI Structured Outputs, iterative Folgeanweisungen,
   lokale 3D-Vorschau, CAD-/STL-Erzeugung sowie gestreamte Phasen- und
-  API-Kostenanzeige
+  API-Kostenanzeige; Modellwahl zwischen Sol, Terra und Luna
 - Flächeneditor mit Auswahl-, Höhen-, Glättungs- und Farbwerkzeugen
 - mehrfarbiger 3MF-Export als slicer-kompatibles Assembly mit einheitlichen
   Seiten- und Übergangskanten

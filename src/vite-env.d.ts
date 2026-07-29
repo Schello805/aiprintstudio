@@ -47,10 +47,20 @@ interface Window {
       suggestedProfile: "logo";
       dataUrl: string;
     }>;
+    getAi3dModels: () => Promise<Array<{
+      id: "gpt-5.6-sol" | "gpt-5.6-terra" | "gpt-5.6-luna";
+      name: string;
+      role: string;
+      description: string;
+      inputUsdPerMillion: number;
+      cachedInputUsdPerMillion: number;
+      outputUsdPerMillion: number;
+      typicalCostEur: number;
+    }>>;
     createAi3d: (prompt: string, existingPlan?: {
       title: string; widthMm: number; depthMm: number; heightMm: number;
       primitives: Array<{ type: "box" | "cylinder" | "roof"; name: string; position: [number, number, number]; size: [number, number, number] }>;
-    }) => Promise<{
+    }, model?: "gpt-5.6-sol" | "gpt-5.6-terra" | "gpt-5.6-luna") => Promise<{
       stlPath: string;
       plan: {
         title: string; widthMm: number; depthMm: number; heightMm: number;

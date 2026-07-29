@@ -36,6 +36,7 @@ type LegalPage = "imprint" | "privacy" | "cookies" | null;
 type SelectedImage = { path: string; name: string; size: number; width: number; height: number; suggestedProfile: "logo" | "photo"; dataUrl: string };
 type ReliefResult = Awaited<ReturnType<NonNullable<typeof window.desktop>["createRelief"]>>;
 type Ai3dResult = Awaited<ReturnType<NonNullable<typeof window.desktop>["createAi3d"]>>;
+type Ai3dModel = Awaited<ReturnType<NonNullable<typeof window.desktop>["getAi3dModels"]>>[number];
 type CadPlan = Ai3dResult["plan"];
 type CadPrimitive = CadPlan["primitives"][number];
 
@@ -1038,6 +1039,11 @@ function Ai3dDialog({ close }: { close: () => void }) {
   const [apiStatus, setApiStatus] = useState<SettingsStatus | null>(null);
   const [unlockPassword, setUnlockPassword] = useState("");
   const [unlockBusy, setUnlockBusy] = useState(false);
+  const [models, setModels] = useState<Ai3dModel[]>([]);
+  const [selectedModel, setSelectedModel] = useState<Ai3dModel["id"]>(() => {
+    const saved = localStorage.getItem("ai-print-studio.ai3d-model");
+    return saved === "gpt-5.6-sol" || saved === "gpt-5.6-luna" ? saved : "gpt-5.6-terra";
+  });
   const [progress, setProgress] = useState({
     phase: "Anfrage vorbereiten",
     progress: 0,
@@ -1052,8 +1058,12 @@ function Ai3dDialog({ close }: { close: () => void }) {
     setApiStatus(await window.desktop.getSettingsStatus());
   }, []);
 
-  useEffect(() => { void refreshApiStatus(); }, [refreshApiStatus]);
+  useEffect(() => {
+    void refreshApiStatus();
+    void window.desktop?.getAi3dModels().then(setModels);
+  }, [refreshApiStatus]);
   useEffect(() => window.desktop?.onAi3dProgress((nextProgress) => setProgress(nextProgress)), []);
+  useEffect(() => localStorage.setItem("ai-print-studio.ai3d-model", selectedModel), [selectedModel]);
 
   async function unlockApiKey() {
     setUnlockBusy(true); setError(null);
@@ -1078,7 +1088,7 @@ function Ai3dDialog({ close }: { close: () => void }) {
     setBusy(true); setError(null);
     try {
       if (!window.desktop) throw new Error("Prompt zu 3D ist nur in der installierten App verfügbar.");
-      const next = await window.desktop.createAi3d(instruction, existing?.plan);
+      const next = await window.desktop.createAi3d(instruction, existing?.plan, selectedModel);
       if (existing) setPreviousResults((current) => [...current, existing]);
       else setPreviousResults([]);
       setResult(next);
@@ -1094,6 +1104,7 @@ function Ai3dDialog({ close }: { close: () => void }) {
       return current.slice(0, -1);
     });
   }
+  const selectedModelDetails = models.find((model) => model.id === selectedModel);
   return (
     <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && !busy && close()}>
       <section className="modal ai3d-modal" role="dialog" aria-modal="true" aria-labelledby="ai3d-title">
@@ -1132,6 +1143,18 @@ function Ai3dDialog({ close }: { close: () => void }) {
         {apiStatus?.openAiConfigured && !result && <div className="notice"><CheckCircle2 /> Der gespeicherte OpenAI API-Schlüssel ist für diese Sitzung entsperrt.</div>}
         {!result && <>
           <p>Beschreibe Form, Anzahl und wichtige Details. OpenAI erstellt daraus einen druckgerechten CAD-Bauplan; die App erzeugt das STL anschließend lokal.</p>
+          <div className="ai-model-picker">
+            <label htmlFor="ai3d-model">OPENAI-MODELL</label>
+            <select id="ai3d-model" value={selectedModel} onChange={(event) => setSelectedModel(event.target.value as Ai3dModel["id"])} disabled={busy}>
+              {models.map((model) => <option key={model.id} value={model.id}>{model.name} · {model.role} · typisch ca. {formatApiCost(model.typicalCostEur)}</option>)}
+            </select>
+            {selectedModelDetails && <div className="ai-model-detail">
+              <div><strong>{selectedModelDetails.role}</strong><span>{selectedModelDetails.description}</span></div>
+              <div><small>TYPISCHE ANFRAGE</small><strong>ca. {formatApiCost(selectedModelDetails.typicalCostEur)}</strong></div>
+              <div><small>PREIS JE 1 MIO. TOKEN</small><span>${selectedModelDetails.inputUsdPerMillion} Eingabe · ${selectedModelDetails.outputUsdPerMillion} Ausgabe</span></div>
+            </div>}
+            <small className="ai-model-disclaimer">„Typisch“ rechnet beispielhaft mit 1.000 Eingabe- und 2.000 Ausgabetoken. Komplexe Modelle und Folgeänderungen können abweichen.</small>
+          </div>
           <label htmlFor="ai3d-prompt">OBJEKT BESCHREIBEN</label>
           <textarea id="ai3d-prompt" rows={5} maxLength={800} value={prompt} onChange={(event) => setPrompt(event.target.value)} disabled={busy} />
         </>}

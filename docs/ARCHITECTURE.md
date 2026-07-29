@@ -121,6 +121,12 @@ angezeigte Prozentwert beschreibt den Arbeitsabschnitt und nicht die unbekannte
 Restlaufzeit. Die Euroanzeige verwendet die hinterlegte Modellpreisliste und
 einen ausdrücklich als Schätzung gekennzeichneten USD/EUR-Kurs.
 
+Die Modellregistrierung in `electron/openai-usage.ts` ist die einzige Quelle
+für erlaubte Modell-IDs und Preise. Der Renderer erhält eine reduzierte
+Darstellung per IPC; jede Modellauswahl wird im Main-Prozess erneut gegen die
+Allowlist geprüft. Dadurch kann das Frontend keine beliebigen Modellnamen an
+die OpenAI-API weiterreichen.
+
 Der Workflow ist für einfache konstruktive Modelle gedacht. Organische
 Text-zu-3D-Rekonstruktion ist nicht Teil der aktuellen Architektur.
 

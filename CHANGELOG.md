@@ -2,6 +2,12 @@
 
 ## Unveröffentlicht
 
+- **Prompt zu 3D** bietet ein Modell-Dropdown mit GPT-5.6 Sol, Terra und Luna.
+  Qualitätsschwerpunkt, Beschreibung, offizielle Tokenpreise und ein typischer
+  Eurobetrag werden direkt vor der Erstellung angezeigt.
+- Terra ist als ausgewogene Standardauswahl voreingestellt. Die letzte Auswahl
+  bleibt lokal erhalten und wird serverseitig gegen die unterstützte
+  Modellliste validiert.
 - **Prompt zu 3D** verarbeitet OpenAI-Antworten jetzt als Stream. Ein
   Fortschrittsbalken zeigt den geschätzten Arbeitsabschnitt von Verbindung,
   Konstruktion, Validierung und lokalem STL-Export.

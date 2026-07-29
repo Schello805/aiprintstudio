@@ -13,7 +13,7 @@ import { renderTextImage, type TextImageOptions } from "./text-image.js";
 import { buildCadPlanningRequest, encodeCadStl, validateCadPlan, type CadPlan } from "./cad.js";
 import { checkSystemCompatibility } from "./system-check.js";
 import { decryptApiKey, encryptApiKey, type EncryptedApiKey } from "./api-key-vault.js";
-import { calculateAiCost, estimateTokens, openAiPricing } from "./openai-usage.js";
+import { calculateAiCost, defaultOpenAiModel, estimateTokens, getOpenAiModel, listOpenAiModels, type OpenAiModelId } from "./openai-usage.js";
 
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
 const developmentUrl = process.env.VITE_DEV_SERVER_URL ?? "http://localhost:5173";
@@ -253,8 +253,10 @@ async function removeLegacyStoredOpenAiKey(): Promise<void> {
 async function createPrintableCadPlan(
   prompt: string,
   existingPlan?: CadPlan,
+  modelId: OpenAiModelId = defaultOpenAiModel,
   onProgress: (progress: Ai3dProgress) => void = () => undefined
 ) {
+  const selectedModel = getOpenAiModel(modelId);
   const apiKey = sessionOpenAiKey;
   if (!apiKey) {
     const settings = await readSettings();
@@ -279,7 +281,7 @@ async function createPrintableCadPlan(
   onProgress({
     phase: "Sichere Verbindung wird aufgebaut",
     progress: 8,
-    estimatedCostEur: calculateAiCost(estimatedInputTokens, 0),
+    estimatedCostEur: calculateAiCost(modelId, estimatedInputTokens, 0),
     exactTokenUsage: false,
     inputTokens: estimatedInputTokens,
     outputTokens: 0
@@ -288,7 +290,7 @@ async function createPrintableCadPlan(
     method: "POST",
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: openAiPricing.model,
+      model: selectedModel.id,
       reasoning: { effort: "medium" },
       input: planningInput,
       stream: true,
@@ -318,7 +320,7 @@ async function createPrintableCadPlan(
   onProgress({
     phase: "OpenAI konstruiert den CAD-Bauplan",
     progress: 24,
-    estimatedCostEur: calculateAiCost(estimatedInputTokens, 0),
+    estimatedCostEur: calculateAiCost(modelId, estimatedInputTokens, 0),
     exactTokenUsage: false,
     inputTokens: estimatedInputTokens,
     outputTokens: 0
@@ -350,7 +352,7 @@ async function createPrintableCadPlan(
       onProgress({
         phase: "CAD-Bauteile werden ausgearbeitet",
         progress: Math.min(86, 30 + Math.round(usage.outputTokens / 18)),
-        estimatedCostEur: calculateAiCost(usage.inputTokens, usage.outputTokens),
+        estimatedCostEur: calculateAiCost(modelId, usage.inputTokens, usage.outputTokens),
         exactTokenUsage: false,
         inputTokens: usage.inputTokens,
         outputTokens: usage.outputTokens
@@ -386,7 +388,7 @@ async function createPrintableCadPlan(
   onProgress({
     phase: "Bauplan validieren und STL lokal erzeugen",
     progress: 94,
-    estimatedCostEur: calculateAiCost(usage.inputTokens, usage.outputTokens, usage.cachedTokens),
+    estimatedCostEur: calculateAiCost(modelId, usage.inputTokens, usage.outputTokens, usage.cachedTokens),
     exactTokenUsage: true,
     inputTokens: usage.inputTokens,
     outputTokens: usage.outputTokens
@@ -394,11 +396,11 @@ async function createPrintableCadPlan(
   return {
     plan: validateCadPlan(JSON.parse(output)),
     billing: {
-      model: openAiPricing.model,
+      model: selectedModel.id,
       inputTokens: usage.inputTokens,
       outputTokens: usage.outputTokens,
       cachedTokens: usage.cachedTokens,
-      estimatedCostEur: calculateAiCost(usage.inputTokens, usage.outputTokens, usage.cachedTokens)
+      estimatedCostEur: calculateAiCost(modelId, usage.inputTokens, usage.outputTokens, usage.cachedTokens)
     }
   };
 }
@@ -646,13 +648,15 @@ app.whenReady().then(async () => {
       dataUrl: `data:image/png;base64,${png.toString("base64")}`
     };
   });
-  ipcMain.handle("ai3d:create", async (event, promptValue: string, existingPlanValue?: unknown) => {
+  ipcMain.handle("ai3d:models", () => listOpenAiModels());
+  ipcMain.handle("ai3d:create", async (event, promptValue: string, existingPlanValue?: unknown, modelValue?: string) => {
     const prompt = promptValue.trim();
     if (prompt.length < (existingPlanValue ? 3 : 10) || prompt.length > 800) {
       throw new Error(existingPlanValue ? "Die Folgeanweisung muss 3 bis 800 Zeichen enthalten." : "Beschreibe das Objekt bitte mit 10 bis 800 Zeichen.");
     }
     const existingPlan = existingPlanValue ? validateCadPlan(existingPlanValue) : undefined;
-    const { plan, billing } = await createPrintableCadPlan(prompt, existingPlan, (progress) => {
+    const selectedModel = getOpenAiModel(modelValue || defaultOpenAiModel);
+    const { plan, billing } = await createPrintableCadPlan(prompt, existingPlan, selectedModel.id, (progress) => {
       if (!event.sender.isDestroyed()) event.sender.send("ai3d:progress", progress);
     });
     const outputDirectory = join(app.getPath("downloads"), "AI Print Studio");

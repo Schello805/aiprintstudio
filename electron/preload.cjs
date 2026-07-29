@@ -13,7 +13,8 @@ contextBridge.exposeInMainWorld("desktop", Object.freeze({
   saveProject: (project) => ipcRenderer.invoke("project:save", project),
   openProject: () => ipcRenderer.invoke("project:open"),
   createTextImage: (options) => ipcRenderer.invoke("text:createImage", options),
-  createAi3d: (prompt, existingPlan) => ipcRenderer.invoke("ai3d:create", prompt, existingPlan),
+  getAi3dModels: () => ipcRenderer.invoke("ai3d:models"),
+  createAi3d: (prompt, existingPlan, model) => ipcRenderer.invoke("ai3d:create", prompt, existingPlan, model),
   onAi3dProgress: (callback) => {
     const listener = (_event, progress) => callback(progress);
     ipcRenderer.on("ai3d:progress", listener);
