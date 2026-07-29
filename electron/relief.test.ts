@@ -286,14 +286,21 @@ describe("relief mesh", () => {
     const carrierHeights = (carrier?.indices ?? []).map((index) => preview.positions[index * 3 + 1]);
     expect(carrierHeights).toContain(0);
     for (const part of preview.colorParts.filter((entry) => entry.color !== "#111111")) {
+      const highestByPosition = new Map<string, number>();
+      for (let vertex = 0; vertex < preview.positions.length / 3; vertex += 1) {
+        const x = preview.positions[vertex * 3], y = preview.positions[vertex * 3 + 1], z = preview.positions[vertex * 3 + 2];
+        const key = `${x.toFixed(6)}:${z.toFixed(6)}`;
+        highestByPosition.set(key, Math.max(highestByPosition.get(key) ?? Number.NEGATIVE_INFINITY, y));
+      }
       for (let index = 0; index < part.indices.length; index += 3) {
         const a = part.indices[index], b = part.indices[index + 1], c = part.indices[index + 2];
         const ax = preview.positions[a * 3], ay = preview.positions[a * 3 + 1], az = preview.positions[a * 3 + 2];
         const bx = preview.positions[b * 3], by = preview.positions[b * 3 + 1], bz = preview.positions[b * 3 + 2];
         const cx = preview.positions[c * 3], cy = preview.positions[c * 3 + 1], cz = preview.positions[c * 3 + 2];
-        const normalY = (bz - az) * (cx - ax) - (bx - ax) * (cz - az);
-        expect(normalY).toBeGreaterThanOrEqual(-1e-6);
         expect(Math.min(ay, by, cy)).toBeGreaterThan(0);
+        for (const [x, y, z] of [[ax, ay, az], [bx, by, bz], [cx, cy, cz]]) {
+          expect(y).toBeCloseTo(highestByPosition.get(`${x.toFixed(6)}:${z.toFixed(6)}`) ?? y);
+        }
       }
     }
   });

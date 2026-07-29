@@ -983,6 +983,11 @@ function buildPreviewSurface(
     const colorParts: Array<{ color: string; indices: number[] }> = [];
     for (const part of solids) {
       const offset = positions.length / 3;
+      const highestVertexByPosition = new Map<string, number>();
+      for (const [x, y, z] of part.mesh.vertices) {
+        const key = `${x.toFixed(6)}:${y.toFixed(6)}`;
+        highestVertexByPosition.set(key, Math.max(highestVertexByPosition.get(key) ?? Number.NEGATIVE_INFINITY, z));
+      }
       for (const [x, y, z] of part.mesh.vertices) {
         positions.push(x - widthMm / 2, z, y - heightMm / 2);
       }
@@ -991,17 +996,16 @@ function buildPreviewSurface(
         partIndices.push(a + offset, c + offset, b + offset);
         indices.push(a + offset, c + offset, b + offset);
       }
-      // Interne Unterseiten der 0,4-mm-Farbdeckel sind nur für den geschlossenen
-      // 3MF-Körper nötig. In der Vorschau würden sie beim Blick von unten durch
-      // Tiefenüberschneidungen wie leere oder bunte Löcher wirken.
+      // Nicht-Trägerfarben zeigen in der Vorschau ausschließlich ihre echte
+      // Deckfläche. Boden und Seiten der geschlossenen 0,4-mm-Farbkörper sind
+      // für den 3MF-Export nötig, würden von unten aber als farbige Löcher und
+      // Streifen durch den einheitlichen Tragkörper scheinen.
       const visiblePartIndices: number[] = [];
       for (const triangle of part.mesh.triangles) {
-        const visible = part.color === colors[sideColorIndex]
-          || normalOf(
-            part.mesh.vertices[triangle[0]],
-            part.mesh.vertices[triangle[1]],
-            part.mesh.vertices[triangle[2]]
-          )[2] > -0.5;
+        const visible = part.color === colors[sideColorIndex] || triangle.every((vertexIndex) => {
+          const [x, y, z] = part.mesh.vertices[vertexIndex];
+          return Math.abs(z - (highestVertexByPosition.get(`${x.toFixed(6)}:${y.toFixed(6)}`) ?? z)) < 1e-6;
+        });
         if (visible) visiblePartIndices.push(
           triangle[0] + offset,
           triangle[2] + offset,

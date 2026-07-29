@@ -12,6 +12,7 @@ import {
   ImagePlus,
   Info,
   Layers3,
+  LoaderCircle,
   Palette,
   Settings2,
   ShieldCheck,
@@ -339,7 +340,19 @@ export function App() {
             </div>
             {fileError && <div className="error-banner" role="alert"><strong>Verarbeitung fehlgeschlagen</strong><span>{fileError}</span><button onClick={() => setFileError(null)} aria-label="Fehlermeldung schließen"><X /></button></div>}
             {uploadStatus && !fileError && <div className="upload-status"><CheckCircle2 /> {uploadStatus}</div>}
-            {result && <ReliefResultCard result={result} />}
+            {busy && processingMode !== "scan" && (
+              <div className="progress-card relief-progress-card">
+                <div className="mesh-spinner" aria-hidden="true"><span /><span /><span /><Box /></div>
+                <div className="progress-copy">
+                  <strong>{reliefProgress.phase}</strong>
+                  <p>{reliefProgress.detail}</p>
+                  <div className="relief-progress-track"><span style={{ width: `${Math.max(2, reliefProgress.progress)}%` }} /></div>
+                  <small>{Math.round(reliefProgress.progress)} %</small>
+                </div>
+                <button className="cancel-job-button" onClick={() => void cancelRelief()}><X /> Abbrechen</button>
+              </div>
+            )}
+            {result && !busy && <ReliefResultCard result={result} />}
             </div>
             {file && !editorOpen && (
               <button className={editorHeightmap ? "editor-launch has-tooltip active" : "editor-launch has-tooltip"} onClick={() => setEditorOpen(true)}>
@@ -481,18 +494,7 @@ export function App() {
               <div><Box size={20} /><div><strong>{processingMode === "scan" ? "Mehrfoto-Rekonstruktion" : file ? file.name : "Noch kein Bild gewählt"}</strong><span>{processingMode === "scan" ? "Wähle 12–300 überlappende Fotos aus verschiedenen Blickwinkeln." : file ? `${(file.size / 1_048_576).toFixed(1)} MB · ${file.width} × ${file.height} px · bereit` : "Wähle zuerst eine geeignete Aufnahme aus."}</span></div></div>
               <button className="primary-button" disabled={(processingMode !== "scan" && !file) || busy} onClick={() => void (processingMode === "scan" ? generateObjectCapture() : generateRelief())}>{busy ? "Modell wird erzeugt …" : processingMode === "scan" ? "Fotos wählen & 3D-Scan starten" : "Relief erstellen"} <ChevronRight size={18} /></button>
             </div>
-            {busy && (
-              <div className="progress-card relief-progress-card">
-                <div className="mesh-spinner" aria-hidden="true"><span /><span /><span /><Box /></div>
-                <div className="progress-copy">
-                  <strong>{reliefProgress.phase}</strong>
-                  <p>{reliefProgress.detail}</p>
-                  <div className="relief-progress-track"><span style={{ width: `${Math.max(2, reliefProgress.progress)}%` }} /></div>
-                  <small>{Math.round(reliefProgress.progress)} %</small>
-                </div>
-                <button className="cancel-job-button" onClick={() => void cancelRelief()}><X /> Abbrechen</button>
-              </div>
-            )}
+            {busy && processingMode === "scan" && <div className="progress-card"><LoaderCircle className="spin" /><div><strong>Object Capture verarbeitet die Fotos …</strong><p>Die vollständige Rekonstruktion läuft lokal.</p></div></div>}
             {scanResult && (
               <div className="result-card ready">
                 <div className="result-check"><CheckCircle2 /></div>

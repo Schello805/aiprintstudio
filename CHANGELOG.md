@@ -2,6 +2,11 @@
 
 ## Unveröffentlicht
 
+- Die AMS-Vorschau zeigt bei Wappen für Nicht-Trägerfarben nur noch die
+  tatsächlichen Deckflächen. Unterseiten und innere Seitenwände bleiben dadurch
+  vollständig in der gewählten Trägerfarbe geschlossen.
+- Fortschritt, Abbruch und Exportergebnis stehen jetzt durchgehend direkt unter
+  der 3D-Vorschau; nach Abschluss erscheint dort der Finder-Button.
 - Reliefberechnungen laufen in einem eigenen Worker und können über einen
   sichtbaren **Abbrechen**-Button tatsächlich beendet werden.
 - Ein animierter 3D-Spinner zeigt Phase, Beschreibung und prozentualen
