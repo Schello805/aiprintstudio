@@ -1,6 +1,6 @@
 # Roadmap
 
-## Aktueller Stand 0.17.2
+## Aktueller Stand 0.18.0
 
 - Bild zu 3D mit Kontur-, Höhenkarten- und lokaler KI-Tiefe
 - Schrift zu 3D mit gemeinsamem Relief- und AMS-Workflow
@@ -14,6 +14,7 @@
 - automatische Druckreparatur für 0,4-mm-Düsen
 - lokale Schicht-, Zeit- und Materialschätzung
 - freier Höhen-/Farbpinsel und Radierer im Flächeneditor
+- bedarfsgesteuerte Reduzierung auf höchstens 250.000 Dreiecke
 
 ## Als Nächstes: präzisere Slicer- und Druckerprofile
 

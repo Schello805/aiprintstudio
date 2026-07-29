@@ -551,7 +551,11 @@ function analysePrintability(mesh: Mesh, heights: number[], options: ReliefOptio
     issues.push("Viele steile Übergänge können Details unsauber drucken."); score -= 20;
     checks.push({ label: "Übergänge", status: "warning", detail: "Viele sehr steile Höhenwechsel erkannt." });
   } else checks.push({ label: "Übergänge", status: "ok", detail: "Höhenwechsel sind druckfreundlich." });
-  if (mesh.triangles.length > 800_000) { issues.push("Sehr großes Mesh – der Slicer kann länger benötigen."); score -= 5; }
+  if (mesh.triangles.length > 250_000) {
+    issues.push("Mehr als 250.000 Dreiecke – für Programme mit begrenzter Meshgröße kann eine Reduzierung sinnvoll sein.");
+    score -= 5;
+    checks.push({ label: "Meshgröße", status: "warning", detail: `${mesh.triangles.length.toLocaleString("de-DE")} Dreiecke.` });
+  } else checks.push({ label: "Meshgröße", status: "ok", detail: `${mesh.triangles.length.toLocaleString("de-DE")} Dreiecke.` });
   if (cellMask.filter(Boolean).length < 4) { issues.push("Das erkannte Motiv ist zu klein oder unvollständig."); score -= 45; }
   const components = countCellComponents(cellMask, columns - 1);
   if (components > 12) {

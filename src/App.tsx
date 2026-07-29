@@ -54,6 +54,7 @@ type StudioProject = {
     processingMode: ProcessingMode; profile: QualityProfile; raiseLightAreas: boolean;
     multicolorEnabled: boolean; colorCount: number; sourceColors: string[]; colors: string[];
     sideColorIndex: number; includeLogoBackground: boolean; optimizeForStandardNozzle: boolean;
+    reduceTo250kTriangles: boolean;
   };
   editorHeightmap: string | null;
   editorColorMap: string | null;
@@ -117,6 +118,7 @@ export function App() {
   const [processingMode, setProcessingMode] = useState<ProcessingMode>("auto");
   const [includeLogoBackground, setIncludeLogoBackground] = useState(true);
   const [optimizeForStandardNozzle, setOptimizeForStandardNozzle] = useState(true);
+  const [reduceTo250kTriangles, setReduceTo250kTriangles] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editorHeightmap, setEditorHeightmap] = useState<string | null>(null);
@@ -228,7 +230,7 @@ export function App() {
       const effectiveResolution = effectiveMode === "auto" && file.suggestedProfile === "logo"
         ? 384
         : repair ? Math.min(384, optimalResolution[profile]) : optimalResolution[profile];
-      const next = await window.desktop.createRelief(jobId, file.path, {
+      const request: Parameters<NonNullable<typeof window.desktop>["createRelief"]>[2] = {
         widthMm, baseMm: repair ? Math.max(1.6, baseMm) : baseMm, reliefMm,
         resolution: effectiveResolution,
         invert: raiseLightAreas, profile, smoothing, detail,
@@ -239,7 +241,23 @@ export function App() {
         sourceColors: multicolorEnabled ? sourceColors : [],
         colors: multicolorEnabled ? colors : [],
         sideColorIndex: multicolorEnabled ? sideColorIndex : 0
-      }, editorHeightmap ?? undefined, editorColorMap ?? undefined);
+      };
+      let currentResolution = effectiveResolution;
+      let next = await window.desktop.createRelief(jobId, file.path, request, editorHeightmap ?? undefined, editorColorMap ?? undefined);
+      for (let attempt = 0; next && reduceTo250kTriangles && next.triangleCount > 250_000 && attempt < 3; attempt += 1) {
+        const reducedResolution = Math.max(64, Math.floor(currentResolution * Math.sqrt(235_000 / next.triangleCount)));
+        if (reducedResolution >= currentResolution) break;
+        setReliefProgress({
+          phase: "Meshgröße reduzieren",
+          detail: `Die Auflösung wird automatisch angepasst (${next.triangleCount.toLocaleString("de-DE")} → maximal 250.000 Dreiecke) …`,
+          progress: 8
+        });
+        currentResolution = reducedResolution;
+        next = await window.desktop.createRelief(jobId, file.path, {
+          ...request,
+          resolution: currentResolution
+        }, editorHeightmap ?? undefined, editorColorMap ?? undefined);
+      }
       if (next) {
         setResult(next);
         const entry: HistoryEntry = {
@@ -285,6 +303,7 @@ export function App() {
         widthMm, baseMm, reliefMm, smoothing, detail, processingMode, profile, raiseLightAreas,
         multicolorEnabled, colorCount, sourceColors, colors, sideColorIndex,
         includeLogoBackground, optimizeForStandardNozzle
+        ,reduceTo250kTriangles
       },
       editorHeightmap,
       editorColorMap
@@ -315,6 +334,7 @@ export function App() {
       setMulticolorEnabled(settings.multicolorEnabled); setColorCount(settings.colorCount);
       setSourceColors(settings.sourceColors); setColors(settings.colors); setSideColorIndex(settings.sideColorIndex);
       setIncludeLogoBackground(settings.includeLogoBackground); setOptimizeForStandardNozzle(settings.optimizeForStandardNozzle);
+      setReduceTo250kTriangles(settings.reduceTo250kTriangles ?? false);
       setEditorHeightmap(loaded.editorHeightmap); setEditorColorMap(loaded.editorColorMap);
       setResult(null); setEditorOpen(false); setFileError(null); setUploadStatus("Projekt vollständig wiederhergestellt.");
     } catch (error) {
@@ -546,6 +566,19 @@ export function App() {
                       <span className="toggle-track"><span /></span>
                     </button>
                   )}
+                  <button
+                    className={reduceTo250kTriangles ? "background-toggle selected" : "background-toggle"}
+                    onClick={() => setReduceTo250kTriangles((current) => !current)}
+                    aria-pressed={reduceTo250kTriangles}
+                  >
+                    <Layers3 />
+                    <div>
+                      <strong>Auf 250.000 Dreiecke reduzieren</strong>
+                      <span>{reduceTo250kTriangles ? "Meshgröße wird beim Erstellen automatisch begrenzt" : "Volle Detailauflösung beibehalten"}</span>
+                    </div>
+                    <SettingTooltip text={"Reduziert die Rasterauflösung nur dann automatisch, wenn das fertige Mesh mehr als 250.000 Dreiecke enthält.\nBeispiel: Erleichtert den Import in CAD- und Online-Programme mit begrenzter Meshgröße."} />
+                    <span className="toggle-track"><span /></span>
+                  </button>
                   {processingMode === "wordmark" && (
                     <button
                       className={optimizeForStandardNozzle ? "background-toggle selected" : "background-toggle"}

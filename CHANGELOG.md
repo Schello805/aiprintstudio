@@ -2,6 +2,11 @@
 
 ## Unveröffentlicht
 
+- Die neue neutrale Exportoption **Auf 250.000 Dreiecke reduzieren** passt die
+  Auflösung nur bei Bedarf automatisch an und erleichtert den Import in
+  Programme mit begrenzter Meshgröße.
+- Der Druckscore kennzeichnet Modelle über 250.000 Dreiecken jetzt sichtbar,
+  statt trotz möglicher Importgrenzen 100/100 anzuzeigen.
 - Erhabene Bereiche von Logos mit Hintergrund werden als echte gestufte
   Extrusion mit senkrechten Wänden aufgebaut. Schräge Übergangsdreiecke und
   dadurch sichtbare Spitzen an Motivenden entfallen in Vorschau, STL und 3MF.

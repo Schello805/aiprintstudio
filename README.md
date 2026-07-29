@@ -9,7 +9,7 @@ CAD-Pläne und Mesh-Dateien bleiben standardmäßig auf dem eigenen Mac.
 
 [![Quality](https://github.com/Schello805/aiprintstudio/actions/workflows/quality.yml/badge.svg)](https://github.com/Schello805/aiprintstudio/actions/workflows/quality.yml)
 
-> Aktueller Stand: Version 0.17.2. Bild- und Schrift-Reliefs, mehrfarbige
+> Aktueller Stand: Version 0.18.0. Bild- und Schrift-Reliefs, mehrfarbige
 > AMS-3MF-Dateien sowie einfache, per OpenAI geplante und lokal konstruierte
 > Prompt-zu-3D-Modelle sind testbar. Die vollständige Rundum-Rekonstruktion aus
 > einem einzelnen Bild bleibt eine spätere Ausbaustufe.
@@ -53,6 +53,8 @@ grundsätzlich kompatibel.
 - speicherbare `.aips`-Projekte einschließlich Quelle, Parametern, Farben und
   manuellen Korrekturen
 - automatische Reparaturvorschläge und lokale Schicht-/Materialsimulation
+- optionaler Export mit höchstens 250.000 Dreiecken für Programme mit
+  begrenzter Meshgröße
 
 ## Studio-Workflows
 
