@@ -12,7 +12,13 @@ contextBridge.exposeInMainWorld("desktop", Object.freeze({
   createTextImage: (options) => ipcRenderer.invoke("text:createImage", options),
   createAi3d: (prompt, existingPlan) => ipcRenderer.invoke("ai3d:create", prompt, existingPlan),
   createObjectCapture: () => ipcRenderer.invoke("objectCapture:create"),
-  createRelief: (imagePath, options, editorHeightmapDataUrl, editorColorMapDataUrl) => ipcRenderer.invoke("relief:create", imagePath, options, editorHeightmapDataUrl, editorColorMapDataUrl),
+  createRelief: (jobId, imagePath, options, editorHeightmapDataUrl, editorColorMapDataUrl) => ipcRenderer.invoke("relief:create", jobId, imagePath, options, editorHeightmapDataUrl, editorColorMapDataUrl),
+  cancelRelief: (jobId) => ipcRenderer.invoke("relief:cancel", jobId),
+  onReliefProgress: (callback) => {
+    const listener = (_event, jobId, progress) => callback(jobId, progress);
+    ipcRenderer.on("relief:progress", listener);
+    return () => ipcRenderer.removeListener("relief:progress", listener);
+  },
   showItemInFolder: (path) => ipcRenderer.invoke("shell:showItem", path),
   openExternal: (url) => ipcRenderer.invoke("shell:openExternal", url)
 }));

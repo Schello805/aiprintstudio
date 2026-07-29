@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
@@ -82,6 +82,8 @@ export function App() {
   const [preview, setPreview] = useState<string | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [reliefProgress, setReliefProgress] = useState({ phase: "Vorbereiten", detail: "Die lokale 3D-Engine wird gestartet …", progress: 0 });
+  const activeReliefJob = useRef<string | null>(null);
   const [result, setResult] = useState<ReliefResult>(null);
   const [uploadStatus, setUploadStatus] = useState<string | null>(null);
   const [raiseLightAreas, setRaiseLightAreas] = useState(false);
@@ -112,6 +114,10 @@ export function App() {
   useEffect(() => {
     void window.desktop?.getVersion().then(setVersion);
   }, []);
+
+  useEffect(() => window.desktop?.onReliefProgress((jobId, progress) => {
+    if (activeReliefJob.current === jobId) setReliefProgress(progress);
+  }), []);
 
   useEffect(() => {
     if (!preview) return;
@@ -174,11 +180,14 @@ export function App() {
 
   async function generateRelief() {
     if (!file) return;
+    const jobId = crypto.randomUUID();
+    activeReliefJob.current = jobId;
+    setReliefProgress({ phase: "Vorbereiten", detail: "Die lokale 3D-Engine wird gestartet …", progress: 1 });
     setBusy(true); setFileError(null); setResult(null);
     try {
       if (!window.desktop) throw new Error("Die lokale 3D-Engine ist nicht erreichbar. Bitte starte die App neu.");
       const effectiveMode = processingMode === "auto" ? (file.suggestedProfile === "logo" ? "auto" : "depth") : processingMode;
-      const next = await window.desktop.createRelief(file.path, {
+      const next = await window.desktop.createRelief(jobId, file.path, {
         widthMm, baseMm, reliefMm,
         resolution: optimalResolution[profile],
         invert: raiseLightAreas, profile, smoothing, detail,
@@ -201,8 +210,24 @@ export function App() {
         });
       }
     } catch (error) {
-      setFileError(error instanceof Error ? error.message : "Das Modell konnte nicht erstellt werden.");
-    } finally { setBusy(false); }
+      const message = error instanceof Error ? error.message : "Das Modell konnte nicht erstellt werden.";
+      if (message.includes("Vorgang abgebrochen")) setUploadStatus("Erstellung abgebrochen – dein bisheriger Studio-Stand bleibt erhalten.");
+      else setFileError(message);
+    } finally {
+      if (activeReliefJob.current === jobId) activeReliefJob.current = null;
+      setBusy(false);
+    }
+  }
+
+  async function cancelRelief() {
+    const jobId = activeReliefJob.current;
+    if (!jobId || !window.desktop) return;
+    setReliefProgress((current) => ({
+      ...current,
+      phase: "Wird abgebrochen",
+      detail: "Worker und laufende Berechnung werden sicher beendet …"
+    }));
+    await window.desktop.cancelRelief(jobId);
   }
 
   async function generateObjectCapture() {
@@ -456,7 +481,18 @@ export function App() {
               <div><Box size={20} /><div><strong>{processingMode === "scan" ? "Mehrfoto-Rekonstruktion" : file ? file.name : "Noch kein Bild gewählt"}</strong><span>{processingMode === "scan" ? "Wähle 12–300 überlappende Fotos aus verschiedenen Blickwinkeln." : file ? `${(file.size / 1_048_576).toFixed(1)} MB · ${file.width} × ${file.height} px · bereit` : "Wähle zuerst eine geeignete Aufnahme aus."}</span></div></div>
               <button className="primary-button" disabled={(processingMode !== "scan" && !file) || busy} onClick={() => void (processingMode === "scan" ? generateObjectCapture() : generateRelief())}>{busy ? "Modell wird erzeugt …" : processingMode === "scan" ? "Fotos wählen & 3D-Scan starten" : "Relief erstellen"} <ChevronRight size={18} /></button>
             </div>
-            {busy && <div className="progress-card"><span /><div><strong>{processingMode === "depth" ? "Depth Anything V2 analysiert das Foto" : "Lokale 3D-Verarbeitung"}</strong><p>Höhenmodell und wasserdichtes Mesh werden berechnet …</p></div></div>}
+            {busy && (
+              <div className="progress-card relief-progress-card">
+                <div className="mesh-spinner" aria-hidden="true"><span /><span /><span /><Box /></div>
+                <div className="progress-copy">
+                  <strong>{reliefProgress.phase}</strong>
+                  <p>{reliefProgress.detail}</p>
+                  <div className="relief-progress-track"><span style={{ width: `${Math.max(2, reliefProgress.progress)}%` }} /></div>
+                  <small>{Math.round(reliefProgress.progress)} %</small>
+                </div>
+                <button className="cancel-job-button" onClick={() => void cancelRelief()}><X /> Abbrechen</button>
+              </div>
+            )}
             {scanResult && (
               <div className="result-card ready">
                 <div className="result-check"><CheckCircle2 /></div>

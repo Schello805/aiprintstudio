@@ -6,8 +6,9 @@ import { arch, platform, tmpdir, totalmem } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
+import { Worker } from "node:worker_threads";
 import sharp, { type Metadata } from "sharp";
-import { createRelief, type ReliefOptions } from "./relief.js";
+import type { ReliefOptions, ReliefProgress, ReliefResult } from "./relief.js";
 import { renderTextImage, type TextImageOptions } from "./text-image.js";
 import { buildCadPlanningRequest, encodeCadStl, validateCadPlan, type CadPlan } from "./cad.js";
 import { checkSystemCompatibility } from "./system-check.js";
@@ -26,6 +27,7 @@ type StoredSettings = {
 
 const settingsDirectoryName = "de.michaelschellenberger.aiprintstudio";
 let sessionOpenAiKey: string | null = null;
+const reliefJobs = new Map<string, { controller: AbortController; worker?: Worker }>();
 
 function isNewerVersion(candidate: string, current: string): boolean {
   const candidateParts = candidate.split(".").map(Number);
@@ -165,14 +167,33 @@ async function ensureCompatibleSystem(): Promise<boolean> {
   return true;
 }
 
-async function createDepthMap(imagePath: string): Promise<{ path: string; cleanup: () => Promise<void> }> {
+async function createDepthMap(imagePath: string, signal?: AbortSignal): Promise<{ path: string; cleanup: () => Promise<void> }> {
   if (!depthModelAvailable()) {
     throw new Error("Depth Anything V2 ist in diesem Build nicht enthalten. Bitte installiere die aktuelle Release-Version.");
   }
   const directory = await mkdtemp(join(tmpdir(), "ai-print-depth-"));
   const output = join(directory, "depth.png");
   const resources = depthResources();
-  await execFileAsync(resources.worker, [resources.model, imagePath, output], { timeout: 120_000, maxBuffer: 1024 * 1024 });
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const child = execFile(
+        resources.worker,
+        [resources.model, imagePath, output],
+        { timeout: 120_000, maxBuffer: 1024 * 1024 },
+        (error) => error ? reject(error) : resolve()
+      );
+      const abort = () => {
+        child.kill("SIGTERM");
+        reject(new Error("Vorgang abgebrochen."));
+      };
+      if (signal?.aborted) abort();
+      else signal?.addEventListener("abort", abort, { once: true });
+      child.once("exit", () => signal?.removeEventListener("abort", abort));
+    });
+  } catch (error) {
+    await rm(directory, { recursive: true, force: true });
+    throw error;
+  }
   return { path: output, cleanup: () => rm(directory, { recursive: true, force: true }) };
 }
 
@@ -491,10 +512,23 @@ app.whenReady().then(async () => {
       await rm(workspace, { recursive: true, force: true });
     }
   });
-  ipcMain.handle("relief:create", async (_event, imagePath: string, options: Partial<ReliefOptions>, editorHeightmapDataUrl?: string, editorColorMapDataUrl?: string) => {
+  ipcMain.handle("relief:cancel", async (_event, jobId: string) => {
+    const job = reliefJobs.get(jobId);
+    if (!job) return false;
+    job.controller.abort();
+    await job.worker?.terminate();
+    reliefJobs.delete(jobId);
+    return true;
+  });
+  ipcMain.handle("relief:create", async (event, jobId: string, imagePath: string, options: Partial<ReliefOptions>, editorHeightmapDataUrl?: string, editorColorMapDataUrl?: string) => {
+    if (!/^[a-f0-9-]{20,64}$/i.test(jobId)) throw new Error("Ungültige Job-ID.");
+    if (reliefJobs.has(jobId)) throw new Error("Dieser Relief-Job läuft bereits.");
     const outputDirectory = join(app.getPath("downloads"), "AI Print Studio");
     let depthMap: Awaited<ReturnType<typeof createDepthMap>> | undefined;
     let editorDirectory: string | undefined;
+    const controller = new AbortController();
+    const job: { controller: AbortController; worker?: Worker } = { controller };
+    reliefJobs.set(jobId, job);
     try {
       let mapPath: string | undefined;
       if (editorHeightmapDataUrl) {
@@ -506,9 +540,17 @@ app.whenReady().then(async () => {
         mapPath = join(editorDirectory, "heightmap.png");
         await writeFile(mapPath, bytes);
       } else if (options.processingMode === "depth") {
-        depthMap = await createDepthMap(imagePath);
+        if (!event.sender.isDestroyed()) {
+          event.sender.send("relief:progress", jobId, {
+            phase: "KI-Tiefe analysieren",
+            detail: "Depth Anything V2 berechnet lokal die räumliche Tiefe …",
+            progress: 10
+          } satisfies ReliefProgress);
+        }
+        depthMap = await createDepthMap(imagePath, controller.signal);
         mapPath = depthMap.path;
       }
+      if (controller.signal.aborted) throw new Error("Vorgang abgebrochen.");
       let colorMapPath: string | undefined;
       if (editorColorMapDataUrl) {
         const match = /^data:image\/png;base64,([A-Za-z0-9+/=]+)$/.exec(editorColorMapDataUrl);
@@ -520,11 +562,53 @@ app.whenReady().then(async () => {
         await writeFile(colorMapPath, bytes);
       }
       const effectiveOptions = editorHeightmapDataUrl ? { ...options, processingMode: "height" as const } : options;
-      return await createRelief(imagePath, outputDirectory, effectiveOptions, mapPath, Boolean(editorHeightmapDataUrl), colorMapPath);
+      const worker = new Worker(new URL("./relief-worker.js", import.meta.url));
+      job.worker = worker;
+      return await new Promise<ReliefResult>((resolve, reject) => {
+        let settled = false;
+        const finish = (callback: () => void) => {
+          if (settled) return;
+          settled = true;
+          callback();
+          void worker.terminate();
+        };
+        worker.on("message", (message: {
+          type: "progress" | "result" | "error";
+          progress?: ReliefProgress;
+          result?: ReliefResult;
+          message?: string;
+        }) => {
+          if (message.type === "progress" && message.progress) {
+            if (!event.sender.isDestroyed()) event.sender.send("relief:progress", jobId, message.progress);
+          } else if (message.type === "result" && message.result) {
+            finish(() => resolve(message.result as ReliefResult));
+          } else if (message.type === "error") {
+            finish(() => reject(new Error(message.message ?? "Unbekannter Worker-Fehler")));
+          }
+        });
+        worker.once("error", (error) => finish(() => reject(error)));
+        worker.once("exit", (code) => {
+          if (!settled) {
+            finish(() => reject(new Error(controller.signal.aborted
+              ? "Vorgang abgebrochen."
+              : `Relief-Worker wurde unerwartet beendet (${code}).`)));
+          }
+        });
+        worker.postMessage({
+          imagePath,
+          outputDirectory,
+          options: effectiveOptions,
+          depthMapPath: mapPath,
+          editorHeightmap: Boolean(editorHeightmapDataUrl),
+          editorColorMapPath: colorMapPath
+        });
+      });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unbekannter Exportfehler";
       throw new Error(`Das Relief konnte nicht unter „${outputDirectory}“ gespeichert werden: ${message}`);
     } finally {
+      if (reliefJobs.get(jobId) === job) reliefJobs.delete(jobId);
+      await job.worker?.terminate();
       await depthMap?.cleanup();
       if (editorDirectory) await rm(editorDirectory, { recursive: true, force: true });
     }

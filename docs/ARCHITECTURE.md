@@ -30,6 +30,12 @@ Electron Main Process
         └── STL / 3MF / USDZ
 ```
 
+Rechenintensive Relief- und Mehrfarben-Meshes laufen in einem separaten
+`worker_threads`-Worker. Fortschrittsmeldungen werden über eine begrenzte
+IPC-Verbindung an den Renderer übertragen. Ein Abbruch beendet sowohl native
+Tiefenprozesse als auch den aktiven Mesh-Worker, ohne den Electron-Hauptprozess
+oder den aktuellen Studio-Stand zu blockieren.
+
 Der Renderer erhält keinen direkten Node.js-, Dateisystem- oder Shell-Zugriff.
 Nur explizit freigegebene IPC-Kommandos werden im Preload-Skript veröffentlicht.
 Netzwerkzugriffe erfolgen ausschließlich im Electron-Hauptprozess.

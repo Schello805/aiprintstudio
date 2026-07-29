@@ -50,7 +50,7 @@ interface Window {
       };
     }>;
     createObjectCapture: () => Promise<{ usdzPath: string; photoCount: number } | null>;
-    createRelief: (imagePath: string, options: {
+    createRelief: (jobId: string, imagePath: string, options: {
       widthMm: number;
       baseMm: number;
       reliefMm: number;
@@ -86,6 +86,12 @@ interface Window {
         colorParts: Array<{ color: string; indices: number[] }>;
       };
     } | null>;
+    cancelRelief: (jobId: string) => Promise<boolean>;
+    onReliefProgress: (callback: (jobId: string, progress: {
+      phase: string;
+      detail: string;
+      progress: number;
+    }) => void) => () => void;
     showItemInFolder: (path: string) => Promise<void>;
     openExternal: (url: string) => Promise<void>;
   };

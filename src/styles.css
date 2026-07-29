@@ -332,6 +332,25 @@ h1,h2,h3 { font-family:Manrope, sans-serif; margin:0; }
 .progress-card>span { width:28px; height:28px; border:3px solid #2d3730; border-top-color:#a5f36d; border-radius:50%; animation:spin .8s linear infinite; }
 .progress-card strong,.result-card strong { font-size:12px; }
 .progress-card p,.result-card p { color:#7f8793; font-size:10px; margin:4px 0 0; }
+.relief-progress-card { position:relative; overflow:hidden; min-height:92px; border-color:#3c5b32; background:radial-gradient(circle at 10% 50%,#20301c 0,#111820 34%,#0e1319 100%); box-shadow:0 16px 42px #0006,inset 0 0 42px #8cf06c08; }
+.relief-progress-card::after { content:""; position:absolute; inset:0; pointer-events:none; background:linear-gradient(105deg,transparent 20%,#a5f36d0c 45%,transparent 70%); animation:progress-sheen 2.2s ease-in-out infinite; }
+.mesh-spinner { position:relative; z-index:1; width:58px; height:58px; flex:0 0 58px; display:grid; place-items:center; color:#caffaa; }
+.mesh-spinner>span { position:absolute; inset:5px; border:1px solid #91f16a88; border-radius:50%; box-shadow:0 0 12px #8cf06c22; animation:mesh-orbit 1.8s linear infinite; }
+.mesh-spinner>span:nth-child(2) { inset:10px 2px; transform:rotateX(62deg); animation-duration:1.25s; animation-direction:reverse; border-color:#72b7ff88; }
+.mesh-spinner>span:nth-child(3) { inset:2px 12px; transform:rotateY(62deg); animation-duration:2.1s; border-color:#d1ffb788; }
+.mesh-spinner svg { width:22px; height:22px; filter:drop-shadow(0 0 8px #9eff74); animation:cube-pulse 1.2s ease-in-out infinite; }
+.progress-copy { position:relative; z-index:1; flex:1; min-width:0; }
+.progress-copy strong { color:#e7f8df; font-size:13px; }
+.progress-copy p { color:#8e9d8a; }
+.progress-copy small { position:absolute; right:0; bottom:-1px; color:#a5f36d; font-size:9px; font-weight:700; }
+.relief-progress-track { height:5px; overflow:hidden; margin-top:10px; border-radius:99px; background:#263028; box-shadow:inset 0 1px 3px #0008; }
+.relief-progress-track span { display:block; height:100%; border-radius:inherit; background:linear-gradient(90deg,#64c846,#b8ff82); box-shadow:0 0 12px #9cff6c88; transition:width .3s ease; }
+.cancel-job-button { position:relative; z-index:2; min-height:40px; display:flex; align-items:center; gap:7px; border:1px solid #684143; border-radius:9px; background:#251719; color:#ffb8b8; padding:9px 13px; cursor:pointer; font-size:10px; font-weight:700; }
+.cancel-job-button:hover { border-color:#a05a5e; background:#321b1e; color:#ffd5d5; }
+.cancel-job-button svg { width:15px; }
+@keyframes mesh-orbit { to { transform:rotate(360deg); } }
+@keyframes cube-pulse { 50% { transform:scale(1.16) rotate(8deg); color:#fff; } }
+@keyframes progress-sheen { 0%,100% { transform:translateX(-50%); opacity:.25; } 50% { transform:translateX(50%); opacity:1; } }
 .result-card>div:nth-child(2) { flex:1; }
 .result-card.warning { border-color:#5c4d2e; }
 .result-card.critical { border-color:#63373c; }

@@ -43,6 +43,12 @@ export type ReliefResult = {
   };
 };
 
+export type ReliefProgress = {
+  phase: string;
+  detail: string;
+  progress: number;
+};
+
 type Vec3 = readonly [number, number, number];
 type Triangle = readonly [number, number, number];
 type Mesh = { vertices: Vec3[]; triangles: Triangle[] };
@@ -69,8 +75,10 @@ export async function createRelief(
   requested: Partial<ReliefOptions> = {},
   depthMapPath?: string,
   editorHeightmap = false,
-  editorColorMapPath?: string
+  editorColorMapPath?: string,
+  onProgress: (update: ReliefProgress) => void = () => undefined
 ): Promise<ReliefResult> {
+  onProgress({ phase: "Bild prüfen", detail: "Datei und Abmessungen werden validiert …", progress: 4 });
   const options = validateOptions({ ...safeDefaults, ...requested });
   const metadata = await sharp(imagePath).metadata();
   if (!metadata.width || !metadata.height) throw new Error("Das Bild besitzt keine gültigen Abmessungen.");
@@ -85,6 +93,7 @@ export async function createRelief(
   const { data: rgba } = await prepared.clone()
     .raw()
     .toBuffer({ resolveWithObject: true });
+  onProgress({ phase: "Motiv erkennen", detail: "Konturen, Innenflächen und Hintergrund werden getrennt …", progress: 18 });
   const rawSubjectPixels = buildSubjectPixelMask(rgba, gridWidth, gridHeight);
   const hasTransparency = hasUsefulTransparency(rgba);
   const rawSubjectCoverage = rawSubjectPixels.reduce((sum, occupied) => sum + Number(occupied), 0)
@@ -164,6 +173,7 @@ export async function createRelief(
     if (options.profile === "logo" && (useWordmarkMask || subjectCoverage < 0.42)) flatVectorSurface = true;
   }
   const smoothed = editorHeightmap ? rawLevels : smoothHeightField(rawLevels, gridWidth, gridHeight, activeMode === "vector" ? Math.min(1, options.smoothing) : options.smoothing);
+  onProgress({ phase: "Höhen berechnen", detail: "Reliefstufen und Oberflächen werden aufgebaut …", progress: 38 });
   const detailed = editorHeightmap ? smoothed : smoothed.map((value, index) =>
     Math.max(0, Math.min(1, value + (rawLevels[index] - value) * options.detail * profile.detail))
   );
@@ -193,6 +203,7 @@ export async function createRelief(
     }
   }
   const mesh = buildWatertightHeightMesh(gridWidth, gridHeight, options.widthMm, heightMm, heights, cellMask);
+  onProgress({ phase: "Mesh schließen", detail: "Boden, Außenwände und Übergänge werden verbunden …", progress: 58 });
   let editorColorAssignments: Buffer | undefined;
   if (editorColorMapPath) {
     const { data } = await sharp(editorColorMapPath)
@@ -212,11 +223,17 @@ export async function createRelief(
   const colorAssignments = detectedColorAssignments
     ? enforceUniformEdgeColor(detectedColorAssignments, cellMask, gridWidth, gridHeight, options.sideColorIndex)
     : undefined;
+  onProgress({
+    phase: colorAssignments ? "Farben aufteilen" : "Vorschau vorbereiten",
+    detail: colorAssignments ? "AMS-Flächen und einfarbiger Tragkörper werden erzeugt …" : "Das vollständige 3D-Mesh wird vorbereitet …",
+    progress: 70
+  });
   const preview = buildPreviewSurface(
     gridWidth, gridHeight, options.widthMm, heightMm, heights, cellMask,
     colorAssignments, options.colors, options.sideColorIndex, flatVectorSurface
   );
   const printability = analysePrintability(mesh, heights, options, cellMask, gridWidth);
+  onProgress({ phase: "Druckbarkeit prüfen", detail: "Zusammenhalt, Mindestbreiten und Volumen werden bewertet …", progress: 84 });
   const heightmapPng = await sharp(Buffer.from(levels.map((value) => Math.round(value * 255))), {
     raw: { width: gridWidth, height: gridHeight, channels: 1 }
   }).png().toBuffer();
@@ -236,10 +253,12 @@ export async function createRelief(
     ...part,
     mesh: orientMeshLikePreview(part.mesh, heightMm)
   }));
+  onProgress({ phase: "Exportieren", detail: "STL und 3MF werden sicher auf deinem Mac gespeichert …", progress: 93 });
   await Promise.all([
     writeFile(stlPath, encodeBinaryStl(exportMesh, "AI Print Studio Relief")),
     writeFile(threeMfPath, await encodeThreeMf(exportMesh, exportColoredMeshes))
   ]);
+  onProgress({ phase: "Fertig", detail: "Vorschau und Export sind vollständig.", progress: 100 });
 
   return {
     stlPath,
@@ -964,18 +983,32 @@ function buildPreviewSurface(
     const colorParts: Array<{ color: string; indices: number[] }> = [];
     for (const part of solids) {
       const offset = positions.length / 3;
-      positions.push(...part.mesh.vertices.flatMap(([x, y, z]) => [
-        x - widthMm / 2,
-        z,
-        y - heightMm / 2
-      ]));
-      const partIndices = part.mesh.triangles.flatMap(([a, b, c]) => [
-        a + offset,
-        b + offset,
-        c + offset
-      ]);
-      indices.push(...partIndices);
-      colorParts.push({ color: part.color, indices: partIndices });
+      for (const [x, y, z] of part.mesh.vertices) {
+        positions.push(x - widthMm / 2, z, y - heightMm / 2);
+      }
+      const partIndices: number[] = [];
+      for (const [a, b, c] of part.mesh.triangles) {
+        partIndices.push(a + offset, c + offset, b + offset);
+        indices.push(a + offset, c + offset, b + offset);
+      }
+      // Interne Unterseiten der 0,4-mm-Farbdeckel sind nur für den geschlossenen
+      // 3MF-Körper nötig. In der Vorschau würden sie beim Blick von unten durch
+      // Tiefenüberschneidungen wie leere oder bunte Löcher wirken.
+      const visiblePartIndices: number[] = [];
+      for (const triangle of part.mesh.triangles) {
+        const visible = part.color === colors[sideColorIndex]
+          || normalOf(
+            part.mesh.vertices[triangle[0]],
+            part.mesh.vertices[triangle[1]],
+            part.mesh.vertices[triangle[2]]
+          )[2] > -0.5;
+        if (visible) visiblePartIndices.push(
+          triangle[0] + offset,
+          triangle[2] + offset,
+          triangle[1] + offset
+        );
+      }
+      colorParts.push({ color: part.color, indices: visiblePartIndices });
     }
     return { positions, indices, colorParts };
   }
@@ -992,7 +1025,7 @@ function buildPreviewSurface(
         z,
         y - heightMm / 2
       ]),
-      indices: solid.triangles.flatMap(([a, b, c]) => [a, b, c]),
+      indices: solid.triangles.flatMap(([a, b, c]) => [a, c, b]),
       colorParts: []
     };
   }

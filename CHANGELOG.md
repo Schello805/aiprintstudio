@@ -2,6 +2,14 @@
 
 ## Unveröffentlicht
 
+- Reliefberechnungen laufen in einem eigenen Worker und können über einen
+  sichtbaren **Abbrechen**-Button tatsächlich beendet werden.
+- Ein animierter 3D-Spinner zeigt Phase, Beschreibung und prozentualen
+  Fortschritt von Analyse, Meshaufbau, Prüfung und Export.
+- Große Mehrfarben-Wappen werden ohne riesige Spread-Aufrufe aufgebaut; dadurch
+  tritt `Maximum call stack size exceeded` nicht mehr auf.
+- Die Wappen-Unterseite zeigt nur den vollständig gefüllten Tragkörper.
+  Interne Unterseiten der Farbdecklagen werden in der Vorschau ausgeblendet.
 - Auch mehrfarbige Textlogos werden in der Vorschau als vollständige Körper mit
   Boden und Seitenflächen angezeigt und liegen sichtbar auf dem Raster.
 - Die 0,4-mm-AMS-Farbdecklage liegt innerhalb der gewählten Reliefhöhe statt

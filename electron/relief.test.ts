@@ -265,6 +265,39 @@ describe("relief mesh", () => {
     expect(preview.colorParts.every((part) => part.indices.length > 0)).toBe(true);
   });
 
+  it("keeps the emblem underside filled with only the carrier color visible", () => {
+    const columns = 6, rows = 6;
+    const cellMask = Array((columns - 1) * (rows - 1)).fill(true) as boolean[];
+    const assignments = cellMask.map((_, index) => index % 3);
+    const preview = reliefInternals.buildPreviewSurface(
+      columns,
+      rows,
+      50,
+      50,
+      Array(columns * rows).fill(5.6),
+      cellMask,
+      assignments,
+      ["#111111", "#FF2020", "#FFFFFF"],
+      0,
+      true
+    );
+    const carrier = preview.colorParts.find((part) => part.color === "#111111");
+    expect(carrier).toBeDefined();
+    const carrierHeights = (carrier?.indices ?? []).map((index) => preview.positions[index * 3 + 1]);
+    expect(carrierHeights).toContain(0);
+    for (const part of preview.colorParts.filter((entry) => entry.color !== "#111111")) {
+      for (let index = 0; index < part.indices.length; index += 3) {
+        const a = part.indices[index], b = part.indices[index + 1], c = part.indices[index + 2];
+        const ax = preview.positions[a * 3], ay = preview.positions[a * 3 + 1], az = preview.positions[a * 3 + 2];
+        const bx = preview.positions[b * 3], by = preview.positions[b * 3 + 1], bz = preview.positions[b * 3 + 2];
+        const cx = preview.positions[c * 3], cy = preview.positions[c * 3 + 1], cz = preview.positions[c * 3 + 2];
+        const normalY = (bz - az) * (cx - ax) - (bx - ax) * (cz - az);
+        expect(normalY).toBeGreaterThanOrEqual(-1e-6);
+        expect(Math.min(ay, by, cy)).toBeGreaterThan(0);
+      }
+    }
+  });
+
   it("raises enclosed logo components above large background regions", () => {
     const width = 20, height = 20;
     const rgba = Buffer.alloc(width * height * 4);
