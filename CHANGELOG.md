@@ -2,6 +2,10 @@
 
 ## Unveröffentlicht
 
+- STL und 3MF spiegeln die Bild-Y-Achse beim Export korrekt, sodass Schrift und
+  Logos im Slicer genauso aufrecht liegen wie in der 3D-Vorschau.
+- Die Dreiecksorientierung wird bei der Achsenkorrektur mitgedreht; Ober- und
+  Unterseiten behalten gültige Normalen.
 - **Wappen & Emblem** und **Logo mit Text** sind getrennte Ergebnisarten:
   Wappen behalten eingeschlossene Flächen, Textlogos öffnen Buchstabenräume.
 - Hintergrundfarbene Innenräume von a, e, d, o, ö und ähnlichen Zeichen werden

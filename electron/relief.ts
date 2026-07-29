@@ -226,9 +226,14 @@ export async function createRelief(
       colorAssignments, options.colors, options.sideColorIndex
     )
     : undefined;
+  const exportMesh = orientMeshLikePreview(mesh, heightMm);
+  const exportColoredMeshes = coloredMeshes?.map((part) => ({
+    ...part,
+    mesh: orientMeshLikePreview(part.mesh, heightMm)
+  }));
   await Promise.all([
-    writeFile(stlPath, encodeBinaryStl(mesh, "AI Print Studio Relief")),
-    writeFile(threeMfPath, await encodeThreeMf(mesh, coloredMeshes))
+    writeFile(stlPath, encodeBinaryStl(exportMesh, "AI Print Studio Relief")),
+    writeFile(threeMfPath, await encodeThreeMf(exportMesh, exportColoredMeshes))
   ]);
 
   return {
@@ -653,6 +658,18 @@ function mergeMeshes(meshes: Mesh[]): Mesh {
   return { vertices, triangles };
 }
 
+function orientMeshLikePreview(mesh: Mesh, heightMm: number): Mesh {
+  // Bildkoordinaten laufen von oben nach unten. STL/3MF beziehungsweise der
+  // Slicer stellen die Y-Achse dagegen von unten nach oben dar. Die Spiegelung
+  // an der horizontalen Bildachse lässt den Export so erscheinen wie die
+  // Vorschau. Durch Vertauschen von B und C bleibt die Dreiecksorientierung
+  // trotz der Spiegelung erhalten.
+  return {
+    vertices: mesh.vertices.map(([x, y, z]) => [x, heightMm - y, z] as const),
+    triangles: mesh.triangles.map(([a, b, c]) => [a, c, b] as const)
+  };
+}
+
 function buildColoredMeshes(
   columns: number,
   rows: number,
@@ -1025,6 +1042,6 @@ export const reliefInternals = {
   buildCellMask, buildSubjectPixelMask, buildWordmarkPixelMask, cleanSubjectPixelMask, applyBoundaryRim,
   buildVectorLevels, buildSmoothedBoundaryPositions, buildColorCellAssignments, buildColoredMeshes, mergeMeshes,
   enforceUniformEdgeColor,
-  buildWatertightHeightMesh, buildPreviewSurface, encodeBinaryStl, encodeThreeMf,
+  buildWatertightHeightMesh, buildPreviewSurface, orientMeshLikePreview, encodeBinaryStl, encodeThreeMf,
   smoothHeightField, analysePrintability, profileSettings
 };

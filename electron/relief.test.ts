@@ -7,6 +7,16 @@ import JSZip from "jszip";
 import { createRelief } from "./relief";
 import { reliefInternals } from "./relief";
 
+function normalForTest(
+  a: readonly [number, number, number],
+  b: readonly [number, number, number],
+  c: readonly [number, number, number]
+) {
+  const ux = b[0] - a[0], uy = b[1] - a[1];
+  const vx = c[0] - a[0], vy = c[1] - a[1];
+  return [0, 0, ux * vy - uy * vx] as const;
+}
+
 describe("relief mesh", () => {
   it("creates a closed manifold surface", () => {
     const mesh = reliefInternals.buildWatertightHeightMesh(
@@ -31,6 +41,28 @@ describe("relief mesh", () => {
     const stl = reliefInternals.encodeBinaryStl(mesh, "test");
     expect(stl.readUInt32LE(80)).toBe(mesh.triangles.length);
     expect(stl.length).toBe(84 + mesh.triangles.length * 50);
+  });
+
+  it("orients STL and 3MF geometry like the upright preview", () => {
+    const mesh = {
+      vertices: [
+        [2, 0, 1],
+        [8, 0, 1],
+        [2, 10, 1]
+      ] as const,
+      triangles: [[0, 1, 2]] as const
+    };
+    const oriented = reliefInternals.orientMeshLikePreview(mesh, 10);
+    expect(oriented.vertices).toEqual([
+      [2, 10, 1],
+      [8, 10, 1],
+      [2, 0, 1]
+    ]);
+    expect(oriented.triangles).toEqual([[0, 2, 1]]);
+    const originalNormal = normalForTest(mesh.vertices[0], mesh.vertices[1], mesh.vertices[2]);
+    const [oa, ob, oc] = oriented.triangles[0];
+    const orientedNormal = normalForTest(oriented.vertices[oa], oriented.vertices[ob], oriented.vertices[oc]);
+    expect(orientedNormal[2]).toBeCloseTo(originalNormal[2]);
   });
 
   it("keeps an irregular masked outline watertight", () => {
