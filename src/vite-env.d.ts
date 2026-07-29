@@ -3,6 +3,12 @@
 interface Window {
   desktop?: {
     getVersion: () => Promise<string>;
+    getAppMetrics: () => Promise<{
+      cpuPercent: number;
+      ramMb: number;
+      totalMemoryMb: number;
+      processCount: number;
+    }>;
     checkForUpdate: () => Promise<{ currentVersion: string; latestVersion: string; available: boolean; url: string; directDownload: boolean }>;
     getSettingsStatus: () => Promise<{
       openAiConfigured: boolean;

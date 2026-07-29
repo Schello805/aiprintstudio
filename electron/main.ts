@@ -346,6 +346,15 @@ app.whenReady().then(async () => {
   await removeLegacyStoredOpenAiKey();
   nativeTheme.themeSource = "dark";
   ipcMain.handle("app:version", () => app.getVersion());
+  ipcMain.handle("app:metrics", () => {
+    const metrics = app.getAppMetrics();
+    return {
+      cpuPercent: metrics.reduce((sum, metric) => sum + metric.cpu.percentCPUUsage, 0),
+      ramMb: metrics.reduce((sum, metric) => sum + metric.memory.workingSetSize, 0) / 1024,
+      totalMemoryMb: totalmem() / 1024 / 1024,
+      processCount: metrics.length
+    };
+  });
   ipcMain.handle("app:checkUpdate", async () => {
     const response = await fetch("https://api.github.com/repos/Schello805/aiprintstudio/releases/latest", {
       headers: { Accept: "application/vnd.github+json", "User-Agent": "AI-Print-Studio" }

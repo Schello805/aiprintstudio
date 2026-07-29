@@ -49,6 +49,7 @@ grundsätzlich kompatibel.
 - möglichst wenige notwendige Einstellungen und motivabhängige Automatik
 - konturgetreuer Export anhand von Transparenz oder erkanntem Hintergrund
 - lokaler Verlauf, Druckscore und Materialschätzung
+- Live-Anzeige für App-CPU und App-RAM in der festen Seitenleiste
 
 ## Studio-Workflows
 

@@ -7,12 +7,14 @@ import {
   CheckCircle2,
   ChevronRight,
   Clock3,
+  Cpu,
   Github,
   History,
   ImagePlus,
   Info,
   Layers3,
   LoaderCircle,
+  MemoryStick,
   Palette,
   Settings2,
   ShieldCheck,
@@ -79,6 +81,7 @@ export function App() {
   const [studioTool, setStudioTool] = useState<StudioTool>("home");
   const [legalPage, setLegalPage] = useState<LegalPage>(null);
   const [version, setVersion] = useState("0.1.0");
+  const [appMetrics, setAppMetrics] = useState<{ cpuPercent: number; ramMb: number; totalMemoryMb: number; processCount: number } | null>(null);
   const [file, setFile] = useState<SelectedImage | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
@@ -116,6 +119,19 @@ export function App() {
 
   useEffect(() => {
     void window.desktop?.getVersion().then(setVersion);
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    const refresh = () => void window.desktop?.getAppMetrics()
+      .then((metrics) => { if (active) setAppMetrics(metrics); })
+      .catch(() => undefined);
+    refresh();
+    const timer = window.setInterval(refresh, 1_500);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
   }, []);
 
   useEffect(() => window.desktop?.onReliefProgress((jobId, progress) => {
@@ -288,9 +304,17 @@ export function App() {
             </button>
           ))}
         </nav>
-        <div className="sidebar-status">
-          <span className="status-dot" />
-          <div><strong>Lokale Relief-Engine</strong><span>Bereit · läuft offline</span></div>
+        <div className="sidebar-status sidebar-monitor">
+          <div className="monitor-heading"><span className="status-dot" /><div><strong>Lokale Verarbeitung</strong><span>{busy ? "Berechnung läuft" : "Bereit · läuft offline"}</span></div></div>
+          <div className="monitor-metric">
+            <div><Cpu /><span>APP CPU</span><strong>{appMetrics ? `${appMetrics.cpuPercent.toFixed(0)} %` : "–"}</strong></div>
+            <span className="monitor-track"><span style={{ width: `${Math.min(100, appMetrics?.cpuPercent ?? 0)}%` }} /></span>
+          </div>
+          <div className="monitor-metric">
+            <div><MemoryStick /><span>APP RAM</span><strong>{appMetrics ? `${Math.round(appMetrics.ramMb)} MB` : "–"}</strong></div>
+            <span className="monitor-track memory"><span style={{ width: `${Math.min(100, appMetrics ? appMetrics.ramMb / appMetrics.totalMemoryMb * 100 : 0)}%` }} /></span>
+          </div>
+          <small>{appMetrics ? `${appMetrics.processCount} App-Prozesse · Live` : "Messung wird gestartet …"}</small>
         </div>
       </aside>
 

@@ -36,6 +36,11 @@ IPC-Verbindung an den Renderer übertragen. Ein Abbruch beendet sowohl native
 Tiefenprozesse als auch den aktiven Mesh-Worker, ohne den Electron-Hauptprozess
 oder den aktuellen Studio-Stand zu blockieren.
 
+Die Ressourcenanzeige fragt über eine schmale, nur lesende IPC-Methode
+`app.getAppMetrics()` ab. CPU- und Working-Set-Werte aller Electron-Prozesse
+werden im Hauptprozess summiert und alle 1,5 Sekunden in der Seitenleiste
+aktualisiert. Es werden keine Prozessdaten gespeichert oder übertragen.
+
 Der Renderer erhält keinen direkten Node.js-, Dateisystem- oder Shell-Zugriff.
 Nur explizit freigegebene IPC-Kommandos werden im Preload-Skript veröffentlicht.
 Netzwerkzugriffe erfolgen ausschließlich im Electron-Hauptprozess.

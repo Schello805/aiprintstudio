@@ -2,6 +2,9 @@
 
 ## Unveröffentlicht
 
+- Die feste Seitenleiste zeigt live die CPU-Last und den RAM-Verbrauch aller
+  AI-Print-Studio-Prozesse. Die Messung aktualisiert sich alle 1,5 Sekunden und
+  kennzeichnet laufende Berechnungen.
 - Der Kostenhinweis besitzt einen eigenen Layoutplatz und überlappt nicht mehr
   mit **Mehrfoto-Scan** oder anderen Einstellungen.
 - Toggle-Schalter zeigen ihren Schaltpunkt in beiden Zuständen zuverlässig.
