@@ -243,7 +243,13 @@ async function removeLegacyStoredOpenAiKey(): Promise<void> {
 
 async function createPrintableCadPlan(prompt: string, existingPlan?: CadPlan) {
   const apiKey = sessionOpenAiKey;
-  if (!apiKey) throw new Error("Bitte hinterlege zuerst in den Einstellungen deinen OpenAI API-Schlüssel.");
+  if (!apiKey) {
+    const settings = await readSettings();
+    if (settings.openAiVault) {
+      throw new Error("Dein OpenAI API-Schlüssel ist gespeichert, aber für diese App-Sitzung noch gesperrt. Entsperre ihn mit deinem AI-Print-Studio-Passwort.");
+    }
+    throw new Error("Es ist noch kein OpenAI API-Schlüssel gespeichert. Richte ihn zuerst in den Einstellungen ein.");
+  }
   const primitiveSchema = {
     type: "object",
     additionalProperties: false,

@@ -2,6 +2,11 @@
 
 ## Unveröffentlicht
 
+- **Prompt zu 3D** erkennt einen gespeicherten, nach dem App-Neustart noch
+  gesperrten OpenAI-Schlüssel und zeigt das Passwortfeld jetzt direkt im
+  Prompt-Dialog. Nach dem Entsperren kann das Modell ohne Umweg erstellt werden.
+- Fehlermeldungen unterscheiden eindeutig zwischen „nicht eingerichtet“ und
+  „verschlüsselt gespeichert, aber für diese Sitzung gesperrt“.
 - Die neue neutrale Exportoption **Auf 250.000 Dreiecke reduzieren** passt die
   Auflösung nur bei Bedarf automatisch an und erleichtert den Import in
   Programme mit begrenzter Meshgröße.

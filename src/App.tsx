@@ -1025,6 +1025,28 @@ function Ai3dDialog({ close }: { close: () => void }) {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<Ai3dResult | null>(null);
   const [previousResults, setPreviousResults] = useState<Ai3dResult[]>([]);
+  const [apiStatus, setApiStatus] = useState<SettingsStatus | null>(null);
+  const [unlockPassword, setUnlockPassword] = useState("");
+  const [unlockBusy, setUnlockBusy] = useState(false);
+
+  const refreshApiStatus = useCallback(async () => {
+    if (!window.desktop) return;
+    setApiStatus(await window.desktop.getSettingsStatus());
+  }, []);
+
+  useEffect(() => { void refreshApiStatus(); }, [refreshApiStatus]);
+
+  async function unlockApiKey() {
+    setUnlockBusy(true); setError(null);
+    try {
+      if (!window.desktop) throw new Error("Die Desktop-Verbindung ist nicht verfügbar.");
+      await window.desktop.unlockOpenAiKey(unlockPassword);
+      await refreshApiStatus();
+      setUnlockPassword("");
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : "Der API-Schlüssel konnte nicht entsperrt werden.");
+    } finally { setUnlockBusy(false); }
+  }
   async function submit(instruction: string, existing?: Ai3dResult) {
     setBusy(true); setError(null);
     try {
@@ -1052,6 +1074,35 @@ function Ai3dDialog({ close }: { close: () => void }) {
         <div className="modal-icon"><Sparkles /></div>
         <p className="eyebrow">KI · VOLLSTÄNDIGES 3D-OBJEKT</p>
         <h2 id="ai3d-title">{result ? "3D-Modell prüfen und weiterentwickeln" : "Prompt zu druckbarer STL"}</h2>
+        {apiStatus?.openAiStored && !apiStatus.openAiConfigured && (
+          <div className="ai-unlock-panel">
+            <ShieldCheck />
+            <div>
+              <strong>API-Schlüssel für diese Sitzung entsperren</strong>
+              <p>Der Schlüssel ist verschlüsselt gespeichert. Dein App-Passwort entschlüsselt ausschließlich diesen OpenAI-Schlüssel im Arbeitsspeicher; es wird nicht gespeichert.</p>
+              <label htmlFor="ai3d-vault-password">AI-Print-Studio-Passwort</label>
+              <div className="ai-unlock-actions">
+                <input
+                  id="ai3d-vault-password"
+                  type="password"
+                  value={unlockPassword}
+                  onChange={(event) => setUnlockPassword(event.target.value)}
+                  onKeyDown={(event) => event.key === "Enter" && unlockPassword.length >= 10 && void unlockApiKey()}
+                  placeholder="Mindestens 10 Zeichen"
+                  autoComplete="off"
+                  disabled={unlockBusy}
+                />
+                <button className="primary-button" onClick={() => void unlockApiKey()} disabled={unlockBusy || unlockPassword.length < 10}>
+                  {unlockBusy ? "Entsperrt …" : "Entsperren"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+        {apiStatus && !apiStatus.openAiStored && (
+          <div className="notice error">Es ist noch kein OpenAI API-Schlüssel gespeichert. Hinterlege ihn einmal unter Einstellungen → OpenAI.</div>
+        )}
+        {apiStatus?.openAiConfigured && !result && <div className="notice"><CheckCircle2 /> Der gespeicherte OpenAI API-Schlüssel ist für diese Sitzung entsperrt.</div>}
         {!result && <>
           <p>Beschreibe Form, Anzahl und wichtige Details. OpenAI erstellt daraus einen druckgerechten CAD-Bauplan; die App erzeugt das STL anschließend lokal.</p>
           <label htmlFor="ai3d-prompt">OBJEKT BESCHREIBEN</label>
@@ -1091,7 +1142,7 @@ function Ai3dDialog({ close }: { close: () => void }) {
         {error && <div className="notice error">{error}</div>}
         <div className="modal-actions">
           <button className="secondary-button" onClick={close} disabled={busy}>{result ? "Schließen" : "Abbrechen"}</button>
-          {!result && <button className="primary-button" disabled={busy || prompt.trim().length < 10} onClick={() => void submit(prompt)}>{busy ? "OpenAI konstruiert …" : "3D-Modell erstellen"} <ChevronRight /></button>}
+          {!result && <button className="primary-button" disabled={busy || apiStatus?.openAiConfigured !== true || prompt.trim().length < 10} onClick={() => void submit(prompt)}>{busy ? "OpenAI konstruiert …" : "3D-Modell erstellen"} <ChevronRight /></button>}
         </div>
       </section>
     </div>
