@@ -176,6 +176,18 @@ describe("relief mesh", () => {
     expect(JSON.parse(projectSettings ?? "{}").filament_colour).toEqual(["#FF0000", "#0000FF"]);
     expect(JSON.parse(projectSettings ?? "{}").filament_settings_id).toEqual(["AI Print Studio", "AI Print Studio"]);
     expect(JSON.parse(projectSettings ?? "{}").print_settings_id).toBe("AI Print Studio");
+    expect(JSON.parse(projectSettings ?? "{}").nozzle_diameter).toEqual(["0.4"]);
+    expect(JSON.parse(projectSettings ?? "{}").printer_settings_id).toBe("AI Print Studio · 0.4 mm");
+  });
+
+  it("widens thin wordmark pixels for a standard 0.4 mm nozzle", () => {
+    const mask = Array(9 * 9).fill(false) as boolean[];
+    mask[4 * 9 + 4] = true;
+    const expanded = reliefInternals.expandPixelMask(mask, 9, 9, 2);
+    expect(expanded.filter(Boolean)).toHaveLength(13);
+    expect(expanded[4 * 9 + 2]).toBe(true);
+    expect(expanded[2 * 9 + 4]).toBe(true);
+    expect(expanded[2 * 9 + 2]).toBe(false);
   });
 
   it("merges high-resolution color meshes without overflowing the call stack", () => {

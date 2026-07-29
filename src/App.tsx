@@ -96,6 +96,7 @@ export function App() {
   const [detail, setDetail] = useState(1);
   const [processingMode, setProcessingMode] = useState<ProcessingMode>("auto");
   const [includeLogoBackground, setIncludeLogoBackground] = useState(true);
+  const [optimizeForStandardNozzle, setOptimizeForStandardNozzle] = useState(true);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editorHeightmap, setEditorHeightmap] = useState<string | null>(null);
@@ -195,6 +196,8 @@ export function App() {
         invert: raiseLightAreas, profile, smoothing, detail,
         processingMode: effectiveMode === "scan" ? "auto" : effectiveMode,
         includeBackground: effectiveMode === "wordmark" && includeLogoBackground,
+        nozzleMm: 0.4,
+        minimumFeatureMm: optimizeForStandardNozzle && effectiveMode === "wordmark" ? 0.8 : 0,
         sourceColors: multicolorEnabled ? sourceColors : [],
         colors: multicolorEnabled ? colors : [],
         sideColorIndex: multicolorEnabled ? sideColorIndex : 0
@@ -425,6 +428,21 @@ export function App() {
                         <span>{includeLogoBackground ? "Grundfläche bleibt in Vorschau, STL und 3MF erhalten" : "Nur Signet und Schrift werden freigestellt exportiert"}</span>
                       </div>
                       <SettingTooltip text={"Legt fest, ob die Bildfläche als zusammenhängende Grundplatte Teil des Modells bleibt.\nBeispiel: Aktiv für ein quadratisches App-Logo; deaktiviert für einen freistehenden Schriftzug."} />
+                      <span className="toggle-track"><span /></span>
+                    </button>
+                  )}
+                  {processingMode === "wordmark" && (
+                    <button
+                      className={optimizeForStandardNozzle ? "background-toggle selected" : "background-toggle"}
+                      onClick={() => setOptimizeForStandardNozzle((current) => !current)}
+                      aria-pressed={optimizeForStandardNozzle}
+                    >
+                      <Settings2 />
+                      <div>
+                        <strong>Für 0,4-mm-Düse optimieren</strong>
+                        <span>{optimizeForStandardNozzle ? "Feine Logo-Stege werden automatisch auf mindestens 0,8 mm verstärkt" : "Originalbreiten bleiben unverändert"}</span>
+                      </div>
+                      <SettingTooltip text={"Verstärkt zu dünne Logo- und Schriftbereiche für zwei druckbare Linien mit der üblichen 0,4-mm-Düse.\nBeispiel: Ein 0,4-mm-Schriftstrich wird auf mindestens 0,8 mm verbreitert."} />
                       <span className="toggle-track"><span /></span>
                     </button>
                   )}

@@ -61,6 +61,8 @@ interface Window {
       detail: number;
       processingMode: "auto" | "vector" | "wordmark" | "depth" | "height";
       includeBackground: boolean;
+      nozzleMm: number;
+      minimumFeatureMm: number;
       sourceColors: string[];
       colors: string[];
       sideColorIndex: number;
@@ -76,6 +78,8 @@ interface Window {
         profile: "fast" | "balanced" | "fine" | "photo" | "logo"; smoothing: number; detail: number;
         processingMode: "auto" | "vector" | "wordmark" | "depth" | "height";
         includeBackground: boolean;
+        nozzleMm: number;
+        minimumFeatureMm: number;
         sourceColors: string[];
         colors: string[];
         sideColorIndex: number;

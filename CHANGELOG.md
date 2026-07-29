@@ -2,6 +2,14 @@
 
 ## Unveröffentlicht
 
+- Der Kostenhinweis besitzt einen eigenen Layoutplatz und überlappt nicht mehr
+  mit **Mehrfoto-Scan** oder anderen Einstellungen.
+- Toggle-Schalter zeigen ihren Schaltpunkt in beiden Zuständen zuverlässig.
+- **Logo mit Text** kann feine Stege standardmäßig auf 0,8 mm verstärken. Das
+  entspricht zwei Linien mit der üblichen 0,4-mm-Düse und lässt sich vor der
+  Erstellung bewusst deaktivieren.
+- 3MF-Dateien dokumentieren 0,4 mm als bevorzugte Düsengröße; STL und 3MF
+  erhalten dieselbe druckoptimierte Geometrie.
 - **Logo mit Text** bietet jetzt den Schalter **Hintergrund mitdrucken**.
   Vorschau, STL und 3MF verwenden gemeinsam entweder eine geschlossene
   Grundplatte oder ein freigestelltes Motiv.

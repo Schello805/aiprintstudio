@@ -14,6 +14,8 @@ export type ReliefOptions = {
   detail: number;
   processingMode: "auto" | "vector" | "wordmark" | "depth" | "height";
   includeBackground: boolean;
+  nozzleMm: number;
+  minimumFeatureMm: number;
   sourceColors: string[];
   colors: string[];
   sideColorIndex: number;
@@ -66,6 +68,8 @@ const safeDefaults: ReliefOptions = {
   detail: 1
   ,processingMode: "auto",
   includeBackground: false,
+  nozzleMm: 0.4,
+  minimumFeatureMm: 0.8,
   sourceColors: [],
   colors: [],
   sideColorIndex: 0
@@ -102,9 +106,15 @@ export async function createRelief(
     / Math.max(1, rawSubjectPixels.length);
   const useWordmarkMask = options.processingMode === "wordmark"
     || (options.processingMode === "auto" && options.profile === "logo" && rawSubjectCoverage < 0.42);
-  const wordmarkPixels = useWordmarkMask
+  const detectedWordmarkPixels = useWordmarkMask
     ? buildWordmarkPixelMask(rgba, gridWidth, gridHeight)
     : undefined;
+  const minimumFeatureRadius = options.minimumFeatureMm > 0
+    ? Math.max(0, Math.ceil((options.minimumFeatureMm / (options.widthMm / gridWidth) - 1) / 2))
+    : 0;
+  const wordmarkPixels = detectedWordmarkPixels && minimumFeatureRadius > 0
+    ? expandPixelMask(detectedWordmarkPixels, gridWidth, gridHeight, minimumFeatureRadius)
+    : detectedWordmarkPixels;
   // Bei Wortmarken und filigranen Logos würde die normale Maskenbereinigung
   // dünne Buchstaben und geschwungene Linien teilweise wegerodieren. Einzelne
   // Pixelartefakte entfernt anschließend bereits die strengere Zellmaske.
@@ -295,6 +305,8 @@ function validateOptions(options: ReliefOptions): ReliefOptions {
   if (options.detail < 0 || options.detail > 2) throw new Error("Die Detailstärke muss zwischen 0 und 2 liegen.");
   if (!["auto", "vector", "wordmark", "depth", "height"].includes(options.processingMode)) throw new Error("Unbekannter Verarbeitungsmodus.");
   if (typeof options.includeBackground !== "boolean") throw new Error("Die Hintergrundeinstellung ist ungültig.");
+  if (options.nozzleMm < 0.2 || options.nozzleMm > 1.2) throw new Error("Die Düsengröße muss zwischen 0,2 und 1,2 mm liegen.");
+  if (options.minimumFeatureMm < 0 || options.minimumFeatureMm > 4) throw new Error("Die Mindestbreite muss zwischen 0 und 4 mm liegen.");
   if (!Array.isArray(options.colors) || options.colors.length > 16 || options.colors.some((color) => !/^#[0-9a-fA-F]{6}$/.test(color))) {
     throw new Error("Die Farbpalette enthält ungültige Farben.");
   }
@@ -504,9 +516,9 @@ function analysePrintability(mesh: Mesh, heights: number[], options: ReliefOptio
     checks.push({ label: "Zusammenhalt", status: "warning", detail: `${components} getrennte Bereiche erkannt.` });
   } else checks.push({ label: "Zusammenhalt", status: "ok", detail: `${components} zusammenhängende Objektbereiche.` });
   const narrowCells = countNarrowCells(cellMask, columns - 1);
-  const narrowWidthMm = pixelMm * 2;
+  const narrowWidthMm = options.minimumFeatureMm || pixelMm * 2;
   if (narrowCells > 0 && narrowWidthMm < 0.8) {
-    issues.push(`Feine Stege sind nur etwa ${narrowWidthMm.toFixed(1)} mm breit; für eine 0,4-mm-Düse sind mindestens 0,8 mm besser.`);
+    issues.push(`Feine Stege sind nur etwa ${narrowWidthMm.toFixed(1)} mm breit; für eine ${options.nozzleMm.toFixed(1).replace(".", ",")}-mm-Düse sind mindestens ${(options.nozzleMm * 2).toFixed(1).replace(".", ",")} mm besser.`);
     score -= 15;
     checks.push({ label: "Mindestbreite", status: "warning", detail: `Schmalste Bereiche ca. ${narrowWidthMm.toFixed(1)} mm.` });
   } else checks.push({ label: "Mindestbreite", status: "ok", detail: "Keine kritisch dünnen Stege erkannt." });
@@ -843,6 +855,24 @@ function cleanSubjectPixelMask(pixels: boolean[], width: number, height: number)
   return current;
 }
 
+function expandPixelMask(pixels: boolean[], width: number, height: number, radius: number): boolean[] {
+  if (radius <= 0) return pixels.slice();
+  const expanded = pixels.slice();
+  for (let y = 0; y < height; y += 1) for (let x = 0; x < width; x += 1) {
+    if (!pixels[y * width + x]) continue;
+    for (let offsetY = -radius; offsetY <= radius; offsetY += 1) {
+      for (let offsetX = -radius; offsetX <= radius; offsetX += 1) {
+        if (offsetX * offsetX + offsetY * offsetY > radius * radius) continue;
+        const targetX = x + offsetX, targetY = y + offsetY;
+        if (targetX >= 0 && targetY >= 0 && targetX < width && targetY < height) {
+          expanded[targetY * width + targetX] = true;
+        }
+      }
+    }
+  }
+  return expanded;
+}
+
 function applyBoundaryRim(levels: number[], mask: boolean[], width: number, height: number, radius: number): number[] {
   const next = levels.slice();
   for (let y = 0; y < height; y += 1) {
@@ -915,6 +945,7 @@ async function encodeThreeMf(mesh: Mesh, coloredMeshes?: ColoredMesh[]): Promise
   zip.folder("3D")?.file("3dmodel.model", `<?xml version="1.0" encoding="UTF-8"?>
 <model unit="millimeter" xml:lang="de-DE" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
 <metadata name="Title">AI Print Studio</metadata>
+<metadata name="Description">Druckoptimiert für eine 0,4-mm-Düse</metadata>
 <resources><basematerials id="2">${materialXml}</basematerials>${objectsXml}${assemblyXml}</resources>
 <build>${buildXml}</build></model>`);
   if (coloredMeshes?.length) {
@@ -942,7 +973,9 @@ async function encodeThreeMf(mesh: Mesh, coloredMeshes?: ColoredMesh[]): Promise
       print_settings_id: "AI Print Studio",
       filament_colour: parts.map(({ color }) => color.toUpperCase()),
       filament_type: parts.map(() => "PLA"),
-      filament_settings_id: parts.map(() => "AI Print Studio")
+      filament_settings_id: parts.map(() => "AI Print Studio"),
+      nozzle_diameter: ["0.4"],
+      printer_settings_id: "AI Print Studio · 0.4 mm"
     }, null, 2));
   }
   return zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE", compressionOptions: { level: 6 } });
@@ -1147,6 +1180,7 @@ function buildPreviewSurface(
 
 export const reliefInternals = {
   buildCellMask, buildSubjectPixelMask, buildWordmarkPixelMask, cleanSubjectPixelMask, applyBoundaryRim,
+  expandPixelMask,
   buildVectorLevels, buildSmoothedBoundaryPositions, buildColorCellAssignments, buildColoredMeshes, mergeMeshes,
   enforceUniformEdgeColor,
   buildWatertightHeightMesh, buildPreviewSurface, orientMeshLikePreview, encodeBinaryStl, encodeThreeMf,

@@ -104,6 +104,13 @@ Aufnahmereihen und unterstützte Apple-Hardware.
 5. **Relief erstellen** anklicken.
 6. STL oder 3MF unter `Downloads/AI Print Studio` im Slicer öffnen.
 
+Für Logos mit Text ist die Optimierung für eine **0,4-mm-Düse** standardmäßig
+aktiv. Feine Stege werden dabei auf mindestens 0,8 mm verbreitert. Der Schalter
+steht vor der Erstellung sichtbar in den Logo-Einstellungen und kann für eine
+unveränderte Originalkontur deaktiviert werden. Die 3MF-Datei enthält 0,4 mm
+zusätzlich als Profilhinweis; die tatsächlich verwendete Düse muss weiterhin
+im Slicer zum ausgewählten Drucker passen.
+
 Die App wählt Qualitätsprofil und Auflösung passend zum Motiv. Die
 Höhenpipeline kombiniert Normalisierung, kantenerhaltende Glättung,
 Detailrückführung und profilabhängige Höhenstufen. Das Ergebnis enthält eine

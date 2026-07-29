@@ -53,6 +53,11 @@ manuelle Höhen- und Farbkarten entgegen:
 6. Druckbarkeit, Mindestdimensionen und Volumen bewerten
 7. STL und/oder materialisiertes 3MF exportieren
 
+Bei **Logo mit Text** kann die Pixelmaske vor der Vermaschung druckgerecht
+erweitert werden. Der Standardwert von 0,8 mm entspricht zwei Extrusionslinien
+einer 0,4-mm-Düse. Diese Mindestbreite verändert Vorschau, STL und 3MF
+gemeinsam; die Option ist in der Oberfläche vor der Berechnung abschaltbar.
+
 Schrift wird zunächst lokal als eng zugeschnittene transparente Vorlage
 gerendert und anschließend durch dieselbe Reliefpipeline verarbeitet. SVG wird
 beim Import sicher gerastert, bevor die Verarbeitung beginnt.
