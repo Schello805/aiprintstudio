@@ -535,6 +535,16 @@ describe("relief mesh", () => {
       expect(heights).toEqual(new Set([0, 1.6, 5.6]));
       expect(result.preview.positions.some((_, index) => index % 3 === 1 && result.preview.positions[index] === 1.6)).toBe(true);
       expect(result.preview.positions.some((_, index) => index % 3 === 1 && result.preview.positions[index] === 5.6)).toBe(true);
+      for (let index = 0; index < result.preview.indices.length; index += 3) {
+        const vertices = result.preview.indices.slice(index, index + 3).map((vertex) => ({
+          x: result.preview.positions[vertex * 3],
+          y: result.preview.positions[vertex * 3 + 1],
+          z: result.preview.positions[vertex * 3 + 2]
+        }));
+        const verticalLevels = new Set(vertices.map((vertex) => vertex.y.toFixed(4)));
+        const horizontalPositions = new Set(vertices.map((vertex) => `${vertex.x.toFixed(4)}:${vertex.z.toFixed(4)}`));
+        if (verticalLevels.size > 1) expect(horizontalPositions.size).toBeLessThanOrEqual(2);
+      }
     } finally {
       await rm(directory, { recursive: true, force: true });
     }

@@ -2,6 +2,9 @@
 
 ## Unveröffentlicht
 
+- Erhabene Bereiche von Logos mit Hintergrund werden als echte gestufte
+  Extrusion mit senkrechten Wänden aufgebaut. Schräge Übergangsdreiecke und
+  dadurch sichtbare Spitzen an Motivenden entfallen in Vorschau, STL und 3MF.
 - Logo-Hintergründe werden nicht mehr nur aus vier Eckfarben geschätzt: Ein
   robustes quadratisches Flächenmodell erkennt jetzt auch radiale Verläufe und
   Vignetten, sodass deren Bildmitte nicht versehentlich erhaben wird.

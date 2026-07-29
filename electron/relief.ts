@@ -249,7 +249,13 @@ export async function createRelief(
       }
     }
   }
-  const mesh = buildWatertightHeightMesh(gridWidth, gridHeight, options.widthMm, heightMm, heights, cellMask);
+  const steppedLogo = Boolean(useWordmarkMask && options.includeBackground && wordmarkPixels && !editorHeightmap);
+  const steppedCellHeights = steppedLogo
+    ? buildBinaryCellHeights(heights, gridWidth, gridHeight)
+    : undefined;
+  const mesh = steppedCellHeights
+    ? buildSteppedCellMesh(gridWidth, gridHeight, options.widthMm, heightMm, steppedCellHeights, cellMask)
+    : buildWatertightHeightMesh(gridWidth, gridHeight, options.widthMm, heightMm, heights, cellMask);
   onProgress({ phase: "Mesh schließen", detail: "Boden, Außenwände und Übergänge werden verbunden …", progress: 58 });
   let editorColorAssignments: Buffer | undefined;
   if (editorColorMapPath) {
@@ -278,7 +284,8 @@ export async function createRelief(
   const preview = buildPreviewSurface(
     gridWidth, gridHeight, options.widthMm, heightMm, heights, cellMask,
     colorAssignments, options.colors, options.sideColorIndex,
-    flatVectorSurface || (useWordmarkMask && options.includeBackground)
+    flatVectorSurface || (useWordmarkMask && options.includeBackground),
+    steppedLogo
   );
   const printability = analysePrintability(mesh, heights, options, cellMask, gridWidth);
   const layerHeightMm = 0.2;
@@ -302,7 +309,7 @@ export async function createRelief(
   const coloredMeshes = colorAssignments
     ? buildColoredMeshes(
       gridWidth, gridHeight, options.widthMm, heightMm, heights, cellMask,
-      colorAssignments, options.colors, options.sideColorIndex
+      colorAssignments, options.colors, options.sideColorIndex, steppedLogo
     )
     : undefined;
   const exportMesh = orientMeshLikePreview(mesh, heightMm);
@@ -764,7 +771,8 @@ function buildColoredMeshes(
   cellMask: boolean[],
   assignments: number[],
   colors: string[],
-  sideColorIndex: number
+  sideColorIndex: number,
+  stepped = false
 ): ColoredMesh[] {
   const outerBoundary = buildSmoothedBoundaryPositions(columns, rows, widthMm, heightMm, cellMask);
   // Zwei typische 0,2-mm-Schichten sind in allen gängigen Slicern als
@@ -775,19 +783,91 @@ function buildColoredMeshes(
   // zusätzlich aufgesetzt (z. B. 4,4 statt 4,0 mm). Der Tragkörper endet nun
   // 0,4 mm tiefer, die jeweilige Farbe schließt exakt auf Sollhöhe ab.
   const structureHeights = heights.map((height) => Math.max(0, height - colorSkinMm));
-  const structure = buildWatertightHeightMesh(
-    columns, rows, widthMm, heightMm, structureHeights, cellMask, 0, outerBoundary
-  );
+  const topCellHeights = stepped ? buildBinaryCellHeights(heights, columns, rows) : undefined;
+  const structureCellHeights = topCellHeights?.map((height) => Math.max(0, height - colorSkinMm));
+  const structure = structureCellHeights
+    ? buildSteppedCellMesh(columns, rows, widthMm, heightMm, structureCellHeights, cellMask)
+    : buildWatertightHeightMesh(columns, rows, widthMm, heightMm, structureHeights, cellMask, 0, outerBoundary);
   return colors.map((color, colorIndex) => {
     const mask = assignments.map((assignment) => assignment === colorIndex);
-    const capHeights = heights.slice();
-    const top = buildWatertightHeightMesh(columns, rows, widthMm, heightMm, capHeights, mask, structureHeights, outerBoundary);
+    const top = topCellHeights && structureCellHeights
+      ? buildSteppedCellMesh(columns, rows, widthMm, heightMm, topCellHeights, mask, structureCellHeights)
+      : buildWatertightHeightMesh(columns, rows, widthMm, heightMm, heights.slice(), mask, structureHeights, outerBoundary);
     return {
       mesh: colorIndex === sideColorIndex ? mergeMeshes([structure, top]) : top,
       color,
       name: `AMS ${colorIndex + 1}`
     };
   }).filter(({ mesh }) => mesh.triangles.length > 0);
+}
+
+function buildBinaryCellHeights(heights: number[], columns: number, rows: number): number[] {
+  let minimum = Number.POSITIVE_INFINITY, maximum = Number.NEGATIVE_INFINITY;
+  for (const height of heights) {
+    minimum = Math.min(minimum, height);
+    maximum = Math.max(maximum, height);
+  }
+  const split = (minimum + maximum) / 2;
+  const result: number[] = [];
+  for (let y = 0; y < rows - 1; y += 1) for (let x = 0; x < columns - 1; x += 1) {
+    const index = y * columns + x;
+    const values = [heights[index], heights[index + 1], heights[index + columns], heights[index + columns + 1]];
+    result.push(values.filter((height) => height > split).length >= 2 ? maximum : minimum);
+  }
+  return result;
+}
+
+function buildSteppedCellMesh(
+  columns: number,
+  rows: number,
+  widthMm: number,
+  heightMm: number,
+  topHeights: number[],
+  cellMask: boolean[],
+  bottomHeights: number[] | number = 0
+): Mesh {
+  const cellColumns = columns - 1, cellRows = rows - 1;
+  const vertices: Vec3[] = [];
+  const triangles: Triangle[] = [];
+  const vertexMap = new Map<string, number>();
+  const vertex = (x: number, y: number, z: number) => {
+    const key = `${x}:${y}:${z.toFixed(6)}`;
+    const existing = vertexMap.get(key);
+    if (existing !== undefined) return existing;
+    const created = vertices.length;
+    vertices.push([x * widthMm / cellColumns, y * heightMm / cellRows, z]);
+    vertexMap.set(key, created);
+    return created;
+  };
+  const bottomAt = (cell: number) => typeof bottomHeights === "number" ? bottomHeights : bottomHeights[cell];
+  const cellAt = (x: number, y: number) => x < 0 || y < 0 || x >= cellColumns || y >= cellRows ? -1 : y * cellColumns + x;
+  const wall = (ax: number, ay: number, bx: number, by: number, low: number, high: number) => {
+    if (high <= low + 1e-6) return;
+    const a0 = vertex(ax, ay, low), b0 = vertex(bx, by, low);
+    const a1 = vertex(ax, ay, high), b1 = vertex(bx, by, high);
+    triangles.push([a1, b0, b1], [a1, a0, b0]);
+  };
+  for (let y = 0; y < cellRows; y += 1) for (let x = 0; x < cellColumns; x += 1) {
+    const cell = y * cellColumns + x;
+    if (!cellMask[cell]) continue;
+    const top = topHeights[cell], bottom = bottomAt(cell);
+    const a = vertex(x, y, top), b = vertex(x + 1, y, top);
+    const c = vertex(x, y + 1, top), d = vertex(x + 1, y + 1, top);
+    const ba = vertex(x, y, bottom), bb = vertex(x + 1, y, bottom);
+    const bc = vertex(x, y + 1, bottom), bd = vertex(x + 1, y + 1, bottom);
+    triangles.push([a, b, d], [a, d, c], [ba, bd, bb], [ba, bc, bd]);
+    const neighbors = [
+      { cell: cellAt(x, y - 1), ax: x, ay: y, bx: x + 1, by: y },
+      { cell: cellAt(x + 1, y), ax: x + 1, ay: y, bx: x + 1, by: y + 1 },
+      { cell: cellAt(x, y + 1), ax: x + 1, ay: y + 1, bx: x, by: y + 1 },
+      { cell: cellAt(x - 1, y), ax: x, ay: y + 1, bx: x, by: y }
+    ];
+    for (const edge of neighbors) {
+      const neighborTop = edge.cell >= 0 && cellMask[edge.cell] ? topHeights[edge.cell] : bottom;
+      wall(edge.ax, edge.ay, edge.bx, edge.by, Math.max(bottom, neighborTop), top);
+    }
+  }
+  return { vertices, triangles };
 }
 
 function buildSubjectPixelMask(rgba: Buffer, width: number, height: number): boolean[] {
@@ -1127,8 +1207,18 @@ function buildPreviewSurface(
   colorAssignments?: number[],
   colors: string[] = [],
   sideColorIndex = 0,
-  preserveBoundaryHeights = false
+  preserveBoundaryHeights = false,
+  stepped = false
 ): { positions: number[]; indices: number[]; colorParts: Array<{ color: string; indices: number[] }> } {
+  if (stepped && cellMask && (!colorAssignments || !colors.length)) {
+    const mesh = buildSteppedCellMesh(
+      columns, rows, widthMm, heightMm,
+      buildBinaryCellHeights(heights, columns, rows), cellMask
+    );
+    const positions = mesh.vertices.flatMap(([x, y, z]) => [x - widthMm / 2, z, y - heightMm / 2]);
+    const indices = mesh.triangles.flatMap(([a, b, c]) => [a, c, b]);
+    return { positions, indices, colorParts: [] };
+  }
   if (preserveBoundaryHeights && cellMask && colorAssignments && colors.length) {
     const solids = buildColoredMeshes(
       columns,
@@ -1139,7 +1229,8 @@ function buildPreviewSurface(
       cellMask,
       colorAssignments,
       colors,
-      sideColorIndex
+      sideColorIndex,
+      stepped
     );
     const positions: number[] = [];
     const indices: number[] = [];
@@ -1301,6 +1392,6 @@ export const reliefInternals = {
   expandPixelMask,
   buildVectorLevels, buildSmoothedBoundaryPositions, buildColorCellAssignments, buildColoredMeshes, mergeMeshes,
   enforceUniformEdgeColor,
-  buildWatertightHeightMesh, buildPreviewSurface, orientMeshLikePreview, encodeBinaryStl, encodeThreeMf,
+  buildWatertightHeightMesh, buildBinaryCellHeights, buildSteppedCellMesh, buildPreviewSurface, orientMeshLikePreview, encodeBinaryStl, encodeThreeMf,
   smoothHeightField, analysePrintability, profileSettings
 };
