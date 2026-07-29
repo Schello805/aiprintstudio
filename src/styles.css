@@ -570,6 +570,15 @@ footer { padding:17px 36px; border-top:1px solid #1c2028; display:flex; justify-
 .ai-model-detail span,.ai-model-detail small,.ai-model-disclaimer { color:#899485; font-size:8px; line-height:1.4; }
 .ai-model-detail small { font-weight:800; letter-spacing:.08em; }
 .ai-model-disclaimer { display:block; }
+.ai-error-diagnostic { display:grid; gap:11px; margin-top:12px; padding:14px; border:1px solid #754047; border-radius:11px; background:#211315; color:#ffcece; }
+.ai-error-diagnostic strong { font-size:12px; }
+.ai-error-diagnostic p { margin:4px 0 0; color:#e9aaaa; font-size:10px; line-height:1.45; }
+.ai-error-diagnostic dl { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:1px; margin:0; overflow:hidden; border:1px solid #432b2e; border-radius:8px; background:#432b2e; }
+.ai-error-diagnostic dl>div { min-width:0; padding:8px 10px; background:#170e10; }
+.ai-error-diagnostic dt { color:#9d7478; font-size:7px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; }
+.ai-error-diagnostic dd { overflow-wrap:anywhere; margin:3px 0 0; color:#e2bec1; font-size:9px; }
+.ai-error-actions { display:flex; flex-wrap:wrap; gap:8px; }
+.ai-error-diagnostic>small { color:#9d777a; font-size:8px; line-height:1.45; }
 .ai-unlock-panel { display:grid; grid-template-columns:38px minmax(0,1fr); gap:12px; margin:14px 0; padding:14px; border:1px solid #49693b; border-radius:11px; background:#111b10; color:#dcebd6; }
 .ai-unlock-panel>svg { width:24px; color:#9bef6e; }
 .ai-unlock-panel strong { display:block; margin-bottom:4px; }

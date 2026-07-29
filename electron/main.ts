@@ -1,7 +1,7 @@
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, shell } from "electron";
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
-import { copyFile, mkdir, mkdtemp, readFile, rename, rm, statfs, writeFile } from "node:fs/promises";
+import { appendFile, copyFile, mkdir, mkdtemp, readFile, rename, rm, statfs, writeFile } from "node:fs/promises";
 import { arch, platform, tmpdir, totalmem } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -37,6 +37,37 @@ type Ai3dProgress = {
   inputTokens: number;
   outputTokens: number;
 };
+
+type Ai3dDiagnostic = {
+  id: string;
+  timestamp: string;
+  stage: string;
+  model: string;
+  elapsedMs: number;
+  message: string;
+  technicalCause: string;
+  logPath: string;
+};
+
+let lastAi3dDiagnostic: Ai3dDiagnostic | null = null;
+
+function technicalError(error: unknown): string {
+  if (!(error instanceof Error)) return String(error);
+  const cause = error.cause;
+  if (cause && typeof cause === "object") {
+    const details = cause as { code?: string; message?: string; errno?: string };
+    return [details.code ?? details.errno, details.message].filter(Boolean).join(" · ") || error.message;
+  }
+  return error.message;
+}
+
+async function appendAi3dLog(entry: Record<string, unknown>): Promise<string> {
+  const logDirectory = app.getPath("logs");
+  await mkdir(logDirectory, { recursive: true });
+  const path = join(logDirectory, "prompt-to-3d.log");
+  await appendFile(path, `${JSON.stringify(entry)}\n`, "utf8");
+  return path;
+}
 
 function isNewerVersion(candidate: string, current: string): boolean {
   const candidateParts = candidate.split(".").map(Number);
@@ -649,6 +680,7 @@ app.whenReady().then(async () => {
     };
   });
   ipcMain.handle("ai3d:models", () => listOpenAiModels());
+  ipcMain.handle("ai3d:lastDiagnostic", () => lastAi3dDiagnostic);
   ipcMain.handle("ai3d:create", async (event, promptValue: string, existingPlanValue?: unknown, modelValue?: string) => {
     const prompt = promptValue.trim();
     if (prompt.length < (existingPlanValue ? 3 : 10) || prompt.length > 800) {
@@ -656,24 +688,74 @@ app.whenReady().then(async () => {
     }
     const existingPlan = existingPlanValue ? validateCadPlan(existingPlanValue) : undefined;
     const selectedModel = getOpenAiModel(modelValue || defaultOpenAiModel);
-    const { plan, billing } = await createPrintableCadPlan(prompt, existingPlan, selectedModel.id, (progress) => {
-      if (!event.sender.isDestroyed()) event.sender.send("ai3d:progress", progress);
+    const startedAt = Date.now();
+    const diagnosticId = `AI3D-${startedAt.toString(36).toUpperCase()}`;
+    let stage = "Anfrage vorbereiten";
+    lastAi3dDiagnostic = null;
+    await appendAi3dLog({
+      timestamp: new Date(startedAt).toISOString(),
+      id: diagnosticId,
+      event: "started",
+      model: selectedModel.id,
+      promptLength: prompt.length,
+      revision: Boolean(existingPlan)
     });
-    const outputDirectory = join(app.getPath("downloads"), "AI Print Studio");
-    await mkdir(outputDirectory, { recursive: true });
-    const stlPath = join(outputDirectory, `ki-${Date.now()}.stl`);
-    await writeFile(stlPath, encodeCadStl(plan));
-    if (!event.sender.isDestroyed()) {
-      event.sender.send("ai3d:progress", {
-        phase: "Fertig",
-        progress: 100,
-        estimatedCostEur: billing.estimatedCostEur,
-        exactTokenUsage: true,
+    try {
+      const { plan, billing } = await createPrintableCadPlan(prompt, existingPlan, selectedModel.id, (progress) => {
+        stage = progress.phase;
+        if (!event.sender.isDestroyed()) event.sender.send("ai3d:progress", progress);
+      });
+      const outputDirectory = join(app.getPath("downloads"), "AI Print Studio");
+      await mkdir(outputDirectory, { recursive: true });
+      const stlPath = join(outputDirectory, `ki-${Date.now()}.stl`);
+      await writeFile(stlPath, encodeCadStl(plan));
+      if (!event.sender.isDestroyed()) {
+        event.sender.send("ai3d:progress", {
+          phase: "Fertig",
+          progress: 100,
+          estimatedCostEur: billing.estimatedCostEur,
+          exactTokenUsage: true,
+          inputTokens: billing.inputTokens,
+          outputTokens: billing.outputTokens
+        } satisfies Ai3dProgress);
+      }
+      await appendAi3dLog({
+        timestamp: new Date().toISOString(),
+        id: diagnosticId,
+        event: "completed",
+        model: selectedModel.id,
+        elapsedMs: Date.now() - startedAt,
         inputTokens: billing.inputTokens,
-        outputTokens: billing.outputTokens
-      } satisfies Ai3dProgress);
+        outputTokens: billing.outputTokens,
+        cachedTokens: billing.cachedTokens
+      });
+      return { stlPath, plan, billing };
+    } catch (error) {
+      const technicalCause = technicalError(error);
+      const logPath = await appendAi3dLog({
+        timestamp: new Date().toISOString(),
+        id: diagnosticId,
+        event: "failed",
+        model: selectedModel.id,
+        stage,
+        elapsedMs: Date.now() - startedAt,
+        errorType: error instanceof Error ? error.name : typeof error,
+        technicalCause
+      });
+      lastAi3dDiagnostic = {
+        id: diagnosticId,
+        timestamp: new Date().toISOString(),
+        stage,
+        model: selectedModel.id,
+        elapsedMs: Date.now() - startedAt,
+        message: (error instanceof Error && error.message === "fetch failed") || technicalCause.includes("fetch failed")
+          ? "Die Verbindung zu OpenAI wurde unterbrochen oder konnte nicht aufgebaut werden."
+          : error instanceof Error ? error.message : "Die Erstellung ist fehlgeschlagen.",
+        technicalCause,
+        logPath
+      };
+      throw new Error(`${lastAi3dDiagnostic.message} Diagnose-ID: ${diagnosticId}`);
     }
-    return { stlPath, plan, billing };
   });
   ipcMain.handle("objectCapture:create", async () => {
     const selection = await dialog.showOpenDialog({

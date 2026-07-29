@@ -57,6 +57,16 @@ interface Window {
       outputUsdPerMillion: number;
       typicalCostEur: number;
     }>>;
+    getLastAi3dDiagnostic: () => Promise<{
+      id: string;
+      timestamp: string;
+      stage: string;
+      model: string;
+      elapsedMs: number;
+      message: string;
+      technicalCause: string;
+      logPath: string;
+    } | null>;
     createAi3d: (prompt: string, existingPlan?: {
       title: string; widthMm: number; depthMm: number; heightMm: number;
       primitives: Array<{ type: "box" | "cylinder" | "roof"; name: string; position: [number, number, number]; size: [number, number, number] }>;

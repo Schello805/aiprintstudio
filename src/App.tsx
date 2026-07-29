@@ -37,6 +37,7 @@ type SelectedImage = { path: string; name: string; size: number; width: number; 
 type ReliefResult = Awaited<ReturnType<NonNullable<typeof window.desktop>["createRelief"]>>;
 type Ai3dResult = Awaited<ReturnType<NonNullable<typeof window.desktop>["createAi3d"]>>;
 type Ai3dModel = Awaited<ReturnType<NonNullable<typeof window.desktop>["getAi3dModels"]>>[number];
+type Ai3dDiagnostic = Awaited<ReturnType<NonNullable<typeof window.desktop>["getLastAi3dDiagnostic"]>>;
 type CadPlan = Ai3dResult["plan"];
 type CadPrimitive = CadPlan["primitives"][number];
 
@@ -1034,6 +1035,7 @@ function Ai3dDialog({ close }: { close: () => void }) {
   const [followUp, setFollowUp] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [diagnostic, setDiagnostic] = useState<Ai3dDiagnostic>(null);
   const [result, setResult] = useState<Ai3dResult | null>(null);
   const [previousResults, setPreviousResults] = useState<Ai3dResult[]>([]);
   const [apiStatus, setApiStatus] = useState<SettingsStatus | null>(null);
@@ -1085,7 +1087,7 @@ function Ai3dDialog({ close }: { close: () => void }) {
       inputTokens: 0,
       outputTokens: 0
     });
-    setBusy(true); setError(null);
+    setBusy(true); setError(null); setDiagnostic(null);
     try {
       if (!window.desktop) throw new Error("Prompt zu 3D ist nur in der installierten App verfügbar.");
       const next = await window.desktop.createAi3d(instruction, existing?.plan, selectedModel);
@@ -1094,7 +1096,9 @@ function Ai3dDialog({ close }: { close: () => void }) {
       setResult(next);
       setFollowUp("");
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "Das KI-Modell konnte nicht erstellt werden.");
+      const nextDiagnostic = await window.desktop?.getLastAi3dDiagnostic() ?? null;
+      setDiagnostic(nextDiagnostic);
+      setError(nextDiagnostic?.message ?? (nextError instanceof Error ? nextError.message : "Das KI-Modell konnte nicht erstellt werden."));
     } finally { setBusy(false); }
   }
   function undoRevision() {
@@ -1213,7 +1217,24 @@ function Ai3dDialog({ close }: { close: () => void }) {
           <strong>ca. {formatApiCost(result.billing.estimatedCostEur)}</strong>
           <small>{result.billing.inputTokens.toLocaleString("de-DE")} Eingabe-Token · {result.billing.outputTokens.toLocaleString("de-DE")} Ausgabe-Token</small>
         </div>}
-        {error && <div className="notice error">{error}</div>}
+        {error && <div className="ai-error-diagnostic">
+          <div>
+            <strong>Erstellung fehlgeschlagen</strong>
+            <p>{error}</p>
+          </div>
+          {diagnostic && <dl>
+            <div><dt>Diagnose-ID</dt><dd>{diagnostic.id}</dd></div>
+            <div><dt>Letzte Phase</dt><dd>{diagnostic.stage}</dd></div>
+            <div><dt>Modell</dt><dd>{diagnostic.model}</dd></div>
+            <div><dt>Laufzeit</dt><dd>{Math.max(1, Math.round(diagnostic.elapsedMs / 1000))} s</dd></div>
+            <div><dt>Technische Ursache</dt><dd>{diagnostic.technicalCause}</dd></div>
+          </dl>}
+          <div className="ai-error-actions">
+            {diagnostic && <button className="secondary-button" onClick={() => void window.desktop?.showItemInFolder(diagnostic.logPath)}>Diagnose-Log im Finder</button>}
+            <button className="secondary-button" disabled={busy || (result ? followUp.trim().length < 3 : prompt.trim().length < 10)} onClick={() => void submit(result ? followUp : prompt, result ?? undefined)}>Bewusst erneut versuchen</button>
+          </div>
+          <small>Die App startet fehlgeschlagene API-Anfragen nicht automatisch neu, damit bei unklarer Übertragung keine doppelten OpenAI-Kosten entstehen. API-Schlüssel und Prompttext stehen nicht im Log.</small>
+        </div>}
         <div className="modal-actions">
           <button className="secondary-button" onClick={close} disabled={busy}>{result ? "Schließen" : "Abbrechen"}</button>
           {!result && <button className="primary-button" disabled={busy || apiStatus?.openAiConfigured !== true || prompt.trim().length < 10} onClick={() => void submit(prompt)}>{busy ? "OpenAI konstruiert …" : "3D-Modell erstellen"} <ChevronRight /></button>}

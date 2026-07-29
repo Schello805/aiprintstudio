@@ -127,6 +127,13 @@ Darstellung per IPC; jede Modellauswahl wird im Main-Prozess erneut gegen die
 Allowlist geprüft. Dadurch kann das Frontend keine beliebigen Modellnamen an
 die OpenAI-API weiterreichen.
 
+Jeder Prompt-zu-3D-Auftrag erhält eine Diagnose-ID. Start, Abschluss oder Fehler
+werden ohne Promptinhalt und ohne Zugangsdaten als JSONL unter dem
+Electron-Logverzeichnis protokolliert. Bei Fehlern hält der Renderer zusätzlich
+Modell, letzte Phase, Laufzeit und den verschachtelten Node-/Undici-Systemfehler
+fest. Ein automatischer Retry ist bewusst nicht aktiv, da ein abgebrochener
+Stream serverseitig bereits Token verbraucht haben kann.
+
 Der Workflow ist für einfache konstruktive Modelle gedacht. Organische
 Text-zu-3D-Rekonstruktion ist nicht Teil der aktuellen Architektur.
 

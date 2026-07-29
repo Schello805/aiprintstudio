@@ -2,6 +2,13 @@
 
 ## Unveröffentlicht
 
+- Fehlgeschlagene Prompt-zu-3D-Aufträge zeigen jetzt Diagnose-ID, letzte Phase,
+  Modell, Laufzeit und die technische Netzwerkursache direkt im Dialog.
+- Ein datensparsames JSONL-Protokoll kann aus der Fehlermeldung im Finder
+  geöffnet werden. API-Schlüssel und Promptinhalt werden nicht protokolliert.
+- Netzwerkfehler werden nicht mehr als unverständliches `fetch failed`
+  ausgegeben. Eine bewusste Wiederholung ist möglich; automatische
+  Wiederholungen bleiben zum Schutz vor doppelten API-Kosten deaktiviert.
 - **Prompt zu 3D** bietet ein Modell-Dropdown mit GPT-5.6 Sol, Terra und Luna.
   Qualitätsschwerpunkt, Beschreibung, offizielle Tokenpreise und ein typischer
   Eurobetrag werden direkt vor der Erstellung angezeigt.

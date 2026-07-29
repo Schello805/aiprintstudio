@@ -9,7 +9,7 @@ CAD-Pläne und Mesh-Dateien bleiben standardmäßig auf dem eigenen Mac.
 
 [![Quality](https://github.com/Schello805/aiprintstudio/actions/workflows/quality.yml/badge.svg)](https://github.com/Schello805/aiprintstudio/actions/workflows/quality.yml)
 
-> Aktueller Stand: Version 0.20.0. Bild- und Schrift-Reliefs, mehrfarbige
+> Aktueller Stand: Version 0.20.1. Bild- und Schrift-Reliefs, mehrfarbige
 > AMS-3MF-Dateien sowie einfache, per OpenAI geplante und lokal konstruierte
 > Prompt-zu-3D-Modelle sind testbar. Die vollständige Rundum-Rekonstruktion aus
 > einem einzelnen Bild bleibt eine spätere Ausbaustufe.
@@ -111,6 +111,13 @@ laufende Kostenschätzung in Euro. Nach Abschluss wird der Betrag mit den von
 OpenAI gemeldeten Token aktualisiert. Der Fortschritt ist keine exakte
 Zeitprognose und der Eurobetrag verwendet einen festen USD/EUR-Schätzkurs. Die
 App erhebt selbst keine zusätzlichen API-Gebühren.
+
+Bei einem API- oder Netzwerkfehler zeigt der Dialog eine Diagnose-ID, die letzte
+erreichte Phase, Laufzeit und technische Ursache. Über **Diagnose-Log im
+Finder** lässt sich das lokale JSONL-Protokoll öffnen. Es enthält weder den
+API-Schlüssel noch den Prompttext. Eine fehlgeschlagene Anfrage wird nicht
+automatisch neu gestartet, weil eine unklare Übertragung andernfalls doppelte
+API-Kosten verursachen könnte.
 
 Vor der Erstellung kann zwischen **GPT-5.6 Sol** für maximale Qualität,
 **GPT-5.6 Terra** als empfohlener Balance und **GPT-5.6 Luna** für günstige

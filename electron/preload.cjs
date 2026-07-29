@@ -14,6 +14,7 @@ contextBridge.exposeInMainWorld("desktop", Object.freeze({
   openProject: () => ipcRenderer.invoke("project:open"),
   createTextImage: (options) => ipcRenderer.invoke("text:createImage", options),
   getAi3dModels: () => ipcRenderer.invoke("ai3d:models"),
+  getLastAi3dDiagnostic: () => ipcRenderer.invoke("ai3d:lastDiagnostic"),
   createAi3d: (prompt, existingPlan, model) => ipcRenderer.invoke("ai3d:create", prompt, existingPlan, model),
   onAi3dProgress: (callback) => {
     const listener = (_event, progress) => callback(progress);
