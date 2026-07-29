@@ -2,6 +2,10 @@
 
 ## Unveröffentlicht
 
+- Auch mehrfarbige Textlogos werden in der Vorschau als vollständige Körper mit
+  Boden und Seitenflächen angezeigt und liegen sichtbar auf dem Raster.
+- Die 0,4-mm-AMS-Farbdecklage liegt innerhalb der gewählten Reliefhöhe statt
+  diese um weitere 0,4 mm zu überschreiten.
 - Freigestellte Textlogos sind insgesamt exakt so hoch wie der eingestellte
   Reliefwert; die Grundplattendicke wird ohne vorhandene Platte nicht addiert.
 - Die 3D-Vorschau zeigt bei flachen Logos jetzt Deckfläche, Seiten und Boden,

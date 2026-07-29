@@ -54,9 +54,10 @@ beim Import sicher gerastert, bevor die Verarbeitung beginnt.
 ## AMS- und 3MF-Aufbau
 
 Die lokal erkannte Palette wird auf zwei bis acht frei definierbare
-Filamentfarben abgebildet. Für AMS-Modelle reicht der einfarbige Tragkörper bis
-zur vollständigen Reliefhöhe. Motivfarben werden als separate, 0,4 mm starke
-und damit slicer-taugliche Deckkörper erzeugt.
+Filamentfarben abgebildet. Motivfarben werden als separate, 0,4 mm starke und
+damit slicer-taugliche Deckkörper erzeugt. Diese Decklage liegt innerhalb der
+eingestellten Gesamthöhe: Der Tragkörper endet 0,4 mm darunter und die Farbe
+schließt exakt auf Sollhöhe ab.
 
 Außenränder und Farbübergänge werden vor dem Meshaufbau der gewählten Farbe
 **Seiten & Tragkörper** zugewiesen. Dadurch bleiben senkrechte Wände einfarbig.

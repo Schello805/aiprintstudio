@@ -691,13 +691,16 @@ function buildColoredMeshes(
   // druckbarer Körper erkennbar. Die frühere 0,04-mm-Haut wurde von Anycubic
   // als vermutlich falsch skalierte Datei bewertet.
   const colorSkinMm = 0.4;
-  const structureHeights = heights.slice();
+  // Die Farbdecklage gehört in die eingestellte Gesamthöhe. Früher wurde sie
+  // zusätzlich aufgesetzt (z. B. 4,4 statt 4,0 mm). Der Tragkörper endet nun
+  // 0,4 mm tiefer, die jeweilige Farbe schließt exakt auf Sollhöhe ab.
+  const structureHeights = heights.map((height) => Math.max(0, height - colorSkinMm));
   const structure = buildWatertightHeightMesh(
     columns, rows, widthMm, heightMm, structureHeights, cellMask, 0, outerBoundary
   );
   return colors.map((color, colorIndex) => {
     const mask = assignments.map((assignment) => assignment === colorIndex);
-    const capHeights = heights.map((height) => height + colorSkinMm);
+    const capHeights = heights.slice();
     const top = buildWatertightHeightMesh(columns, rows, widthMm, heightMm, capHeights, mask, structureHeights, outerBoundary);
     return {
       mesh: colorIndex === sideColorIndex ? mergeMeshes([structure, top]) : top,
@@ -944,6 +947,39 @@ function buildPreviewSurface(
   sideColorIndex = 0,
   preserveBoundaryHeights = false
 ): { positions: number[]; indices: number[]; colorParts: Array<{ color: string; indices: number[] }> } {
+  if (preserveBoundaryHeights && cellMask && colorAssignments && colors.length) {
+    const solids = buildColoredMeshes(
+      columns,
+      rows,
+      widthMm,
+      heightMm,
+      heights,
+      cellMask,
+      colorAssignments,
+      colors,
+      sideColorIndex
+    );
+    const positions: number[] = [];
+    const indices: number[] = [];
+    const colorParts: Array<{ color: string; indices: number[] }> = [];
+    for (const part of solids) {
+      const offset = positions.length / 3;
+      positions.push(...part.mesh.vertices.flatMap(([x, y, z]) => [
+        x - widthMm / 2,
+        z,
+        y - heightMm / 2
+      ]));
+      const partIndices = part.mesh.triangles.flatMap(([a, b, c]) => [
+        a + offset,
+        b + offset,
+        c + offset
+      ]);
+      indices.push(...partIndices);
+      colorParts.push({ color: part.color, indices: partIndices });
+    }
+    return { positions, indices, colorParts };
+  }
+
   // Flache einfarbige Wort-/Schriftlogos benötigen in der Vorschau nicht nur
   // ihre Deckfläche, sondern auch Boden und Seitenwände. Andernfalls liegt die
   // einzige sichtbare Fläche auf ihrer Z-Höhe über dem Raster und wirkt

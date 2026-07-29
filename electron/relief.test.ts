@@ -198,8 +198,8 @@ describe("relief mesh", () => {
     const sideBody = colored.find((part) => part.color === "#000000");
     const redSkin = colored.find((part) => part.color === "#FF0000");
     expect(sideBody?.mesh.vertices.some((vertex) => vertex[2] === 0)).toBe(true);
-    expect(redSkin?.mesh.vertices.every((vertex) => vertex[2] >= 5)).toBe(true);
-    expect(Math.max(...(redSkin?.mesh.vertices.map((vertex) => vertex[2]) ?? []))).toBeCloseTo(5.4);
+    expect(redSkin?.mesh.vertices.every((vertex) => vertex[2] >= 4.6)).toBe(true);
+    expect(Math.max(...(redSkin?.mesh.vertices.map((vertex) => vertex[2]) ?? []))).toBeCloseTo(5);
   });
 
   it("assigns every outer and color-transition edge to the configured side color", () => {
@@ -240,6 +240,29 @@ describe("relief mesh", () => {
     expect(black?.indices).toContain(0);
     expect(black?.indices.length).toBeGreaterThan(0);
     expect(red?.indices.length).toBeGreaterThan(0);
+  });
+
+  it("shows a multicolor wordmark grounded at its exact configured height", () => {
+    const columns = 5, rows = 5;
+    const cellMask = Array((columns - 1) * (rows - 1)).fill(true) as boolean[];
+    const assignments = cellMask.map((_, index) => index % 2);
+    const preview = reliefInternals.buildPreviewSurface(
+      columns,
+      rows,
+      40,
+      40,
+      Array(columns * rows).fill(4),
+      cellMask,
+      assignments,
+      ["#315979", "#8492A4"],
+      0,
+      true
+    );
+    const yCoordinates = preview.positions.filter((_, index) => index % 3 === 1);
+    expect(Math.min(...yCoordinates)).toBe(0);
+    expect(Math.max(...yCoordinates)).toBe(4);
+    expect(preview.colorParts).toHaveLength(2);
+    expect(preview.colorParts.every((part) => part.indices.length > 0)).toBe(true);
   });
 
   it("raises enclosed logo components above large background regions", () => {
