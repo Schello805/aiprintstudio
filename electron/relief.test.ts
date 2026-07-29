@@ -535,6 +535,38 @@ describe("relief mesh", () => {
     }
   });
 
+  it("automatically treats a gradient logo as one printable background relief", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "ai-print-auto-gradient-logo-test-"));
+    try {
+      const imagePath = join(directory, "gradient-logo.png");
+      const svg = Buffer.from(`
+        <svg xmlns="http://www.w3.org/2000/svg" width="180" height="180">
+          <defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#9aa3ad"/><stop offset="1" stop-color="#252d38"/>
+          </linearGradient></defs>
+          <rect width="180" height="180" fill="url(#bg)"/>
+          <rect x="35" y="35" width="110" height="55" rx="12" fill="#91e2ad"/>
+          <text x="28" y="138" font-family="Helvetica" font-size="34" font-weight="bold" fill="white">AI Print</text>
+        </svg>
+      `);
+      await writeFile(imagePath, await sharp(svg).png().toBuffer());
+      const result = await createRelief(imagePath, directory, {
+        widthMm: 100, baseMm: 1.6, reliefMm: 4, resolution: 128, invert: false,
+        profile: "logo", smoothing: 2, detail: 1, processingMode: "auto",
+        includeBackground: false, nozzleMm: 0.4, minimumFeatureMm: 0,
+        sourceColors: [], colors: [], sideColorIndex: 0
+      });
+      expect(result.options.includeBackground).toBe(true);
+      expect(result.options.minimumFeatureMm).toBe(0.8);
+      expect(result.printability.checks.find((check) => check.label === "Zusammenhalt")?.status).toBe("ok");
+      expect(result.printability.checks.find((check) => check.label === "Mindestbreite")?.status).toBe("ok");
+      const heights = new Set(result.preview.positions.filter((_, index) => index % 3 === 1).map((height) => Number(height.toFixed(4))));
+      expect(heights).toEqual(new Set([0, 1.6, 5.6]));
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
   it("removes enclosed background from wordmark letters but preserves it for emblems", () => {
     const width = 9, height = 9;
     const rgba = Buffer.alloc(width * height * 4, 255);

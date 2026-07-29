@@ -206,14 +206,17 @@ export function App() {
     try {
       if (!window.desktop) throw new Error("Die lokale 3D-Engine ist nicht erreichbar. Bitte starte die App neu.");
       const effectiveMode = processingMode === "auto" ? (file.suggestedProfile === "logo" ? "auto" : "depth") : processingMode;
+      const effectiveResolution = effectiveMode === "auto" && file.suggestedProfile === "logo"
+        ? 384
+        : optimalResolution[profile];
       const next = await window.desktop.createRelief(jobId, file.path, {
         widthMm, baseMm, reliefMm,
-        resolution: optimalResolution[profile],
+        resolution: effectiveResolution,
         invert: raiseLightAreas, profile, smoothing, detail,
         processingMode: effectiveMode === "scan" ? "auto" : effectiveMode,
         includeBackground: effectiveMode === "wordmark" && includeLogoBackground,
         nozzleMm: 0.4,
-        minimumFeatureMm: optimizeForStandardNozzle && effectiveMode === "wordmark" ? 0.8 : 0,
+        minimumFeatureMm: optimizeForStandardNozzle && (effectiveMode === "wordmark" || (effectiveMode === "auto" && file.suggestedProfile === "logo")) ? 0.8 : 0,
         sourceColors: multicolorEnabled ? sourceColors : [],
         colors: multicolorEnabled ? colors : [],
         sideColorIndex: multicolorEnabled ? sideColorIndex : 0

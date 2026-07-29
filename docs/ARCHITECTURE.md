@@ -69,6 +69,11 @@ Für nicht transparente Logos interpoliert die Motiverkennung die erwartete
 Hintergrundfarbe positionsabhängig aus den vier Bildecken. Gleichmäßige
 Farbverläufe bleiben so auf Grundhöhe, während Schrift und Signet auf die
 vollständige Reliefhöhe gesetzt werden.
+Die Automatik nutzt zusätzlich den Farbabstand der vier Ecken als
+Verlaufsindikator. Bei einem Logo-Profil mit deutlichem Verlauf wechselt sie in
+die Wordmark-Pipeline, aktiviert Hintergrund und Mindestbreite und nutzt 384
+Rasterpunkte. Explizit ausgewählte Wappen verbleiben für maximale
+Konturauflösung bei 512 Rasterpunkten.
 
 Schrift wird zunächst lokal als eng zugeschnittene transparente Vorlage
 gerendert und anschließend durch dieselbe Reliefpipeline verarbeitet. SVG wird

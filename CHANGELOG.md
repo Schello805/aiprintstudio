@@ -2,6 +2,10 @@
 
 ## Unveröffentlicht
 
+- **Automatisch** erkennt Verlaufslogos jetzt selbstständig als Logo mit
+  Hintergrund, aktiviert die 0,8-mm-Mindestbreite und verwendet eine
+  slicerfreundliche Logoauflösung. Beim Referenzlogo sinkt das Mesh von rund
+  833.000 auf 590.000 Dreiecke und wird zu einem zusammenhängenden Körper.
 - Ein positionsabhängiges Hintergrundmodell trennt Logo-Motive jetzt auch bei
   vertikalen und diagonalen Farbverläufen klar von der Grundfläche.
 - Logos mit aktiviertem Hintergrund werden auch in der 3D-Vorschau als

@@ -117,6 +117,13 @@ massiven Körper: Boden und Hintergrund bilden die Grundplatte; erkannte Schrift
 und Signet stehen um die eingestellte Reliefhöhe darüber. Vorschau, STL und 3MF
 verwenden dieselbe Volumengeometrie.
 
+Im Modus **Automatisch** erkennt die App Logos mit deutlichem
+Hintergrundverlauf selbstständig. Sie übernimmt dann die geschlossene
+Grundplatte, verstärkt feine Details für die 0,4-mm-Düse und begrenzt die
+Rasterauflösung so, dass der Slicer nicht durch ein unnötig großes Mesh belastet
+wird. Für Sonderfälle bleiben **Wappen & Emblem** und **Logo mit Text** manuell
+wählbar.
+
 Die App wählt Qualitätsprofil und Auflösung passend zum Motiv. Die
 Höhenpipeline kombiniert Normalisierung, kantenerhaltende Glättung,
 Detailrückführung und profilabhängige Höhenstufen. Das Ergebnis enthält eine

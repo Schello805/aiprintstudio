@@ -102,10 +102,28 @@ export async function createRelief(
   onProgress({ phase: "Motiv erkennen", detail: "Konturen, Innenflächen und Hintergrund werden getrennt …", progress: 18 });
   const rawSubjectPixels = buildSubjectPixelMask(rgba, gridWidth, gridHeight);
   const hasTransparency = hasUsefulTransparency(rgba);
+  const cornerIndices = [0, gridWidth - 1, (gridHeight - 1) * gridWidth, gridWidth * gridHeight - 1];
+  let cornerColorSpan = 0;
+  for (let first = 0; first < cornerIndices.length; first += 1) {
+    for (let second = first + 1; second < cornerIndices.length; second += 1) {
+      const a = cornerIndices[first] * 4, b = cornerIndices[second] * 4;
+      cornerColorSpan = Math.max(cornerColorSpan, Math.hypot(
+        rgba[a] - rgba[b],
+        rgba[a + 1] - rgba[b + 1],
+        rgba[a + 2] - rgba[b + 2]
+      ));
+    }
+  }
+  const hasLogoBackgroundGradient = !hasTransparency && cornerColorSpan >= 55;
   const rawSubjectCoverage = rawSubjectPixels.reduce((sum, occupied) => sum + Number(occupied), 0)
     / Math.max(1, rawSubjectPixels.length);
   const useWordmarkMask = options.processingMode === "wordmark"
-    || (options.processingMode === "auto" && options.profile === "logo" && rawSubjectCoverage < 0.42);
+    || (options.processingMode === "auto" && options.profile === "logo"
+      && (rawSubjectCoverage < 0.42 || hasLogoBackgroundGradient));
+  if (options.processingMode === "auto" && useWordmarkMask) {
+    options.includeBackground ||= hasLogoBackgroundGradient;
+    options.minimumFeatureMm = Math.max(options.minimumFeatureMm, options.nozzleMm * 2);
+  }
   const detectedWordmarkPixels = useWordmarkMask
     ? buildWordmarkPixelMask(rgba, gridWidth, gridHeight)
     : undefined;
