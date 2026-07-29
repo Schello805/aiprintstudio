@@ -3,13 +3,13 @@
 AI Print Studio lädt keine optionalen 3D-Modellgewichte ohne vorherige,
 ausdrückliche Zustimmung.
 
-## Hunyuan3D Shape Small (optional)
+## Hunyuan3D-2mini (optional)
 
 - Zweck: lokale Single-Image-zu-3D-Rekonstruktion komplexer Außenformen
-- Modell: `zimengxiong/hunyuan3d-mlx-shape-small`
-- Modellversion: `b7536809d38ad13fe6a9b7769a41fd5d42e520df`
+- Modell: `tencent/Hunyuan3D-2mini`
+- Modellversion: `bdaa271fdf61380fb75a45078778cce6d949c333`
 - Downloadgröße: ca. 3,82 GB
-- Quelle: https://huggingface.co/zimengxiong/hunyuan3d-mlx-shape-small
+- Quelle: https://huggingface.co/tencent/Hunyuan3D-2mini
 - Modelllizenz: Tencent Hunyuan Community License  
   https://github.com/Tencent-Hunyuan/Hunyuan3D-2/blob/main/LICENSE
 - Lokale Swift-/MLX-Implementierung: Hunyuan3D-Swift, MIT  

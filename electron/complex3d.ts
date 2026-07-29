@@ -9,17 +9,17 @@ import { join } from "node:path";
 export const complex3dModel = {
   id: "hunyuan3d-mlx-shape-small",
   name: "Hunyuan3D Shape Small (MLX)",
-  version: "b7536809d38ad13fe6a9b7769a41fd5d42e520df",
+  version: "bdaa271fdf61380fb75a45078778cce6d949c333",
   sizeBytes: 3_819_958_234,
   requiredFreeBytes: 5_500_000_000,
-  sourceUrl: "https://huggingface.co/zimengxiong/hunyuan3d-mlx-shape-small",
+  sourceUrl: "https://huggingface.co/tencent/Hunyuan3D-2mini",
   licenseUrl: "https://github.com/Tencent-Hunyuan/Hunyuan3D-2/blob/main/LICENSE",
   codeUrl: "https://github.com/ZimengXiong/Hunyuan3D-Swift",
   weightsSha256: "3cc66f3bea33e4062b7dbc875ffe1d70c4888914aec3e91b60f94e9bd01b522b",
   notice: "Das Modell unterliegt der Tencent Hunyuan Community License. Die Swift-Implementierung steht unter MIT."
 } as const;
 
-const base = `https://huggingface.co/zimengxiong/hunyuan3d-mlx-shape-small/resolve/${complex3dModel.version}`;
+const base = `https://huggingface.co/tencent/Hunyuan3D-2mini/resolve/${complex3dModel.version}/hunyuan3d-dit-v2-mini`;
 
 export function modelDirectory(userData: string): string {
   return join(userData, "models", complex3dModel.id);

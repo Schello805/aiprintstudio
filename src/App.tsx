@@ -1567,7 +1567,7 @@ function Settings() {
       <section className="settings-grid">
         <article><div className="setting-icon"><Sparkles /></div><div><h3>OpenAI · Prompt zu 3D</h3><p>{status.openAiConfigured ? "Der lokal verschlüsselte API-Schlüssel ist für diese Sitzung entsperrt." : status.openAiStored ? "Der API-Schlüssel ist lokal verschlüsselt und aktuell gesperrt." : "Speichert den API-Schlüssel lokal verschlüsselt – ohne macOS-Schlüsselbund."}</p></div><div className="setting-action">{status.openAiConfigured ? <span className="tag"><CheckCircle2 /> Entsperrt</span> : status.openAiStored ? <span className="tag neutral">Gesperrt</span> : <span className="tag neutral">Nicht eingerichtet</span>}<button onClick={() => setDialog("openai")}>{status.openAiStored ? "Verwalten" : "Einrichten"}</button></div></article>
         <article><div className="setting-icon"><Layers3 /></div><div><h3>Lokale Relief-Engine</h3><p>Integriert · erzeugt wasserdichte STL- und 3MF-Dateien vollständig offline.</p></div><button onClick={() => setDialog("model")}>Details</button></article>
-        <article><div className="setting-icon"><Box /></div><div><h3>Depth Anything V2</h3><p>Lokale KI-Tiefenschätzung für Fotos · Apple Core ML · keine Cloud.</p></div><span className={status.depthModelAvailable ? "tag" : "tag neutral"}>{status.depthModelAvailable ? "Bereit" : "Nur im Release"}</span></article>
+        <article><div className="setting-icon"><Box /></div><div><h3>Tiefenerkennung für Fotos</h3><p>Erzeugt räumliche Tiefe direkt auf deinem Mac · keine Cloud.</p></div><span className={status.depthModelAvailable ? "tag" : "tag neutral"}>{status.depthModelAvailable ? "Bereit" : "Aktuelles Update nötig"}</span></article>
         <article className="complex-settings-card">
           <div className="setting-icon"><Sparkles /></div>
           <div className="complex-settings-content">
@@ -1582,11 +1582,10 @@ function Settings() {
                 <span><b>Quelle</b> Hugging Face / Hunyuan3D</span>
                 <span><b>Lizenz</b> Tencent Hunyuan Community License</span>
               </div>
-              <p className="model-legal-copy">Geladen werden ausschließlich Modellgewichte und Konfiguration, kein nachträglich ausführbarer Programmcode. Die lokale Swift-/MLX-Implementierung steht unter MIT. Komplexe Ergebnisse sind KI-Näherungen; Rechte an Referenzen, Designs und Marken müssen vor der Nutzung geprüft werden.</p>
+              <p className="model-legal-copy">Das optionale Modell läuft nach dem Download lokal. Ergebnisse sind KI-Näherungen; prüfe vor einer Veröffentlichung die Rechte an verwendeten Referenzen, Designs und Marken.</p>
               <div className="complex-license-links">
                 <button onClick={() => void window.desktop?.openExternal(complexStatus.sourceUrl)}>Modellquelle</button>
                 <button onClick={() => void window.desktop?.openExternal(complexStatus.licenseUrl)}>Lizenz vollständig lesen</button>
-                <button onClick={() => void window.desktop?.openExternal(complexStatus.codeUrl)}>Worker-Quellcode</button>
               </div>
               <label className="license-confirm"><input type="checkbox" checked={complexConsent} onChange={(event) => setComplexConsent(event.target.checked)} disabled={complexBusy} /><span>Ich habe Quelle und Lizenzbedingungen gelesen und stimme dem Download der optionalen Modellgewichte ausdrücklich zu.</span></label>
               <div className="complex-settings-actions">
@@ -1597,10 +1596,9 @@ function Settings() {
             {complexStatus?.installed && <div className="complex-settings-actions"><button className="secondary-button danger-button" disabled={complexBusy} onClick={() => void removeComplexModelFromDisk()}>Lokales Modell entfernen</button></div>}
             {complexBusy && complexProgress.phase && <div className="settings-download-progress"><div><strong>{complexProgress.phase}</strong><span>{Math.round(complexProgress.progress)} %</span></div><div className="ai-progress-track"><span style={{ width: `${Math.max(2, complexProgress.progress)}%` }} /></div>{complexProgress.totalBytes > 0 && <small>{(complexProgress.loadedBytes / 1_000_000_000).toFixed(2)} von {(complexProgress.totalBytes / 1_000_000_000).toFixed(2)} GB</small>}</div>}
             {complexError && <div className="notice error">{complexError}</div>}
-            {complexStatus && !complexStatus.workerAvailable && <div className="notice error">Der lokale MLX-Worker fehlt in diesem Build. Installiere eine vollständige Release-Version.</div>}
+            {complexStatus && !complexStatus.workerAvailable && <div className="notice error">Dieser App-Version fehlt eine benötigte Komponente. Bitte installiere das aktuelle vollständige Update.</div>}
           </div>
         </article>
-        <article><div className="setting-icon"><CheckCircle2 /></div><div><h3>Hardwareprofil</h3><p>Apple M3 · 16 GB · automatische CPU-/Metal-Auswahl</p></div><span className="tag">Erkannt</span></article>
         <UpdateSettings />
       </section>
       {dialog === "openai" && <OpenAiDialog status={status} close={() => setDialog(null)} refresh={refreshStatus} />}
@@ -1610,7 +1608,7 @@ function Settings() {
 }
 
 function UpdateSettings() {
-  const [message, setMessage] = useState("Prüft GitHub Releases nur auf Wunsch.");
+  const [message, setMessage] = useState("Updates werden automatisch geprüft. Hier kannst du die Prüfung sofort wiederholen.");
   const [url, setUrl] = useState<string | null>(null);
   const [directDownload, setDirectDownload] = useState(false);
   const [busy, setBusy] = useState(false);
