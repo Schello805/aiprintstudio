@@ -41,6 +41,14 @@ nav { display: grid; gap: 6px; }
 .monitor-metric.storage em { color:#7e8996; font-size:7px; font-style:normal; line-height:1.35; }
 .monitor-metric.storage.insufficient em,.monitor-metric.storage.insufficient strong { color:#ffbd74; }
 .monitor-metric.storage.insufficient .monitor-track.storage>span { background:linear-gradient(90deg,#d06b40,#ffad63); box-shadow:0 0 7px #ff985460; }
+.monitor-update { display:grid; grid-template-columns:12px minmax(0,1fr) auto; align-items:center; gap:6px; padding-top:9px; border-top:1px solid #262c35; }
+.monitor-update>svg { width:12px; height:12px; color:#8ea0b3; }
+.monitor-update>div { min-width:0; }
+.monitor-update span,.monitor-update strong { display:block; margin:0; }
+.monitor-update span { color:#7e8996; font-size:7px; font-weight:700; letter-spacing:.08em; }
+.monitor-update strong { overflow:hidden; margin-top:2px; color:#aab4c0; font-size:8px; line-height:1.25; text-overflow:ellipsis; }
+.monitor-update.available>svg,.monitor-update.available strong { color:#b5fb84; }
+.monitor-update button { padding:4px 6px; border:1px solid #506a42; border-radius:6px; color:#dfffd0; background:#182317; font-size:7px; cursor:pointer; }
 .sidebar-monitor>small { color:#59636f; font-size:7px; text-align:right; }
 main { min-width:0; min-height:0; overflow-y:auto; overflow-x:hidden; overscroll-behavior:contain; scrollbar-gutter:stable; display:flex; flex-direction:column; }
 .topbar { padding:11px 58px 3px; display:flex; align-items:center; justify-content:space-between; }

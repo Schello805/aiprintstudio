@@ -40,6 +40,7 @@ type Ai3dModel = Awaited<ReturnType<NonNullable<typeof window.desktop>["getAi3dM
 type Ai3dDiagnostic = Awaited<ReturnType<NonNullable<typeof window.desktop>["getLastAi3dDiagnostic"]>>;
 type CadPlan = Ai3dResult["plan"];
 type CadPrimitive = CadPlan["primitives"][number];
+type UpdateInfo = Awaited<ReturnType<NonNullable<typeof window.desktop>["checkForUpdate"]>>;
 
 function formatApiCost(value: number): string {
   return new Intl.NumberFormat("de-DE", {
@@ -124,6 +125,8 @@ export function App() {
     requiredDownloadBytes: number;
     downloadStorageSufficient: boolean;
   } | null>(null);
+  const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
+  const [updateCheckFailed, setUpdateCheckFailed] = useState(false);
   const [file, setFile] = useState<SelectedImage | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
@@ -172,6 +175,29 @@ export function App() {
     const timer = window.setInterval(refresh, 1_500);
     return () => {
       active = false;
+      window.clearInterval(timer);
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    const check = () => {
+      if (!window.desktop) return;
+      void window.desktop.checkForUpdate()
+        .then((update) => {
+          if (!active) return;
+          setUpdateInfo(update);
+          setUpdateCheckFailed(false);
+        })
+        .catch(() => {
+          if (active) setUpdateCheckFailed(true);
+        });
+    };
+    const initial = window.setTimeout(check, 1_500);
+    const timer = window.setInterval(check, 6 * 60 * 60 * 1_000);
+    return () => {
+      active = false;
+      window.clearTimeout(initial);
       window.clearInterval(timer);
     };
   }, []);
@@ -434,6 +460,20 @@ export function App() {
                 ? `Bereit für Downloads · mindestens ${formatStorage(appMetrics.requiredDownloadBytes)} benötigt`
                 : `Zu wenig für das 3D-Modell · ${formatStorage(appMetrics.requiredDownloadBytes)} benötigt`}</em>
             ) : <em>Speicherprüfung nicht verfügbar</em>}
+          </div>
+          <div className={`monitor-update ${updateInfo?.available ? "available" : ""}`}>
+            <UploadCloud />
+            <div>
+              <span>APP-UPDATE</span>
+              <strong>{updateInfo?.available
+                ? `Version ${updateInfo.latestVersion} verfügbar`
+                : updateInfo
+                  ? `Version ${updateInfo.currentVersion} aktuell`
+                  : updateCheckFailed
+                    ? "Prüfung momentan nicht möglich"
+                    : "Wird geprüft …"}</strong>
+            </div>
+            {updateInfo?.available && <button onClick={() => void window.desktop?.openExternal(updateInfo.url)}>Öffnen</button>}
           </div>
           <small>{appMetrics ? `${appMetrics.processCount} App-Prozesse · Live` : "Messung wird gestartet …"}</small>
         </div>
