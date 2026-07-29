@@ -676,7 +676,10 @@ export function App() {
         <Footer version={version} openLegal={setLegalPage} />
       </main>
       {textDialogOpen && <TextToStlDialog close={() => { setTextDialogOpen(false); if (!file) setStudioTool("home"); }} create={createTextSource} />}
-      {ai3dDialogOpen && <Ai3dDialog close={() => { setAi3dDialogOpen(false); if (studioTool === "prompt") setStudioTool("home"); }} />}
+      {ai3dDialogOpen && <Ai3dDialog
+        close={() => { setAi3dDialogOpen(false); if (studioTool === "prompt") setStudioTool("home"); }}
+        openSettings={() => { setAi3dDialogOpen(false); setStudioTool("home"); setView("settings"); }}
+      />}
     </div>
   );
 }
@@ -998,7 +1001,13 @@ function TextToStlDialog({
   );
 }
 
-function Ai3dDialog({ close }: { close: () => void }) {
+type Complex3dStatus = {
+  name: string; sizeBytes: number; sourceUrl: string; licenseUrl: string; codeUrl: string;
+  installed: boolean; workerAvailable: boolean; accepted: boolean; acceptedAt: string | null;
+  installedBytes: number; version: string; weightsSha256: string; notice: string;
+};
+
+function Ai3dDialog({ close, openSettings }: { close: () => void; openSettings: () => void }) {
   const [prompt, setPrompt] = useState("Ein kleines Haus mit vier Fenstern, einem Stockwerk und einem Spitzdach");
   const [followUp, setFollowUp] = useState("");
   const [busy, setBusy] = useState(false);
@@ -1011,11 +1020,7 @@ function Ai3dDialog({ close }: { close: () => void }) {
   const [unlockBusy, setUnlockBusy] = useState(false);
   const [models, setModels] = useState<Ai3dModel[]>([]);
   const [complexMode, setComplexMode] = useState(true);
-  const [complexStatus, setComplexStatus] = useState<{
-    name: string; sizeBytes: number; sourceUrl: string; licenseUrl: string; codeUrl: string;
-    installed: boolean; workerAvailable: boolean;
-  } | null>(null);
-  const [licenseConfirmed, setLicenseConfirmed] = useState(false);
+  const [complexStatus, setComplexStatus] = useState<Complex3dStatus | null>(null);
   const [complexReference, setComplexReference] = useState<{ path: string; dataUrl: string; disclaimer: string } | null>(null);
   const [complexResult, setComplexResult] = useState<{ stlPath: string; triangleCount: number; preview: { positions: number[]; indices: number[] } } | null>(null);
   const [complexProgress, setComplexProgress] = useState({ phase: "", progress: 0, loadedBytes: 0, totalBytes: 0 });
@@ -1059,19 +1064,6 @@ function Ai3dDialog({ close }: { close: () => void }) {
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : "Der API-Schlüssel konnte nicht entsperrt werden.");
     } finally { setUnlockBusy(false); }
-  }
-  async function installComplexModel() {
-    if (!window.desktop || !licenseConfirmed) return;
-    setBusy(true); setError(null);
-    const jobId = crypto.randomUUID();
-    complexJob.current = jobId;
-    try {
-      await window.desktop.acceptComplex3dLicense(true);
-      await window.desktop.downloadComplex3dModel(jobId);
-      setComplexStatus(await window.desktop.getComplex3dStatus());
-    } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "Das lokale 3D-Modell konnte nicht installiert werden.");
-    } finally { complexJob.current = null; setBusy(false); }
   }
   async function createComplexReference() {
     if (!window.desktop) return;
@@ -1169,20 +1161,11 @@ function Ai3dDialog({ close }: { close: () => void }) {
             <button className={!complexMode ? "selected" : ""} onClick={() => setComplexMode(false)}><Box /><span><strong>Einfaches CAD</strong><small>Grundkörper, schnell und exakt</small></span></button>
           </div>
           <p>{complexMode ? "OpenAI erzeugt zunächst eine sichtbare Referenz. Erst nach deiner Prüfung rekonstruiert das optionale lokale Modell daraus ein Mesh." : "OpenAI erstellt einen validierten CAD-Bauplan aus einfachen Grundkörpern; die App erzeugt das STL lokal."}</p>
-          {complexMode && complexStatus && !complexStatus.installed && <div className="complex-model-consent">
-            <strong>Optionales lokales 3D-Modell erforderlich</strong>
-            <p><b>{complexStatus.name}</b> · Download ca. {(complexStatus.sizeBytes / 1_000_000_000).toFixed(2)} GB · benötigt mindestens 5,5 GB freien Speicher.</p>
-            <p>Quelle: Hugging Face / Hunyuan3D. Modelllizenz: Tencent Hunyuan Community License; lokale Swift-Implementierung: MIT. Der Download enthält Modellgewichte und Konfiguration, keinen nachgeladenen Programmcode.</p>
-            <div className="complex-license-links">
-              <button onClick={() => void window.desktop?.openExternal(complexStatus.sourceUrl)}>Modellquelle</button>
-              <button onClick={() => void window.desktop?.openExternal(complexStatus.licenseUrl)}>Lizenz vollständig lesen</button>
-              <button onClick={() => void window.desktop?.openExternal(complexStatus.codeUrl)}>Worker-Quellcode</button>
-            </div>
-            <label className="license-confirm"><input type="checkbox" checked={licenseConfirmed} onChange={(event) => setLicenseConfirmed(event.target.checked)} /><span>Ich habe Quelle und Lizenzhinweise gelesen und stimme dem Download der optionalen Modellgewichte ausdrücklich zu.</span></label>
-            <button className="primary-button" disabled={!licenseConfirmed || busy || !complexStatus.workerAvailable} onClick={() => void installComplexModel()}>Lokales Modell herunterladen</button>
-            {!complexStatus.workerAvailable && <small className="notice error">Der lokale MLX-Worker fehlt in diesem Build. Installiere eine vollständige Release-Version.</small>}
+          {complexMode && complexStatus && !complexStatus.installed && <div className="complex-model-compact">
+            <div><strong>Lokales 3D-Modell noch nicht installiert</strong><span>Download und Lizenzverwaltung findest du übersichtlich in den Einstellungen.</span></div>
+            <button className="secondary-button" onClick={openSettings}><Settings2 /> Zu den Einstellungen</button>
           </div>}
-          {complexMode && complexStatus?.installed && <div className="notice"><CheckCircle2 /> Lokales Hunyuan3D-Modell installiert · Verarbeitung nach der Referenzerstellung vollständig auf diesem Mac.</div>}
+          {complexMode && complexStatus?.installed && <div className="complex-model-ready"><CheckCircle2 /><span>Lokales 3D-Modell bereit</span></div>}
           {!complexMode && <div className="ai-model-picker">
             <label htmlFor="ai3d-model">OPENAI-MODELL</label>
             <select id="ai3d-model" value={selectedModel} onChange={(event) => setSelectedModel(event.target.value as Ai3dModel["id"])} disabled={busy}>
@@ -1410,14 +1393,57 @@ function Settings() {
     storageVersion: 0
     ,depthModelAvailable: false
   });
+  const [complexStatus, setComplexStatus] = useState<Complex3dStatus | null>(null);
+  const [complexConsent, setComplexConsent] = useState(false);
+  const [complexBusy, setComplexBusy] = useState(false);
+  const [complexError, setComplexError] = useState<string | null>(null);
+  const [complexProgress, setComplexProgress] = useState({ phase: "", progress: 0, loadedBytes: 0, totalBytes: 0 });
+  const complexJob = useRef<string | null>(null);
 
   async function refreshStatus() {
     if (!window.desktop) return;
     const next = await window.desktop.getSettingsStatus();
     setStatus(next);
+    setComplexStatus(await window.desktop.getComplex3dStatus());
   }
 
   useEffect(() => { void refreshStatus(); }, []);
+  useEffect(() => window.desktop?.onComplex3dProgress((jobId, progress) => {
+    if (complexJob.current === jobId) setComplexProgress(progress);
+  }), []);
+
+  async function installComplexModel() {
+    if (!window.desktop || !complexConsent) return;
+    setComplexBusy(true); setComplexError(null);
+    const jobId = crypto.randomUUID();
+    complexJob.current = jobId;
+    try {
+      await window.desktop.acceptComplex3dLicense(true);
+      await window.desktop.downloadComplex3dModel(jobId);
+      setComplexStatus(await window.desktop.getComplex3dStatus());
+      setComplexConsent(false);
+    } catch (error) {
+      setComplexError(error instanceof Error ? error.message : "Das lokale 3D-Modell konnte nicht installiert werden.");
+    } finally {
+      complexJob.current = null;
+      setComplexBusy(false);
+    }
+  }
+
+  async function removeComplexModelFromDisk() {
+    if (!window.desktop || !window.confirm("Lokales 3D-Modell entfernen?\n\nDie etwa 3,82 GB großen Modellgewichte werden gelöscht. Prompt zu 3D kann weiterhin das einfache CAD verwenden.")) return;
+    setComplexBusy(true); setComplexError(null);
+    try {
+      await window.desktop.removeComplex3dModel();
+      setComplexStatus(await window.desktop.getComplex3dStatus());
+    } catch (error) {
+      setComplexError(error instanceof Error ? error.message : "Das lokale Modell konnte nicht entfernt werden.");
+    } finally { setComplexBusy(false); }
+  }
+
+  async function cancelComplexDownload() {
+    if (complexJob.current) await window.desktop?.cancelComplex3d(complexJob.current);
+  }
 
   return (
     <>
@@ -1425,6 +1451,38 @@ function Settings() {
         <article><div className="setting-icon"><Sparkles /></div><div><h3>OpenAI · Prompt zu 3D</h3><p>{status.openAiConfigured ? "Der lokal verschlüsselte API-Schlüssel ist für diese Sitzung entsperrt." : status.openAiStored ? "Der API-Schlüssel ist lokal verschlüsselt und aktuell gesperrt." : "Speichert den API-Schlüssel lokal verschlüsselt – ohne macOS-Schlüsselbund."}</p></div><div className="setting-action">{status.openAiConfigured ? <span className="tag"><CheckCircle2 /> Entsperrt</span> : status.openAiStored ? <span className="tag neutral">Gesperrt</span> : <span className="tag neutral">Nicht eingerichtet</span>}<button onClick={() => setDialog("openai")}>{status.openAiStored ? "Verwalten" : "Einrichten"}</button></div></article>
         <article><div className="setting-icon"><Layers3 /></div><div><h3>Lokale Relief-Engine</h3><p>Integriert · erzeugt wasserdichte STL- und 3MF-Dateien vollständig offline.</p></div><button onClick={() => setDialog("model")}>Details</button></article>
         <article><div className="setting-icon"><Box /></div><div><h3>Depth Anything V2</h3><p>Lokale KI-Tiefenschätzung für Fotos · Apple Core ML · keine Cloud.</p></div><span className={status.depthModelAvailable ? "tag" : "tag neutral"}>{status.depthModelAvailable ? "Bereit" : "Nur im Release"}</span></article>
+        <article className="complex-settings-card">
+          <div className="setting-icon"><Sparkles /></div>
+          <div className="complex-settings-content">
+            <div className="complex-settings-heading">
+              <div><h3>Komplexe Außenformen · lokales 3D-Modell</h3><p>{complexStatus?.installed ? `${complexStatus.name} ist lokal installiert und einsatzbereit.` : "Optional für komplexe Prompt-Modelle. Einfaches Prompt-CAD funktioniert weiterhin ohne diesen Download."}</p></div>
+              <span className={complexStatus?.installed ? "tag" : "tag neutral"}>{complexStatus?.installed ? "Installiert" : "Optional"}</span>
+            </div>
+            {!complexStatus?.installed && complexStatus && <>
+              <div className="model-facts">
+                <span><b>Download</b> ca. {(complexStatus.sizeBytes / 1_000_000_000).toFixed(2)} GB</span>
+                <span><b>Freier Speicher</b> mindestens 5,5 GB</span>
+                <span><b>Quelle</b> Hugging Face / Hunyuan3D</span>
+                <span><b>Lizenz</b> Tencent Hunyuan Community License</span>
+              </div>
+              <p className="model-legal-copy">Geladen werden ausschließlich Modellgewichte und Konfiguration, kein nachträglich ausführbarer Programmcode. Die lokale Swift-/MLX-Implementierung steht unter MIT. Komplexe Ergebnisse sind KI-Näherungen; Rechte an Referenzen, Designs und Marken müssen vor der Nutzung geprüft werden.</p>
+              <div className="complex-license-links">
+                <button onClick={() => void window.desktop?.openExternal(complexStatus.sourceUrl)}>Modellquelle</button>
+                <button onClick={() => void window.desktop?.openExternal(complexStatus.licenseUrl)}>Lizenz vollständig lesen</button>
+                <button onClick={() => void window.desktop?.openExternal(complexStatus.codeUrl)}>Worker-Quellcode</button>
+              </div>
+              <label className="license-confirm"><input type="checkbox" checked={complexConsent} onChange={(event) => setComplexConsent(event.target.checked)} disabled={complexBusy} /><span>Ich habe Quelle und Lizenzbedingungen gelesen und stimme dem Download der optionalen Modellgewichte ausdrücklich zu.</span></label>
+              <div className="complex-settings-actions">
+                <button className="primary-button" disabled={!complexConsent || complexBusy || !complexStatus.workerAvailable} onClick={() => void installComplexModel()}>{complexBusy ? "Modell wird geladen …" : "Lokales 3D-Modell herunterladen"}</button>
+                {complexBusy && <button className="secondary-button" onClick={() => void cancelComplexDownload()}>Download abbrechen</button>}
+              </div>
+            </>}
+            {complexStatus?.installed && <div className="complex-settings-actions"><button className="secondary-button danger-button" disabled={complexBusy} onClick={() => void removeComplexModelFromDisk()}>Lokales Modell entfernen</button></div>}
+            {complexBusy && complexProgress.phase && <div className="settings-download-progress"><div><strong>{complexProgress.phase}</strong><span>{Math.round(complexProgress.progress)} %</span></div><div className="ai-progress-track"><span style={{ width: `${Math.max(2, complexProgress.progress)}%` }} /></div>{complexProgress.totalBytes > 0 && <small>{(complexProgress.loadedBytes / 1_000_000_000).toFixed(2)} von {(complexProgress.totalBytes / 1_000_000_000).toFixed(2)} GB</small>}</div>}
+            {complexError && <div className="notice error">{complexError}</div>}
+            {complexStatus && !complexStatus.workerAvailable && <div className="notice error">Der lokale MLX-Worker fehlt in diesem Build. Installiere eine vollständige Release-Version.</div>}
+          </div>
+        </article>
         <article><div className="setting-icon"><CheckCircle2 /></div><div><h3>Hardwareprofil</h3><p>Apple M3 · 16 GB · automatische CPU-/Metal-Auswahl</p></div><span className="tag">Erkannt</span></article>
         <UpdateSettings />
       </section>
