@@ -62,6 +62,9 @@ Bei **Logo mit Text** kann die Pixelmaske vor der Vermaschung druckgerecht
 erweitert werden. Der Standardwert von 0,8 mm entspricht zwei Extrusionslinien
 einer 0,4-mm-Düse. Diese Mindestbreite verändert Vorschau, STL und 3MF
 gemeinsam; die Option ist in der Oberfläche vor der Berechnung abschaltbar.
+Bei aktiviertem Hintergrund wird die Vorschau aus dem vollständigen
+wasserdichten Höhenkörper aufgebaut, nicht nur aus dessen Deckfläche. Dadurch
+sind Boden, Seiten und erhabenes Motiv in Vorschau und Export identisch.
 
 Schrift wird zunächst lokal als eng zugeschnittene transparente Vorlage
 gerendert und anschließend durch dieselbe Reliefpipeline verarbeitet. SVG wird

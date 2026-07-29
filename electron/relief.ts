@@ -251,7 +251,8 @@ export async function createRelief(
   });
   const preview = buildPreviewSurface(
     gridWidth, gridHeight, options.widthMm, heightMm, heights, cellMask,
-    colorAssignments, options.colors, options.sideColorIndex, flatVectorSurface
+    colorAssignments, options.colors, options.sideColorIndex,
+    flatVectorSurface || (useWordmarkMask && options.includeBackground)
   );
   const printability = analysePrintability(mesh, heights, options, cellMask, gridWidth);
   onProgress({ phase: "Druckbarkeit prüfen", detail: "Zusammenhalt, Mindestbreiten und Volumen werden bewertet …", progress: 84 });
@@ -807,14 +808,16 @@ function buildWordmarkPixelMask(rgba: Buffer, width: number, height: number): bo
   );
   // Anders als beim Wappen wird nicht nur der von außen erreichbare
   // Hintergrund entfernt. Auch eingeschlossene, hintergrundfarbene Bereiche
-  // in a, e, d, o oder ö bleiben echte Löcher.
+  // in a, e, d, o oder ö bleiben echte Löcher. Ein robuster Abstand von 48
+  // ignoriert typische Verläufe und Schatten eines Logo-Hintergrunds; die
+  // anschließende 0,4-mm-Düsenoptimierung stabilisiert dünne Konturränder.
   return Array.from({ length: pixelCount }, (_, index) => {
     const offset = index * 4;
     return Math.hypot(
       rgba[offset] - background[0],
       rgba[offset + 1] - background[1],
       rgba[offset + 2] - background[2]
-    ) >= 26;
+    ) >= 48;
   });
 }
 

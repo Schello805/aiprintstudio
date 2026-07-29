@@ -112,6 +112,11 @@ unveränderte Originalkontur deaktiviert werden. Die 3MF-Datei enthält 0,4 mm
 zusätzlich als Profilhinweis; die tatsächlich verwendete Düse muss weiterhin
 im Slicer zum ausgewählten Drucker passen.
 
+Ist **Hintergrund mitdrucken** aktiv, erzeugt die App einen geschlossenen,
+massiven Körper: Boden und Hintergrund bilden die Grundplatte; erkannte Schrift
+und Signet stehen um die eingestellte Reliefhöhe darüber. Vorschau, STL und 3MF
+verwenden dieselbe Volumengeometrie.
+
 Die App wählt Qualitätsprofil und Auflösung passend zum Motiv. Die
 Höhenpipeline kombiniert Normalisierung, kantenerhaltende Glättung,
 Detailrückführung und profilabhängige Höhenstufen. Das Ergebnis enthält eine

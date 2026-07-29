@@ -527,7 +527,7 @@ describe("relief mesh", () => {
       const heights = new Set([...usedVertices].map((index) =>
         Number(result.preview.positions[index * 3 + 1].toFixed(4))
       ));
-      expect(heights).toEqual(new Set([1.6, 5.6]));
+      expect(heights).toEqual(new Set([0, 1.6, 5.6]));
       expect(result.preview.positions.some((_, index) => index % 3 === 1 && result.preview.positions[index] === 1.6)).toBe(true);
       expect(result.preview.positions.some((_, index) => index % 3 === 1 && result.preview.positions[index] === 5.6)).toBe(true);
     } finally {

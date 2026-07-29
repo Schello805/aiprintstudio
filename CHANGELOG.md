@@ -2,6 +2,10 @@
 
 ## Unveröffentlicht
 
+- Logos mit aktiviertem Hintergrund werden auch in der 3D-Vorschau als
+  vollständiger massiver Körper mit Boden und Seitenwänden dargestellt.
+- Eine robustere Vordergrundschwelle trennt Schrift und Signet klarer von
+  typischen grauen Hintergrundverläufen und Schatten.
 - Die feste Seitenleiste zeigt live die CPU-Last und den RAM-Verbrauch aller
   AI-Print-Studio-Prozesse. Die Messung aktualisiert sich alle 1,5 Sekunden und
   kennzeichnet laufende Berechnungen.
