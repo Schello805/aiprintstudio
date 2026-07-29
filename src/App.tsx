@@ -461,8 +461,10 @@ export function App() {
                 <div className="progress-copy">
                   <strong>{reliefProgress.phase}</strong>
                   <p>{reliefProgress.detail}</p>
-                  <div className="relief-progress-track"><span style={{ width: `${Math.max(2, reliefProgress.progress)}%` }} /></div>
-                  <small>{Math.round(reliefProgress.progress)} %</small>
+                  <div className="relief-progress-line">
+                    <div className="relief-progress-track"><span style={{ width: `${Math.max(2, reliefProgress.progress)}%` }} /></div>
+                    <small>{Math.round(reliefProgress.progress)} %</small>
+                  </div>
                 </div>
                 <button className="cancel-job-button" onClick={() => void cancelRelief()}><X /> Abbrechen</button>
               </div>

@@ -614,4 +614,30 @@ describe("relief mesh", () => {
     expect(mask[37 * width + 20]).toBe(false);
     expect(mask[20 * width + 20]).toBe(true);
   });
+
+  it("does not raise a radial vignette behind a logo", () => {
+    const width = 80, height = 80;
+    const rgba = Buffer.alloc(width * height * 4);
+    for (let y = 0; y < height; y += 1) for (let x = 0; x < width; x += 1) {
+      const nx = (x - width / 2) / (width / 2);
+      const ny = (y - height / 2) / (height / 2);
+      const light = Math.round(58 + Math.max(0, 1 - (nx * nx + ny * ny)) * 72);
+      const offset = (y * width + x) * 4;
+      rgba[offset] = light;
+      rgba[offset + 1] = light + 5;
+      rgba[offset + 2] = light + 12;
+      rgba[offset + 3] = 255;
+    }
+    for (let y = 28; y < 52; y += 1) for (let x = 25; x < 55; x += 1) {
+      const offset = (y * width + x) * 4;
+      rgba[offset] = 170;
+      rgba[offset + 1] = 244;
+      rgba[offset + 2] = 195;
+    }
+    const mask = reliefInternals.buildWordmarkPixelMask(rgba, width, height);
+    expect(mask[40 * width + 10]).toBe(false);
+    expect(mask[10 * width + 40]).toBe(false);
+    expect(mask[65 * width + 40]).toBe(false);
+    expect(mask[40 * width + 40]).toBe(true);
+  });
 });

@@ -2,6 +2,11 @@
 
 ## Unveröffentlicht
 
+- Logo-Hintergründe werden nicht mehr nur aus vier Eckfarben geschätzt: Ein
+  robustes quadratisches Flächenmodell erkennt jetzt auch radiale Verläufe und
+  Vignetten, sodass deren Bildmitte nicht versehentlich erhaben wird.
+- Die Prozentanzeige der Reliefberechnung besitzt neben dem Fortschrittsbalken
+  einen festen Platz und bleibt auch bei 100 % vollständig lesbar.
 - Studio-Stände lassen sich als portable `.aips`-Projektdateien speichern und
   mit Quelle, Einstellungen, AMS-Farben und manuellen Korrekturen wieder öffnen.
 - Der Druckscore bietet eine bestätigungspflichtige automatische Reparatur:

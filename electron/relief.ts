@@ -838,33 +838,102 @@ function buildWordmarkPixelMask(rgba: Buffer, width: number, height: number): bo
     return Array.from({ length: pixelCount }, (_, index) => rgba[index * 4 + 3] >= 64);
   }
 
-  const cornerPixels = [0, width - 1, (height - 1) * width, pixelCount - 1];
-  const corners = cornerPixels.map((pixel) => [
-    rgba[pixel * 4],
-    rgba[pixel * 4 + 1],
-    rgba[pixel * 4 + 2]
-  ] as const);
   // Anders als beim Wappen wird nicht nur der von außen erreichbare
   // Hintergrund entfernt. Auch eingeschlossene, hintergrundfarbene Bereiche
-  // in a, e, d, o oder ö bleiben echte Löcher. Die Hintergrundfarbe wird für
-  // jede Position aus den vier Bildecken interpoliert. Dadurch bleibt ein
-  // vertikaler oder diagonaler Verlauf eine Grundfläche, statt großflächig als
-  // erhabenes Motiv fehlinterpretiert zu werden.
+  // in a, e, d, o oder ö bleiben echte Löcher. Ein robust angepasstes
+  // quadratisches Flächenmodell bildet auch radiale Lichtverläufe und
+  // Vignetten ab. Die frühere Interpolation aus nur vier Ecken konnte solche
+  // Hintergründe in der Bildmitte nicht erklären und hob sie fälschlich an.
+  const background = fitSmoothBackground(rgba, width, height);
   return Array.from({ length: pixelCount }, (_, index) => {
     const x = index % width, y = Math.floor(index / width);
-    const tx = x / Math.max(1, width - 1), ty = y / Math.max(1, height - 1);
-    const background = [0, 1, 2].map((channel) => {
-      const top = corners[0][channel] * (1 - tx) + corners[1][channel] * tx;
-      const bottom = corners[2][channel] * (1 - tx) + corners[3][channel] * tx;
-      return top * (1 - ty) + bottom * ty;
-    });
+    const expected = background.at(x, y);
     const offset = index * 4;
     return Math.hypot(
-      rgba[offset] - background[0],
-      rgba[offset + 1] - background[1],
-      rgba[offset + 2] - background[2]
-    ) >= 42;
+      rgba[offset] - expected[0],
+      rgba[offset + 1] - expected[1],
+      rgba[offset + 2] - expected[2]
+    ) >= background.threshold;
   });
+}
+
+function fitSmoothBackground(rgba: Buffer, width: number, height: number): {
+  at: (x: number, y: number) => readonly [number, number, number];
+  threshold: number;
+} {
+  const basisAt = (x: number, y: number) => {
+    const nx = x / Math.max(1, width - 1) * 2 - 1;
+    const ny = y / Math.max(1, height - 1) * 2 - 1;
+    return [1, nx, ny, nx * nx, nx * ny, ny * ny];
+  };
+  const bandX = Math.max(2, Math.round(width * 0.12));
+  const bandY = Math.max(2, Math.round(height * 0.12));
+  const stride = Math.max(1, Math.floor(Math.max(width, height) / 140));
+  let samples: { basis: number[]; rgb: readonly [number, number, number] }[] = [];
+  for (let y = 0; y < height; y += stride) {
+    for (let x = 0; x < width; x += stride) {
+      if (x >= bandX && x < width - bandX && y >= bandY && y < height - bandY) continue;
+      const offset = (y * width + x) * 4;
+      samples.push({ basis: basisAt(x, y), rgb: [rgba[offset], rgba[offset + 1], rgba[offset + 2]] });
+    }
+  }
+  const fit = (channel: number) => {
+    const matrix = Array.from({ length: 6 }, () => Array(6).fill(0));
+    const vector = Array(6).fill(0);
+    for (const sample of samples) for (let row = 0; row < 6; row += 1) {
+      vector[row] += sample.basis[row] * sample.rgb[channel];
+      for (let column = 0; column < 6; column += 1) matrix[row][column] += sample.basis[row] * sample.basis[column];
+    }
+    return solveLinearSystem(matrix, vector);
+  };
+  let coefficients = [fit(0), fit(1), fit(2)];
+  // Helle oder dunkle Motivpixel, die bis an den Rand reichen, werden nach
+  // zwei Anpassungsrunden aus den Stützpunkten entfernt.
+  for (let pass = 0; pass < 2; pass += 1) {
+    const residuals = samples.map((sample) => Math.hypot(...sample.rgb.map((value, channel) =>
+      value - sample.basis.reduce((sum, basis, index) => sum + basis * coefficients[channel][index], 0)
+    )));
+    const sorted = residuals.slice().sort((a, b) => a - b);
+    const median = sorted[Math.floor(sorted.length / 2)] ?? 0;
+    const keepBelow = Math.max(18, median * 2.8);
+    const filtered = samples.filter((_, index) => residuals[index] <= keepBelow);
+    if (filtered.length < 24 || filtered.length === samples.length) break;
+    samples = filtered;
+    coefficients = [fit(0), fit(1), fit(2)];
+  }
+  const borderResiduals = samples.map((sample) => Math.hypot(...sample.rgb.map((value, channel) =>
+    value - sample.basis.reduce((sum, basis, index) => sum + basis * coefficients[channel][index], 0)
+  ))).sort((a, b) => a - b);
+  const residual95 = borderResiduals[Math.floor(borderResiduals.length * 0.95)] ?? 0;
+  const threshold = Math.max(38, Math.min(58, residual95 * 1.8 + 12));
+  return {
+    at: (x, y) => {
+      const basis = basisAt(x, y);
+      return coefficients.map((channel) => Math.max(0, Math.min(255,
+        channel.reduce((sum, value, index) => sum + value * basis[index], 0)
+      ))) as [number, number, number];
+    },
+    threshold
+  };
+}
+
+function solveLinearSystem(matrix: number[][], vector: number[]): number[] {
+  const size = vector.length;
+  const rows = matrix.map((row, index) => [...row, vector[index]]);
+  for (let pivot = 0; pivot < size; pivot += 1) {
+    let best = pivot;
+    for (let row = pivot + 1; row < size; row += 1) if (Math.abs(rows[row][pivot]) > Math.abs(rows[best][pivot])) best = row;
+    [rows[pivot], rows[best]] = [rows[best], rows[pivot]];
+    const divisor = rows[pivot][pivot];
+    if (Math.abs(divisor) < 1e-8) return [0, 0, 0, 0, 0, 0];
+    for (let column = pivot; column <= size; column += 1) rows[pivot][column] /= divisor;
+    for (let row = 0; row < size; row += 1) {
+      if (row === pivot) continue;
+      const factor = rows[row][pivot];
+      for (let column = pivot; column <= size; column += 1) rows[row][column] -= factor * rows[pivot][column];
+    }
+  }
+  return rows.map((row) => row[size]);
 }
 
 function buildCellMask(pixels: boolean[], columns: number, rows: number, threshold = 2): boolean[] {
