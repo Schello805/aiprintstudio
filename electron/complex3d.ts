@@ -50,31 +50,44 @@ async function downloadFile(url: string, target: string, expectedBytes: number |
   const temporary = `${target}.part`;
   let offset = 0;
   try { offset = (await stat(temporary)).size; } catch { /* neuer Download */ }
-  const headers: Record<string, string> = { "Accept-Encoding": "identity" };
-  if (offset) headers.Range = `bytes=${offset}-`;
-  const response = await fetch(url, { signal, headers });
-  if (!response.ok || !response.body) throw new Error(`Modelldownload fehlgeschlagen (HTTP ${response.status}).`);
-  if (offset && response.status !== 206) {
+  if (expectedBytes && offset > expectedBytes) {
     await rm(temporary, { force: true });
-    return downloadFile(url, target, expectedBytes, signal, progress);
+    offset = 0;
   }
-  if (offset) {
-    const range = /^bytes (\d+)-(\d+)\/(\d+)$/.exec(response.headers.get("content-range") ?? "");
-    const validRange = range
-      && Number(range[1]) === offset
-      && (!expectedBytes || Number(range[3]) === expectedBytes);
-    if (!validRange) {
-      await response.body.cancel();
-      await rm(temporary, { force: true });
-      return downloadFile(url, target, expectedBytes, signal, progress);
+  const chunkBytes = 64 * 1024 * 1024;
+  while (!expectedBytes || offset < expectedBytes) {
+    const end = expectedBytes ? Math.min(expectedBytes - 1, offset + chunkBytes - 1) : undefined;
+    const headers: Record<string, string> = { "Accept-Encoding": "identity" };
+    if (end !== undefined || offset) headers.Range = `bytes=${offset}-${end ?? ""}`;
+    const response = await fetch(url, { signal, headers });
+    if (!response.ok || !response.body) throw new Error(`Modelldownload fehlgeschlagen (HTTP ${response.status}).`);
+    if (end !== undefined) {
+      const range = /^bytes (\d+)-(\d+)\/(\d+)$/.exec(response.headers.get("content-range") ?? "");
+      const validRange = response.status === 206
+        && range
+        && Number(range[1]) === offset
+        && Number(range[2]) === end
+        && Number(range[3]) === expectedBytes;
+      if (!validRange) {
+        await response.body.cancel();
+        throw new Error(`Der Downloadserver hat den angeforderten Dateibereich ${offset}-${end} nicht korrekt bestätigt.`);
+      }
     }
+    const output = createWriteStream(temporary, { flags: offset ? "a" : "w", mode: 0o600 });
+    let received = 0;
+    const source = Readable.fromWeb(response.body as never);
+    source.on("data", (chunk: Buffer) => {
+      received += chunk.length;
+      progress(offset + received);
+    });
+    await pipeline(source, output);
+    if (end !== undefined && received !== end - offset + 1) {
+      throw new Error(`Ein Downloadbereich ist unvollständig (${received} statt ${end - offset + 1} Bytes).`);
+    }
+    offset += received;
+    if (!expectedBytes) break;
   }
-  const output = createWriteStream(temporary, { flags: offset ? "a" : "w", mode: 0o600 });
-  let loaded = offset;
-  const source = Readable.fromWeb(response.body as never);
-  source.on("data", (chunk: Buffer) => { loaded += chunk.length; progress(loaded); });
-  await pipeline(source, output);
-  if (expectedBytes && loaded !== expectedBytes) throw new Error(`Der Download ist unvollständig (${loaded} statt ${expectedBytes} Bytes).`);
+  if (expectedBytes && offset !== expectedBytes) throw new Error(`Der Download ist unvollständig (${offset} statt ${expectedBytes} Bytes).`);
   await rename(temporary, target);
 }
 
