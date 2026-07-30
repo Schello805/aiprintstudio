@@ -26,7 +26,6 @@ import {
   Wrench,
   X
 } from "lucide-react";
-import { RegionEditor } from "./RegionEditor";
 import { SettingTooltip } from "./SettingTooltip";
 import { extractColorPalette } from "./domain/color-palette";
 import appLogoMark from "../build/icon-mark.png";
@@ -73,8 +72,6 @@ type StudioProject = {
     sideColorIndex: number; includeLogoBackground: boolean; optimizeForStandardNozzle: boolean;
     reduceTo250kTriangles: boolean;
   };
-  editorHeightmap: string | null;
-  editorColorMap: string | null;
 };
 
 const optimalResolution: Record<QualityProfile, number> = {
@@ -145,9 +142,6 @@ export function App() {
   const [optimizeForStandardNozzle, setOptimizeForStandardNozzle] = useState(true);
   const [reduceTo250kTriangles, setReduceTo250kTriangles] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
-  const [editorOpen, setEditorOpen] = useState(false);
-  const [editorHeightmap, setEditorHeightmap] = useState<string | null>(null);
-  const [editorColorMap, setEditorColorMap] = useState<string | null>(null);
   const [multicolorEnabled, setMulticolorEnabled] = useState(false);
   const [colorCount, setColorCount] = useState(4);
   const [sourceColors, setSourceColors] = useState(["#111827", "#F5F5F4", "#22C55E", "#F59E0B"]);
@@ -249,9 +243,6 @@ export function App() {
     setProfile(selected.suggestedProfile);
     setProcessingMode(selected.suggestedProfile === "logo" ? "vector" : "depth");
     setResult(null);
-    setEditorOpen(false);
-    setEditorHeightmap(null);
-    setEditorColorMap(null);
     setUploadStatus(`${selected.width} × ${selected.height} Pixel geladen · Profil „${selected.suggestedProfile === "logo" ? "Logo" : "Foto"}“ empfohlen.`);
   }
 
@@ -290,7 +281,7 @@ export function App() {
         sideColorIndex: multicolorEnabled ? sideColorIndex : 0
       };
       let currentResolution = effectiveResolution;
-      let next = await window.desktop.createRelief(jobId, file.path, request, editorHeightmap ?? undefined, editorColorMap ?? undefined);
+      let next = await window.desktop.createRelief(jobId, file.path, request);
       for (let attempt = 0; next && reduceTo250kTriangles && next.triangleCount > 250_000 && attempt < 3; attempt += 1) {
         const reducedResolution = Math.max(64, Math.floor(currentResolution * Math.sqrt(235_000 / next.triangleCount)));
         if (reducedResolution >= currentResolution) break;
@@ -303,7 +294,7 @@ export function App() {
         next = await window.desktop.createRelief(jobId, file.path, {
           ...request,
           resolution: currentResolution
-        }, editorHeightmap ?? undefined, editorColorMap ?? undefined);
+        });
       }
       if (next) {
         setResult(next);
@@ -351,9 +342,7 @@ export function App() {
         multicolorEnabled, colorCount, sourceColors, colors, sideColorIndex,
         includeLogoBackground, optimizeForStandardNozzle
         ,reduceTo250kTriangles
-      },
-      editorHeightmap,
-      editorColorMap
+      }
     };
   }
 
@@ -382,8 +371,7 @@ export function App() {
       setSourceColors(settings.sourceColors); setColors(settings.colors); setSideColorIndex(settings.sideColorIndex);
       setIncludeLogoBackground(settings.includeLogoBackground); setOptimizeForStandardNozzle(settings.optimizeForStandardNozzle);
       setReduceTo250kTriangles(settings.reduceTo250kTriangles ?? false);
-      setEditorHeightmap(loaded.editorHeightmap); setEditorColorMap(loaded.editorColorMap);
-      setResult(null); setEditorOpen(false); setFileError(null); setUploadStatus("Projekt vollständig wiederhergestellt.");
+      setResult(null); setFileError(null); setUploadStatus("Projekt vollständig wiederhergestellt.");
     } catch (error) {
       setFileError(error instanceof Error ? error.message : "Das Projekt konnte nicht geöffnet werden.");
     }
@@ -400,20 +388,13 @@ export function App() {
     await window.desktop.cancelRelief(jobId);
   }
 
-  const updateEditorHeightmap = useCallback((dataUrl: string | null) => {
-    setEditorHeightmap(dataUrl);
-    setResult(null);
-  }, []);
   function returnToToolSelection() {
-    const hasProgress = Boolean(file || result || editorHeightmap || editorColorMap);
+    const hasProgress = Boolean(file || result);
     if (hasProgress && !window.confirm("Aktuellen Studio-Stand verwerfen?\n\nBild, Einstellungen, Farbauswahl und noch nicht exportierte Änderungen gehen dabei verloren.")) return;
     setStudioTool("home");
     setFile(null);
     setPreview(null);
     setResult(null);
-    setEditorOpen(false);
-    setEditorHeightmap(null);
-    setEditorColorMap(null);
   }
 
   if (legalPage) {
@@ -542,22 +523,6 @@ export function App() {
               <SlicerAnalysisCard result={result} />
             </>}
             </div>
-            {file && !editorOpen && (
-              <button className={editorHeightmap ? "editor-launch has-tooltip active" : "editor-launch has-tooltip"} onClick={() => setEditorOpen(true)}>
-                <Layers3 /> {editorHeightmap ? "Flächenkorrekturen weiter bearbeiten" : "Motivbereiche manuell korrigieren"}
-                {editorHeightmap && <span>Aktiv</span>}
-                <SettingTooltip text={"Öffnet den Flächeneditor für gezielte Höhenkorrekturen.\nBeispiel: Rollen im Wappen auswählen und unabhängig vom Hintergrund anheben."} />
-              </button>
-            )}
-            {file && preview && editorOpen && (
-              <RegionEditor
-                imageUrl={preview}
-                initialHeightmapUrl={editorHeightmap ?? result?.heightmapDataUrl}
-                reliefMm={reliefMm}
-                onHeightmapChange={updateEditorHeightmap}
-                onClose={() => setEditorOpen(false)}
-              />
-            )}
             <div className="workflow-row" aria-label="Verarbeitungsschritte">
               {[
                 studioTool === "text" ? "Schrift rendern" : "Bild analysieren",
@@ -734,7 +699,7 @@ export function App() {
 function InfoView({ version }: { version: string }) {
   const technologies = [
     ["Desktop-App", "Electron", "Fenster, sichere IPC-Brücke, Dateien und lokale Prozesse", "MIT"],
-    ["Oberfläche", "React · TypeScript · Vite", "Studio, Editor und Zustandsverwaltung", "MIT"],
+    ["Oberfläche", "React · TypeScript · Vite", "Studio, Vorschau und Zustandsverwaltung", "MIT"],
     ["3D-Vorschau", "Three.js · React Three Fiber · Drei", "Dreh- und zoombare Mesh-Vorschau", "MIT"],
     ["Bildverarbeitung", "Sharp", "Rasterung, Masken, Höhenkarten und Farbanalyse", "Apache-2.0"],
     ["Lokale Foto-Tiefe", "Depth Anything V2 Small · Core ML", "Monokulare Tiefenschätzung auf Apple Silicon", "Apache-2.0"],

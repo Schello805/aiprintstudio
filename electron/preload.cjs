@@ -21,7 +21,7 @@ contextBridge.exposeInMainWorld("desktop", Object.freeze({
     ipcRenderer.on("ai3d:progress", listener);
     return () => ipcRenderer.removeListener("ai3d:progress", listener);
   },
-  createRelief: (jobId, imagePath, options, editorHeightmapDataUrl, editorColorMapDataUrl) => ipcRenderer.invoke("relief:create", jobId, imagePath, options, editorHeightmapDataUrl, editorColorMapDataUrl),
+  createRelief: (jobId, imagePath, options) => ipcRenderer.invoke("relief:create", jobId, imagePath, options),
   cancelRelief: (jobId) => ipcRenderer.invoke("relief:cancel", jobId),
   onReliefProgress: (callback) => {
     const listener = (_event, jobId, progress) => callback(jobId, progress);

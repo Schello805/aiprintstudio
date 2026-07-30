@@ -88,8 +88,6 @@ export async function createRelief(
   outputDirectory: string,
   requested: Partial<ReliefOptions> = {},
   depthMapPath?: string,
-  editorHeightmap = false,
-  editorColorMapPath?: string,
   onProgress: (update: ReliefProgress) => void = () => undefined
 ): Promise<ReliefResult> {
   onProgress({ phase: "Bild prüfen", detail: "Datei und Abmessungen werden validiert …", progress: 4 });
@@ -153,7 +151,10 @@ export async function createRelief(
     : hasTransparency || preserveThinVectorStrokes
       ? rawSubjectPixels
     : cleanSubjectPixelMask(rawSubjectPixels, gridWidth, gridHeight);
-  const cellMask = buildCellMask(subjectPixels, gridWidth, gridHeight, hasTransparency ? 1 : 2);
+  // Ein einzelner belegter Eckpunkt erzeugte rund um transparente Schrift
+  // eine zusätzliche Zellreihe, die im Slicer wie ein Brim wirkte. Mindestens
+  // zwei belegte Eckpunkte halten die Kontur eng am tatsächlichen Schriftzug.
+  const cellMask = buildCellMask(subjectPixels, gridWidth, gridHeight, 2);
   const heightMm = options.widthMm * gridHeight / gridWidth;
   const profile = profileSettings(options.profile);
   const activeMode = options.processingMode === "wordmark"
@@ -166,13 +167,6 @@ export async function createRelief(
     rawLevels = useWordmarkMask && options.includeBackground && wordmarkPixels
       ? wordmarkPixels.map((occupied) => Number(options.invert ? !occupied : occupied))
       : buildVectorLevels(rgba, subjectPixels, gridWidth, gridHeight, options.invert);
-  } else if (editorHeightmap && depthMapPath) {
-    const { data } = await sharp(depthMapPath)
-      .resize(gridWidth, gridHeight, { fit: "fill" })
-      .grayscale()
-      .raw()
-      .toBuffer({ resolveWithObject: true });
-    rawLevels = Array.from(data, (value) => value / 255);
   } else {
     const source = depthMapPath ? sharp(depthMapPath) : prepared.clone().flatten({ background: "#ffffff" }).grayscale();
     const { data } = await source
@@ -217,14 +211,14 @@ export async function createRelief(
       / Math.max(1, subjectPixels.length);
     if (options.profile === "logo" && !options.includeBackground && (useWordmarkMask || subjectCoverage < 0.42)) flatVectorSurface = true;
   }
-  const smoothed = editorHeightmap || (useWordmarkMask && options.includeBackground)
+  const smoothed = useWordmarkMask && options.includeBackground
     ? rawLevels
     : smoothHeightField(rawLevels, gridWidth, gridHeight, activeMode === "vector" ? Math.min(1, options.smoothing) : options.smoothing);
   onProgress({ phase: "Höhen berechnen", detail: "Reliefstufen und Oberflächen werden aufgebaut …", progress: 38 });
-  const detailed = editorHeightmap ? smoothed : smoothed.map((value, index) =>
+  const detailed = smoothed.map((value, index) =>
     Math.max(0, Math.min(1, value + (rawLevels[index] - value) * options.detail * profile.detail))
   );
-  const profiledLevels = !editorHeightmap && profile.steps ? detailed.map((value) => Math.round(value * profile.steps) / profile.steps) : detailed;
+  const profiledLevels = profile.steps ? detailed.map((value) => Math.round(value * profile.steps) / profile.steps) : detailed;
   // Eine flache Konturzone verhindert, dass antialiaste Randpixel als hohe,
   // sägezahnartige Außenwand im Mesh erscheinen.
   const levels = flatVectorSurface
@@ -249,7 +243,7 @@ export async function createRelief(
       }
     }
   }
-  const steppedLogo = Boolean(useWordmarkMask && options.includeBackground && wordmarkPixels && !editorHeightmap);
+  const steppedLogo = Boolean(useWordmarkMask && options.includeBackground && wordmarkPixels);
   const steppedCellHeights = steppedLogo
     ? flattenSteppedOuterRim(buildBinaryCellHeights(heights, gridWidth, gridHeight), cellMask, gridWidth, gridHeight)
     : undefined;
@@ -257,20 +251,10 @@ export async function createRelief(
     ? buildSteppedCellMesh(gridWidth, gridHeight, options.widthMm, heightMm, steppedCellHeights, cellMask)
     : buildWatertightHeightMesh(gridWidth, gridHeight, options.widthMm, heightMm, heights, cellMask);
   onProgress({ phase: "Mesh schließen", detail: "Boden, Außenwände und Übergänge werden verbunden …", progress: 58 });
-  let editorColorAssignments: Buffer | undefined;
-  if (editorColorMapPath) {
-    const { data } = await sharp(editorColorMapPath)
-      .resize(gridWidth, gridHeight, { fit: "fill", kernel: "nearest" })
-      .grayscale()
-      .raw()
-      .toBuffer({ resolveWithObject: true });
-    editorColorAssignments = data;
-  }
   const detectedColorAssignments = options.colors.length
     ? buildColorCellAssignments(
       rgba, cellMask, gridWidth, gridHeight,
-      options.sourceColors.length === options.colors.length ? options.sourceColors : options.colors,
-      editorColorAssignments
+      options.sourceColors.length === options.colors.length ? options.sourceColors : options.colors
     )
     : undefined;
   const colorAssignments = detectedColorAssignments
@@ -681,20 +665,12 @@ function buildColorCellAssignments(
   cellMask: boolean[],
   width: number,
   height: number,
-  colors: string[],
-  editorAssignments?: Buffer
+  colors: string[]
 ): number[] {
   const palette = colors.map(parseHexColor);
   return Array.from({ length: (width - 1) * (height - 1) }, (_, cell) => {
     if (!cellMask[cell]) return -1;
     const x = cell % (width - 1), y = Math.floor(cell / (width - 1));
-    if (editorAssignments) {
-      const samples = [y * width + x, y * width + x + 1, (y + 1) * width + x, (y + 1) * width + x + 1];
-      const explicit = samples.map((sample) => editorAssignments[sample]).filter((value) => value < colors.length);
-      if (explicit.length) return explicit.sort((a, b) =>
-        explicit.filter((value) => value === b).length - explicit.filter((value) => value === a).length
-      )[0];
-    }
     const pixel = y * width + x;
     let red = 0, green = 0, blue = 0, weight = 0;
     for (const sample of [pixel, pixel + 1, pixel + width, pixel + width + 1]) {

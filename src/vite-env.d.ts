@@ -110,7 +110,7 @@ interface Window {
       sourceColors: string[];
       colors: string[];
       sideColorIndex: number;
-    }, editorHeightmapDataUrl?: string, editorColorMapDataUrl?: string) => Promise<{
+    }) => Promise<{
       stlPath: string;
       threeMfPath: string;
       vertexCount: number;

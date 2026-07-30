@@ -778,26 +778,17 @@ app.whenReady().then(async () => {
     reliefJobs.delete(jobId);
     return true;
   });
-  ipcMain.handle("relief:create", async (event, jobId: string, imagePath: string, options: Partial<ReliefOptions>, editorHeightmapDataUrl?: string, editorColorMapDataUrl?: string) => {
+  ipcMain.handle("relief:create", async (event, jobId: string, imagePath: string, options: Partial<ReliefOptions>) => {
     if (!/^[a-f0-9-]{20,64}$/i.test(jobId)) throw new Error("Ungültige Job-ID.");
     if (reliefJobs.has(jobId)) throw new Error("Dieser Relief-Job läuft bereits.");
     const outputDirectory = join(app.getPath("downloads"), "AI Print Studio");
     let depthMap: Awaited<ReturnType<typeof createDepthMap>> | undefined;
-    let editorDirectory: string | undefined;
     const controller = new AbortController();
     const job: { controller: AbortController; worker?: Worker } = { controller };
     reliefJobs.set(jobId, job);
     try {
       let mapPath: string | undefined;
-      if (editorHeightmapDataUrl) {
-        const match = /^data:image\/png;base64,([A-Za-z0-9+/=]+)$/.exec(editorHeightmapDataUrl);
-        if (!match) throw new Error("Die bearbeitete Höhenkarte besitzt ein ungültiges Format.");
-        const bytes = Buffer.from(match[1], "base64");
-        if (!bytes.length || bytes.length > 12 * 1024 * 1024) throw new Error("Die bearbeitete Höhenkarte ist leer oder zu groß.");
-        editorDirectory = await mkdtemp(join(tmpdir(), "ai-print-editor-"));
-        mapPath = join(editorDirectory, "heightmap.png");
-        await writeFile(mapPath, bytes);
-      } else if (options.processingMode === "depth") {
+      if (options.processingMode === "depth") {
         if (!event.sender.isDestroyed()) {
           event.sender.send("relief:progress", jobId, {
             phase: "KI-Tiefe analysieren",
@@ -809,17 +800,6 @@ app.whenReady().then(async () => {
         mapPath = depthMap.path;
       }
       if (controller.signal.aborted) throw new Error("Vorgang abgebrochen.");
-      let colorMapPath: string | undefined;
-      if (editorColorMapDataUrl) {
-        const match = /^data:image\/png;base64,([A-Za-z0-9+/=]+)$/.exec(editorColorMapDataUrl);
-        if (!match) throw new Error("Die bearbeitete Farbkarte besitzt ein ungültiges Format.");
-        const bytes = Buffer.from(match[1], "base64");
-        if (!bytes.length || bytes.length > 12 * 1024 * 1024) throw new Error("Die bearbeitete Farbkarte ist leer oder zu groß.");
-        if (!editorDirectory) editorDirectory = await mkdtemp(join(tmpdir(), "ai-print-editor-"));
-        colorMapPath = join(editorDirectory, "colormap.png");
-        await writeFile(colorMapPath, bytes);
-      }
-      const effectiveOptions = editorHeightmapDataUrl ? { ...options, processingMode: "height" as const } : options;
       const worker = new Worker(new URL("./relief-worker.js", import.meta.url));
       job.worker = worker;
       return await new Promise<ReliefResult>((resolve, reject) => {
@@ -855,10 +835,8 @@ app.whenReady().then(async () => {
         worker.postMessage({
           imagePath,
           outputDirectory,
-          options: effectiveOptions,
-          depthMapPath: mapPath,
-          editorHeightmap: Boolean(editorHeightmapDataUrl),
-          editorColorMapPath: colorMapPath
+          options,
+          depthMapPath: mapPath
         });
       });
     } catch (error) {
@@ -868,7 +846,6 @@ app.whenReady().then(async () => {
       if (reliefJobs.get(jobId) === job) reliefJobs.delete(jobId);
       await job.worker?.terminate();
       await depthMap?.cleanup();
-      if (editorDirectory) await rm(editorDirectory, { recursive: true, force: true });
     }
   });
   ipcMain.handle("shell:showItem", (_event, path: string) => shell.showItemInFolder(path));

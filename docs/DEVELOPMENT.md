@@ -40,8 +40,8 @@ macOS-Version des jeweiligen Build-Macs zur Mindestversion des Releases.
 
 | Pfad | Inhalt |
 | --- | --- |
-| `src/` | React-Oberfläche, 3D-Vorschau und Flächeneditor |
-| `src/domain/` | testbare Renderer-Domänenlogik wie Palette und Auswahl |
+| `src/` | React-Oberfläche und 3D-Vorschau |
+| `src/domain/` | testbare Renderer-Domänenlogik wie Bildprüfung und Palette |
 | `electron/main.ts` | Fenster, IPC, Dateien, Einstellungen, Updates und OpenAI |
 | `electron/relief.ts` | Relief-, Farb-, STL- und 3MF-Pipeline |
 | `electron/cad.ts` | validierter CAD-Plan und lokale Binär-STL-Erzeugung |

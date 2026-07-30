@@ -2,6 +2,11 @@
 
 ## Unveröffentlicht
 
+- Der manuelle Flächeneditor wurde vollständig aus Oberfläche, Projektformat,
+  IPC-Brücke, Worker und Relief-Engine entfernt.
+- Transparente Schriftkonturen erzeugen keine zusätzliche äußere Zellreihe
+  mehr. Damit enthält der Textkörper keinen modellierten Rand, der im Slicer
+  wie ein Brim erscheint.
 - Flächen werden im Dickeneditor jetzt direkt am 3D-Modell angeklickt. Die
   separate 2D-Auswahlansicht wurde entfernt.
 - Ausgewählte 3D-Flächen leuchten grün; Umschalt-Klick ermöglicht weiterhin

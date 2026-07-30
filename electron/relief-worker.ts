@@ -6,8 +6,6 @@ type ReliefWorkerRequest = {
   outputDirectory: string;
   options: Partial<ReliefOptions>;
   depthMapPath?: string;
-  editorHeightmap: boolean;
-  editorColorMapPath?: string;
 };
 
 if (!parentPort) throw new Error("Relief-Worker wurde ohne Parent-Port gestartet.");
@@ -19,8 +17,6 @@ parentPort.once("message", async (request: ReliefWorkerRequest) => {
       request.outputDirectory,
       request.options,
       request.depthMapPath,
-      request.editorHeightmap,
-      request.editorColorMapPath,
       (progress) => parentPort?.postMessage({ type: "progress", progress })
     );
     parentPort?.postMessage({ type: "result", result });

@@ -9,14 +9,12 @@
   API-Kostenanzeige; Modellwahl zwischen Sol, Terra und Luna
 - datensparsame Prompt-zu-3D-Diagnose mit letzter Phase, Systemursache und
   lokalem Log
-- Flächeneditor mit Auswahl-, Höhen-, Glättungs- und Farbwerkzeugen
 - mehrfarbiger 3MF-Export als slicer-kompatibles Assembly mit einheitlichen
   Seiten- und Übergangskanten
 - SVG-Import, Druckscore, Verlauf und Updateprüfung
 - `.aips`-Projektdateien mit eingebetteter Quelle und Bearbeitungsstand
 - automatische Druckreparatur für 0,4-mm-Düsen
 - lokale Schicht-, Zeit- und Materialschätzung
-- freier Höhen-/Farbpinsel und Radierer im Flächeneditor
 - bedarfsgesteuerte Reduzierung auf höchstens 250.000 Dreiecke
 
 ## Als Nächstes: präzisere Slicer- und Druckerprofile
@@ -26,9 +24,8 @@
 - druckerspezifische Mindestwerte für FDM und Resin
 - echte Werkzeugpfade und Zeitmodelle über eine optionale lokale Slicer-Engine
 
-Diese Prüfungen sollen unmittelbar im Flächeneditor erscheinen, damit eine
-problematische Auswahl direkt angehoben, verbreitert, geglättet oder auf die
-Grundfläche gesetzt werden kann.
+Diese Prüfungen sollen direkt an der erzeugten Vorschau verständlich erklärt
+und über eine automatische Reparatur korrigiert werden.
 
 ## Weitere sinnvolle Ausbaustufen
 

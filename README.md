@@ -65,16 +65,6 @@ Für Logos und Wappen erkennt die App Motivflächen und Höhenebenen, glättet d
 Außenkontur und hält den Tragkörper geschlossen. Für Fotos steht Depth Anything
 V2 Small lokal über Apple Core ML zur Verfügung.
 
-Der Flächeneditor erlaubt Mehrfachauswahl, angrenzendes Erweitern oder
-Reduzieren, Auswahl ähnlicher Farben, Höhenkorrekturen, Glättung,
-Kantenabrundung und manuelle AMS-Farbzuweisung. Änderungen erscheinen in der
-Live-3D-Vorschau und werden beim nächsten Export übernommen.
-
-Zusätzlich besitzt er Pinsel, Radierer und eine direkte Höhen- und
-AMS-Farbzuweisung. Damit lassen sich Bereiche frei nachzeichnen, entfernen,
-verbinden oder trennen, ohne zuerst eine perfekt erkannte Bildfläche treffen zu
-müssen.
-
 Nach einer Berechnung zeigt die App eine lokale Schichtsimulation mit
 Schichtzahl, Materialmenge, grober Druckzeit und Farbwechseln. Diese Angaben
 sind geometriebasierte Schätzwerte; verbindlich bleibt das konkrete
@@ -133,10 +123,9 @@ Nutzung des eigenen OpenAI-Kontos.
 1. Im Studio **Bild zu 3D** auswählen und ein PNG-, JPG-, WEBP- oder SVG-Bild öffnen.
 2. Automatik verwenden oder gezielt **Logo & Wappen** beziehungsweise
    **Foto & 3D-Tiefe** wählen.
-3. Optional **Motivbereiche manuell korrigieren** öffnen und Flächen bearbeiten.
-4. Für Mehrfarbdruck **AMS-Farbdruck** aktivieren und Filamentfarben festlegen.
-5. **Relief erstellen** anklicken.
-6. STL oder 3MF unter `Downloads/AI Print Studio` im Slicer öffnen.
+3. Für Mehrfarbdruck **AMS-Farbdruck** aktivieren und Filamentfarben festlegen.
+4. **Relief erstellen** anklicken.
+5. STL oder 3MF unter `Downloads/AI Print Studio` im Slicer öffnen.
 
 Für Logos mit Text ist die Optimierung für eine **0,4-mm-Düse** standardmäßig
 aktiv. Feine Stege werden dabei auf mindestens 0,8 mm verbreitert. Der Schalter
@@ -224,7 +213,7 @@ Repository stammt.
 | Bereich | Technologie | Zweck |
 | --- | --- | --- |
 | Desktop | Electron | macOS-Fenster, Dateisystem und sichere IPC-Brücke |
-| Oberfläche | React, TypeScript, Vite | Studio, Editor und Einstellungen |
+| Oberfläche | React, TypeScript, Vite | Studio, Vorschau und Einstellungen |
 | 3D-Vorschau | Three.js, React Three Fiber | interaktive Mesh- und Farbvorschau |
 | Bildpipeline | Sharp, TypeScript | Masken, Höhenkarten, Farben und Meshaufbau |
 | Native Worker | Swift, Core ML, MLX | lokale Tiefe und optionale komplexe Formrekonstruktion |
