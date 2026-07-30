@@ -14,9 +14,9 @@ import { SettingTooltip } from "./SettingTooltip";
 const editorTooltips = {
   undo: "Nimmt die letzte Höhenänderung zurück.\nBeispiel: Ein versehentlich angehobener Bereich erhält wieder seine vorherige Höhe.",
   redo: "Stellt die zuletzt zurückgenommene Höhenänderung wieder her.",
-  height: "Legt die absolute Reliefhöhe der markierten Flächen fest.\nBeispiel: 3,0 mm hebt Rollen deutlich über die Grundfläche.",
-  higher: "Hebt die Auswahl um eine kleine Höhenstufe an.\nBeispiel: Eine Kontur schrittweise stärker hervorheben.",
-  lower: "Senkt die Auswahl um eine kleine Höhenstufe ab.\nBeispiel: Einen zu dominanten Bereich zurücknehmen."
+  height: "Bestimmt die Materialdicke der im 3D-Modell ausgewählten Fläche.\nBeispiel: Ein einzelner Buchstabe wird 3,0 mm dick.",
+  higher: "Macht ausschließlich die ausgewählte Modellfläche dicker.",
+  lower: "Macht ausschließlich die ausgewählte Modellfläche dünner."
 };
 
 type EditorData = {
@@ -37,7 +37,6 @@ export function RegionEditor({
   onHeightmapChange: (dataUrl: string | null) => void;
   onClose: () => void;
 }) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
   const sliderStartRef = useRef<Uint8ClampedArray | null>(null);
   // Die beim Öffnen sichtbare, bereits berechnete Form ist die verbindliche
   // Ausgangsbasis. Änderungen, die wir nach oben melden, dürfen den Editor
@@ -117,30 +116,6 @@ export function RegionEditor({
     onHeightmapChange(canvas.toDataURL("image/png"));
   }, [data, levels, onHeightmapChange]);
 
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas || !data) return;
-    canvas.width = data.segmentation.width; canvas.height = data.segmentation.height;
-    const context = canvas.getContext("2d");
-    if (!context) return;
-    const display = data.source.slice();
-    for (let index = 0; index < data.segmentation.regionIds.length; index += 1) {
-      if (levels) {
-        const offset = index * 4;
-        display[offset] = Math.round(display[offset] * 0.82 + levels[index] * 0.18);
-        display[offset + 1] = Math.round(display[offset + 1] * 0.82 + levels[index] * 0.18);
-        display[offset + 2] = Math.round(display[offset + 2] * 0.82 + levels[index] * 0.18);
-      }
-      if (!selection.has(data.segmentation.regionIds[index])) continue;
-      const offset = index * 4;
-      display[offset] = Math.round(display[offset] * 0.2 + 165 * 0.8);
-      display[offset + 1] = Math.round(display[offset + 1] * 0.2 + 243 * 0.8);
-      display[offset + 2] = Math.round(display[offset + 2] * 0.2 + 109 * 0.8);
-      display[offset + 3] = 255;
-    }
-    context.putImageData(new ImageData(display, canvas.width, canvas.height), 0, 0);
-  }, [data, levels, selection]);
-
   const commitLevels = (next: Uint8ClampedArray) => {
     if (!levels) return;
     setUndoStack((current) => [...current.slice(-29), levels.slice()]);
@@ -186,21 +161,9 @@ export function RegionEditor({
     setUndoStack((current) => [...current, levels.slice()]);
     setLevels(next);
   };
-  const pointerPixel = (event: React.PointerEvent<HTMLCanvasElement>) => {
-    if (!data || !canvasRef.current) return;
-    const bounds = canvasRef.current.getBoundingClientRect();
-    const x = Math.min(data.segmentation.width - 1, Math.max(0, Math.floor((event.clientX - bounds.left) / bounds.width * data.segmentation.width)));
-    const y = Math.min(data.segmentation.height - 1, Math.max(0, Math.floor((event.clientY - bounds.top) / bounds.height * data.segmentation.height)));
-    return { x, y };
-  };
-  const handleCanvasDown = (event: React.PointerEvent<HTMLCanvasElement>) => {
-    if (!data || !levels) return;
-    const point = pointerPixel(event);
-    if (!point) return;
-    const { x, y } = point;
-    const id = data.segmentation.regionIds[y * data.segmentation.width + x];
+  const selectRegion = (id: number, additive: boolean) => {
     setSelection((current) => {
-      if (!event.shiftKey) return new Set([id]);
+      if (!additive) return new Set([id]);
       const next = new Set(current);
       if (next.has(id)) next.delete(id); else next.add(id);
       return next;
@@ -209,27 +172,24 @@ export function RegionEditor({
   return (
     <section className="region-editor" aria-label="Motivbereiche bearbeiten">
       <div className="region-editor-heading">
-        <div><span className="option-label">FLÄCHENEDITOR</span><strong>Erkannte Flächen anheben oder absenken</strong><p>Fläche links anklicken · Umschalt-Klick wählt mehrere Flächen.</p></div>
+        <div><span className="option-label">3D-DICKENEDITOR</span><strong>Ausgewählte Modellflächen dicker oder dünner machen</strong><p>Direkt im 3D-Modell anklicken · Umschalt-Klick wählt mehrere Flächen.</p></div>
         <div className="editor-history">
           <button className="has-tooltip" onClick={undo} disabled={!undoStack.length} aria-description={editorTooltips.undo}><Undo2 /><SettingTooltip text={editorTooltips.undo} /></button>
           <button className="has-tooltip" onClick={redo} disabled={!redoStack.length} aria-description={editorTooltips.redo}><Redo2 /><SettingTooltip text={editorTooltips.redo} /></button>
           <button onClick={onClose} title="Editor schließen"><X /></button>
         </div>
       </div>
-      <div className="region-editor-grid">
-        <div className="region-canvas-panel">
-          <span className="panel-label">2D-AUSWAHL · GRÜN MARKIERT</span>
-          {data ? <canvas
-            ref={canvasRef}
-            className="editor-canvas tool-select"
-            onPointerDown={handleCanvasDown}
-          /> : <div className="editor-loading">Flächen werden erkannt …</div>}
-        </div>
-        <EditorReliefPreview segmentation={data?.segmentation ?? null} source={data?.source ?? null} levels={levels} reliefMm={reliefMm} />
-      </div>
+      <EditorReliefPreview
+        segmentation={data?.segmentation ?? null}
+        source={data?.source ?? null}
+        levels={levels}
+        reliefMm={reliefMm}
+        selection={selection}
+        onSelectRegion={selectRegion}
+      />
       <div className="height-toolbar">
         <label className="has-tooltip">
-          <span>HÖHE DER AUSWAHL</span>
+          <span>DICKE DER AUSWAHL</span>
           <input
             className="height-range"
             type="range"
@@ -244,7 +204,7 @@ export function RegionEditor({
             onPointerCancel={endSliderDrag}
             onKeyDown={beginSliderDrag}
             onKeyUp={endSliderDrag}
-            aria-label="Höhe der ausgewählten Fläche"
+            aria-label="Dicke der ausgewählten Fläche"
           />
           <span className="height-value">
             <input
@@ -255,18 +215,18 @@ export function RegionEditor({
               value={(currentLevel / 255 * reliefMm).toFixed(1)}
               disabled={!selection.size}
               onChange={(event) => setLevel(Number(event.target.value) / reliefMm * 255)}
-              aria-label="Höhe in Millimetern"
+              aria-label="Dicke in Millimetern"
             />
             mm
           </span>
           <SettingTooltip text={editorTooltips.height} />
         </label>
-        <button className="has-tooltip" disabled={!selection.size} onClick={() => setLevel(currentLevel + 20)}><ChevronUp /> Höher<SettingTooltip text={editorTooltips.higher} /></button>
-        <button className="has-tooltip" disabled={!selection.size} onClick={() => setLevel(currentLevel - 20)}><ChevronDown /> Tiefer<SettingTooltip text={editorTooltips.lower} /></button>
+        <button className="has-tooltip" disabled={!selection.size} onClick={() => setLevel(currentLevel + 20)}><ChevronUp /> Dicker<SettingTooltip text={editorTooltips.higher} /></button>
+        <button className="has-tooltip" disabled={!selection.size} onClick={() => setLevel(currentLevel - 20)}><ChevronDown /> Dünner<SettingTooltip text={editorTooltips.lower} /></button>
         <button disabled={!selection.size} onClick={() => setSelection(new Set())}><X /> Auswahl aufheben</button>
       </div>
       <div className="editor-status">
-        <span>{selection.size ? selection.size <= 20 ? `✓ ${selection.size} Fläche${selection.size === 1 ? "" : "n"} grün ausgewählt` : "✓ Mehrere angrenzende Teilflächen grün ausgewählt" : "Klicke links im Bild auf eine Fläche – erst danach wird der Höhenregler aktiv."}</span>
+        <span>{selection.size ? `✓ ${selection.size} Modellfläche${selection.size === 1 ? "" : "n"} im 3D-Modell grün ausgewählt` : "Klicke im 3D-Modell auf die Fläche, deren Dicke du ändern möchtest."}</span>
         <strong>Danach unten „Relief erstellen“ klicken, um das Modell neu zu berechnen.</strong>
       </div>
     </section>
@@ -277,16 +237,21 @@ function EditorReliefPreview({
   segmentation,
   source,
   levels,
-  reliefMm
+  reliefMm,
+  selection,
+  onSelectRegion
 }: {
   segmentation: Segmentation | null;
   source: Uint8ClampedArray | null;
   levels: Uint8ClampedArray | null;
   reliefMm: number;
+  selection: ReadonlySet<number>;
+  onSelectRegion: (regionId: number, additive: boolean) => void;
 }) {
   const preview = useMemo(() => {
     const next = new THREE.BufferGeometry();
-    if (!segmentation || !source || !levels) return { geometry: next, extent: 92 };
+    const selected = new THREE.BufferGeometry();
+    if (!segmentation || !source || !levels) return { geometry: next, selectionGeometry: selected, faceRegions: [] as number[], extent: 92 };
     // 90 Abtastpunkte waren für kleine Logos ausreichend, ließen aber gerade
     // Schriftkanten im Editor sichtbar ausfransen. 320 bleibt auf Apple
     // Silicon interaktiv und bewahrt Rundungen sowie diagonale Konturen.
@@ -294,7 +259,7 @@ function EditorReliefPreview({
     const stride = Math.max(1, Math.ceil(Math.max(segmentation.width, segmentation.height) / previewResolution));
     const columns = Math.ceil((segmentation.width - 1) / stride) + 1;
     const rows = Math.ceil((segmentation.height - 1) / stride) + 1;
-    const positions: number[] = [], indices: number[] = [];
+    const positions: number[] = [], indices: number[] = [], selectedIndices: number[] = [], faceRegions: number[] = [];
     for (let y = 0; y < rows; y += 1) for (let x = 0; x < columns; x += 1) {
       const sourceX = Math.min(segmentation.width - 1, x * stride);
       const sourceY = Math.min(segmentation.height - 1, y * stride);
@@ -310,28 +275,60 @@ function EditorReliefPreview({
         const sourceX = Math.min(segmentation.width - 1, column * stride);
         const sourceY = Math.min(segmentation.height - 1, row * stride);
         const index = sourceY * segmentation.width + sourceX;
-        return source[index * 4 + 3] >= 24 && levels[index] > 1;
+        return { index, occupied: source[index * 4 + 3] >= 24 && levels[index] > 1 };
       };
-      if (![sample(x, y), sample(x + 1, y), sample(x, y + 1), sample(x + 1, y + 1)].some(Boolean)) continue;
+      const samples = [sample(x, y), sample(x + 1, y), sample(x, y + 1), sample(x + 1, y + 1)];
+      const occupied = samples.filter((entry) => entry.occupied);
+      if (!occupied.length) continue;
+      const regionId = segmentation.regionIds[occupied.sort((first, second) => levels[second.index] - levels[first.index])[0].index];
       indices.push(a, d, b, a, c, d);
+      faceRegions.push(regionId, regionId);
+      if (selection.has(regionId)) selectedIndices.push(a, d, b, a, c, d);
     }
     next.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
     next.setIndex(indices);
     next.computeVertexNormals();
     next.computeBoundingSphere();
-    return { geometry: next, extent: Math.max(columns, rows) };
-  }, [levels, reliefMm, segmentation, source]);
-  useEffect(() => () => preview.geometry.dispose(), [preview]);
+    selected.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+    selected.setIndex(selectedIndices);
+    selected.computeVertexNormals();
+    return { geometry: next, selectionGeometry: selected, faceRegions, extent: Math.max(columns, rows) };
+  }, [levels, reliefMm, segmentation, selection, source]);
+  useEffect(() => () => {
+    preview.geometry.dispose();
+    preview.selectionGeometry.dispose();
+  }, [preview]);
   const size = preview.extent;
   return (
-    <div className="editor-preview-panel">
-      <span className="panel-label">LIVE-3D-VORSCHAU</span>
+    <div className="editor-preview-panel interactive">
+      <span className="panel-label">3D-AUSWAHL · FLÄCHE ANKLICKEN</span>
       <Canvas dpr={[1, 2]} gl={{ antialias: true, powerPreference: "high-performance" }} camera={{ position: [size * 0.64, size * 0.5, size * 0.88], fov: 38 }}>
         <ambientLight intensity={1.45} />
         <directionalLight position={[size * 0.35, size * 0.75, size * 0.5]} intensity={3.4} />
         <directionalLight position={[-size * 0.4, size * 0.2, -size * 0.2]} intensity={0.7} />
-        <mesh geometry={preview.geometry}>
+        <mesh
+          geometry={preview.geometry}
+          onClick={(event) => {
+            event.stopPropagation();
+            if (event.faceIndex == null) return;
+            const regionId = preview.faceRegions[event.faceIndex];
+            if (regionId === undefined) return;
+            onSelectRegion(regionId, event.nativeEvent.shiftKey);
+          }}
+        >
           <meshStandardMaterial color="#c8f59d" roughness={0.58} metalness={0.02} side={THREE.DoubleSide} flatShading={false} />
+        </mesh>
+        <mesh geometry={preview.selectionGeometry} raycast={() => null}>
+          <meshStandardMaterial
+            color="#74ff45"
+            emissive="#2a7a16"
+            emissiveIntensity={0.45}
+            roughness={0.5}
+            side={THREE.DoubleSide}
+            polygonOffset
+            polygonOffsetFactor={-2}
+            polygonOffsetUnits={-2}
+          />
         </mesh>
         <OrbitControls makeDefault enableDamping />
       </Canvas>

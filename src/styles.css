@@ -325,6 +325,8 @@ h1,h2,h3 { font-family:Manrope, sans-serif; margin:0; }
 .region-canvas-panel { display:grid; place-items:center; padding:10px; }
 .region-canvas-panel canvas { width:100%; height:100%; object-fit:contain; image-rendering:auto; cursor:crosshair; }
 .editor-preview-panel canvas { cursor:grab; }
+.editor-preview-panel.interactive { width:100%; height:360px; }
+.editor-preview-panel.interactive canvas { cursor:pointer; }
 .editor-loading { color:#7e887b; font-size:10px; }
 .height-toolbar { display:grid; grid-template-columns:minmax(240px,1fr) repeat(3,auto); gap:7px; align-items:end; margin-top:10px; }
 .print-checks { display:flex; flex-wrap:wrap; gap:5px; margin-top:7px; }

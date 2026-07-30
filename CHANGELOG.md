@@ -2,6 +2,12 @@
 
 ## Unveröffentlicht
 
+- Flächen werden im Dickeneditor jetzt direkt am 3D-Modell angeklickt. Die
+  separate 2D-Auswahlansicht wurde entfernt.
+- Ausgewählte 3D-Flächen leuchten grün; Umschalt-Klick ermöglicht weiterhin
+  eine gezielte Mehrfachauswahl.
+- Regler und Aktionen heißen nun eindeutig **Dicke**, **Dicker** und **Dünner**.
+  Verändert wird ausschließlich die Materialstärke der ausgewählten Fläche.
 - Der Flächeneditor ist bewusst auf seinen Kern reduziert: erkannte Fläche
   anklicken, Höhe einstellen, anheben oder absenken.
 - Pinsel, Radierer, Farbpinsel, Auswahl-Automatik, Verbinden/Trennen, Glätten
