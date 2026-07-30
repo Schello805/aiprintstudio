@@ -71,12 +71,12 @@ interface Window {
     } | null>;
     createAi3d: (prompt: string, existingPlan?: {
       title: string; widthMm: number; depthMm: number; heightMm: number;
-      primitives: Array<{ type: "box" | "cylinder" | "roof"; name: string; position: [number, number, number]; size: [number, number, number] }>;
+      primitives: Array<{ type: "box" | "cylinder" | "roof" | "leaf"; name: string; position: [number, number, number]; size: [number, number, number]; rotation?: [number, number, number] }>;
     }, model?: "gpt-5.6-sol" | "gpt-5.6-terra" | "gpt-5.6-luna") => Promise<{
       stlPath: string;
       plan: {
         title: string; widthMm: number; depthMm: number; heightMm: number;
-        primitives: Array<{ type: "box" | "cylinder" | "roof"; name: string; position: [number, number, number]; size: [number, number, number] }>;
+        primitives: Array<{ type: "box" | "cylinder" | "roof" | "leaf"; name: string; position: [number, number, number]; size: [number, number, number]; rotation?: [number, number, number] }>;
       };
       billing: {
         model: string;

@@ -9,7 +9,7 @@ CAD-Pläne und Mesh-Dateien bleiben standardmäßig auf dem eigenen Mac.
 
 [![Quality](https://github.com/Schello805/aiprintstudio/actions/workflows/quality.yml/badge.svg)](https://github.com/Schello805/aiprintstudio/actions/workflows/quality.yml)
 
-> Aktueller Stand: Version 0.21.9. Bild- und Schrift-Reliefs, mehrfarbige
+> Aktueller Stand: Version 0.22.0. Bild- und Schrift-Reliefs, mehrfarbige
 > AMS-3MF-Dateien sowie einfache, per OpenAI geplante und lokal konstruierte
 > Prompt-zu-3D-Modelle sind testbar. Die vollständige Rundum-Rekonstruktion aus
 > einem einzelnen Bild bleibt eine spätere Ausbaustufe.
@@ -94,10 +94,12 @@ Abmessungs-, Relief- und AMS-Werkzeuge wie bei Bild zu 3D zur Verfügung.
 ### Prompt zu 3D
 
 OpenAI wandelt eine Beschreibung in einen streng validierten, strukturierten
-CAD-Bauplan aus einfachen Körpern um. Die eigentliche Geometrie und die
+CAD-Bauplan aus druckbaren Körpern um. Neben Quadern, Zylindern und Dächern
+stehen geschwungene, verjüngte Blattkörper für Palmen, Blätter, Federn,
+Blüten und dekorative Silhouetten bereit. Die eigentliche Geometrie und die
 Binär-STL erzeugt AI Print Studio lokal. Dieser Workflow eignet sich für einfache
-konstruktive Objekte, nicht für organische Meshes auf dem Niveau spezialisierter
-Text-zu-3D-Dienste. Meshy wird nicht verwendet.
+konstruktive und stilisierte organische Objekte, nicht für fotorealistische
+Meshes auf dem Niveau spezialisierter Text-zu-3D-Dienste. Meshy wird nicht verwendet.
 
 Nach der ersten Erstellung erscheint der Bauplan als dreh- und zoombare
 3D-Vorschau. Folgeanweisungen wie „Füge unten links und rechts zwei Haustüren

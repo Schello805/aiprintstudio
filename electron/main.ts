@@ -296,12 +296,13 @@ async function createPrintableCadPlan(
   const primitiveSchema = {
     type: "object",
     additionalProperties: false,
-    required: ["type", "name", "position", "size"],
+    required: ["type", "name", "position", "size", "rotation"],
     properties: {
-      type: { type: "string", enum: ["box", "cylinder", "roof"] },
+      type: { type: "string", enum: ["box", "cylinder", "roof", "leaf"] },
       name: { type: "string" },
       position: { type: "array", minItems: 3, maxItems: 3, items: { type: "number" } },
-      size: { type: "array", minItems: 3, maxItems: 3, items: { type: "number", minimum: 1.2, maximum: 300 } }
+      size: { type: "array", minItems: 3, maxItems: 3, items: { type: "number", minimum: 1.2, maximum: 300 } },
+      rotation: { type: "array", minItems: 3, maxItems: 3, items: { type: "number", minimum: -360, maximum: 360 } }
     }
   };
   const planningInput = buildCadPlanningRequest(prompt, existingPlan);

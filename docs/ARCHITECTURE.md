@@ -23,7 +23,7 @@ Electron Main Process
   └── lokale 3D-Pipelines
         ├── Relief / Kontur / Höhenkarte
         ├── Flächen- und Farbeditor
-        ├── CAD-Körpergenerator
+        ├── CAD-Körpergenerator mit Quader-, Zylinder-, Dach- und Blattkörpern
         ├── Druckbarkeitsanalyse
         └── STL / 3MF
 ```

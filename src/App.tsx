@@ -1300,10 +1300,60 @@ function CadPrimitiveMesh({ primitive }: { primitive: CadPrimitive }) {
   if (primitive.type === "roof") {
     return <RoofMesh primitive={primitive} color={color} />;
   }
+  if (primitive.type === "leaf") {
+    return <LeafMesh primitive={primitive} color="#8fd58a" />;
+  }
   return <mesh position={[x + width / 2, z + height / 2, y + depth / 2]} castShadow receiveShadow>
     <boxGeometry args={[width, height, depth]} />
     <meshStandardMaterial color={color} roughness={0.72} metalness={0.01} />
   </mesh>;
+}
+
+function LeafMesh({ primitive, color }: { primitive: CadPrimitive; color: string }) {
+  const geometry = useMemo(() => {
+    const [length, width, thickness] = primitive.size;
+    const [px, py, pz] = primitive.position;
+    const rotation = primitive.rotation ?? [0, 0, 0];
+    const radians = rotation.map((angle) => angle * Math.PI / 180);
+    const segments = 18;
+    const positions: number[] = [];
+    const indices: number[] = [];
+    const transform = (point: [number, number, number]) => {
+      let [x, y, z] = point;
+      [y, z] = [y * Math.cos(radians[0]) - z * Math.sin(radians[0]), y * Math.sin(radians[0]) + z * Math.cos(radians[0])];
+      [x, z] = [x * Math.cos(radians[1]) + z * Math.sin(radians[1]), -x * Math.sin(radians[1]) + z * Math.cos(radians[1])];
+      [x, y] = [x * Math.cos(radians[2]) - y * Math.sin(radians[2]), x * Math.sin(radians[2]) + y * Math.cos(radians[2])];
+      positions.push(x + px, z + pz, y + py);
+    };
+    for (let index = 0; index <= segments; index += 1) {
+      const t = index / segments;
+      const taper = Math.pow(Math.sin(Math.PI * t), 0.72);
+      const halfWidth = Math.max(thickness * 0.35, width * 0.5 * taper);
+      const arch = Math.sin(Math.PI * t) * length * 0.12 - t * t * length * 0.08;
+      transform([length * t, -halfWidth, arch]);
+      transform([length * t, halfWidth, arch]);
+      transform([length * t, -halfWidth, arch + thickness]);
+      transform([length * t, halfWidth, arch + thickness]);
+    }
+    for (let index = 0; index < segments; index += 1) {
+      const current = index * 4, next = (index + 1) * 4;
+      indices.push(
+        current + 2, current + 3, next + 3, current + 2, next + 3, next + 2,
+        current, next + 1, current + 1, current, next, next + 1,
+        current, current + 2, next + 2, current, next + 2, next,
+        current + 1, next + 1, next + 3, current + 1, next + 3, current + 3
+      );
+    }
+    const end = segments * 4;
+    indices.push(0, 1, 3, 0, 3, 2, end, end + 3, end + 1, end, end + 2, end + 3);
+    const next = new THREE.BufferGeometry();
+    next.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+    next.setIndex(indices);
+    next.computeVertexNormals();
+    return next;
+  }, [primitive]);
+  useEffect(() => () => geometry.dispose(), [geometry]);
+  return <mesh geometry={geometry} castShadow receiveShadow><meshStandardMaterial color={color} roughness={0.72} /></mesh>;
 }
 
 function RoofMesh({ primitive, color }: { primitive: CadPrimitive; color: string }) {

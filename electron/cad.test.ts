@@ -37,4 +37,19 @@ describe("OpenAI CAD generator", () => {
     expect(request).toContain("Hauskörper");
     expect(request).toContain("zwei Haustüren");
   });
+
+  it("creates curved printable leaf solids instead of rectangular foliage", () => {
+    const plan = validateCadPlan({
+      title: "Palme", widthMm: 100, depthMm: 70, heightMm: 140,
+      primitives: [
+        { type: "cylinder", name: "Stamm", position: [50, 35, 0], size: [8, 8, 100], rotation: [0, 0, 0] },
+        { type: "leaf", name: "Geschwungenes Blatt", position: [50, 35, 96], size: [42, 15, 2], rotation: [0, -8, 25] }
+      ]
+    });
+    const stl = encodeCadStl(plan);
+    expect(stl.readUInt32LE(80)).toBeGreaterThan(250);
+    const request = buildCadPlanningRequest("Erstelle eine Palme mit geschwungenen Blättern.");
+    expect(request).toContain("NEVER approximate requested curved or detailed leaves with boxes");
+    expect(request).toContain("leaf primitives");
+  });
 });

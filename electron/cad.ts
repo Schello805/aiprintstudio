@@ -1,8 +1,9 @@
 export type CadPrimitive = {
-  type: "box" | "cylinder" | "roof";
+  type: "box" | "cylinder" | "roof" | "leaf";
   name: string;
   position: [number, number, number];
   size: [number, number, number];
+  rotation?: [number, number, number];
 };
 
 export type CadPlan = {
@@ -32,10 +33,14 @@ export function validateCadPlan(value: unknown): CadPlan {
     throw new Error("Der CAD-Bauplan enthält ungültige Gesamtmaße.");
   }
   for (const primitive of plan.primitives) {
-    if (!["box", "cylinder", "roof"].includes(primitive.type) || !Array.isArray(primitive.position) || !Array.isArray(primitive.size)) {
+    if (!["box", "cylinder", "roof", "leaf"].includes(primitive.type) || !Array.isArray(primitive.position) || !Array.isArray(primitive.size)) {
       throw new Error("Der CAD-Bauplan enthält eine unbekannte Form.");
     }
-    if ([...primitive.position, ...primitive.size].some((number) => !Number.isFinite(number) || Math.abs(number) > 300)) {
+    if (primitive.rotation !== undefined && (!Array.isArray(primitive.rotation) || primitive.rotation.length !== 3)) {
+      throw new Error("Der CAD-Bauplan enthält eine ungültige Drehung.");
+    }
+    if ([...primitive.position, ...primitive.size].some((number) => !Number.isFinite(number) || Math.abs(number) > 300)
+      || (primitive.rotation ?? [0, 0, 0]).some((number) => !Number.isFinite(number) || Math.abs(number) > 360)) {
       throw new Error("Der CAD-Bauplan enthält ungültige Abmessungen.");
     }
     if (primitive.size.some((number) => number < 1.2)) throw new Error("OpenAI hat ein Bauteil unter 1,2 mm erzeugt.");
@@ -48,7 +53,7 @@ export function buildCadPlanningRequest(instruction: string, existingPlan?: CadP
   if (normalized.length < 3 || normalized.length > 800) {
     throw new Error("Die Anweisung muss zwischen 3 und 800 Zeichen enthalten.");
   }
-  const rules = `Use only additive boxes, vertical cylinders and triangular-prism roofs. All coordinates and sizes are millimeters. Put the object on z=0, keep every feature connected or intersecting, use at least 1.2 mm thickness, prefer a stable flat base, and model requested windows/doors as raised frames or panels. Preserve exact requested counts. Keep it under 80 primitives.`;
+  const rules = `Use additive boxes, vertical cylinders, triangular-prism roofs, and curved leaf solids. Each primitive has rotation [x,y,z] in degrees; use [0,0,0] when no rotation is needed. For leaf, position is the attachment point and size is [length,width,thickness]. Leaf creates a tapered, curved, printable organic blade extending along its local X axis. Use multiple rotated leaf solids for palms, foliage, feathers, petals, curved branches, and decorative organic silhouettes. NEVER approximate requested curved or detailed leaves with boxes. If a follow-up rejects rectangles, replace the affected box primitives with leaf primitives. All coordinates and sizes are millimeters. Put the object on z=0, keep every feature connected or intersecting, use at least 1.2 mm thickness, prefer a stable flat base, and model requested windows/doors as raised frames or panels. Preserve exact requested counts. Keep it under 80 primitives.`;
   if (!existingPlan) return `Create a printable constructive CAD plan for this request: ${normalized}
 ${rules}`;
   const validated = validateCadPlan(existingPlan);
@@ -78,7 +83,54 @@ export function encodeCadStl(plan: CadPlan): Buffer {
 function primitiveTriangles(primitive: CadPrimitive): Triangle[] {
   if (primitive.type === "cylinder") return cylinderTriangles(primitive);
   if (primitive.type === "roof") return roofTriangles(primitive);
+  if (primitive.type === "leaf") return leafTriangles(primitive);
   return boxTriangles(primitive);
+}
+
+function leafTriangles({ position, size: [length, width, thickness], rotation = [0, 0, 0] }: CadPrimitive): Triangle[] {
+  const segments = 18;
+  const lower: Array<[Vec3, Vec3]> = [];
+  const upper: Array<[Vec3, Vec3]> = [];
+  const transform = (point: Vec3): Vec3 => {
+    const radians = rotation.map((angle) => angle * Math.PI / 180);
+    let [x, y, z] = point;
+    [y, z] = [y * Math.cos(radians[0]) - z * Math.sin(radians[0]), y * Math.sin(radians[0]) + z * Math.cos(radians[0])];
+    [x, z] = [x * Math.cos(radians[1]) + z * Math.sin(radians[1]), -x * Math.sin(radians[1]) + z * Math.cos(radians[1])];
+    [x, y] = [x * Math.cos(radians[2]) - y * Math.sin(radians[2]), x * Math.sin(radians[2]) + y * Math.cos(radians[2])];
+    return [x + position[0], y + position[1], z + position[2]];
+  };
+  for (let index = 0; index <= segments; index += 1) {
+    const t = index / segments;
+    const taper = Math.pow(Math.sin(Math.PI * t), 0.72);
+    const halfWidth = Math.max(thickness * 0.35, width * 0.5 * taper);
+    const arch = Math.sin(Math.PI * t) * length * 0.12 - t * t * length * 0.08;
+    lower.push([
+      transform([length * t, -halfWidth, arch]),
+      transform([length * t, halfWidth, arch])
+    ]);
+    upper.push([
+      transform([length * t, -halfWidth, arch + thickness]),
+      transform([length * t, halfWidth, arch + thickness])
+    ]);
+  }
+  const triangles: Triangle[] = [];
+  for (let index = 0; index < segments; index += 1) {
+    const [bl0, br0] = lower[index], [bl1, br1] = lower[index + 1];
+    const [tl0, tr0] = upper[index], [tl1, tr1] = upper[index + 1];
+    triangles.push(
+      [tl0, tr0, tr1], [tl0, tr1, tl1],
+      [bl0, br1, br0], [bl0, bl1, br1],
+      [bl0, tl1, bl1], [bl0, tl0, tl1],
+      [br0, br1, tr1], [br0, tr1, tr0]
+    );
+  }
+  const [bottomLeft, bottomRight] = lower[0], [topLeft, topRight] = upper[0];
+  const [endBottomLeft, endBottomRight] = lower[segments], [endTopLeft, endTopRight] = upper[segments];
+  triangles.push(
+    [bottomLeft, bottomRight, topRight], [bottomLeft, topRight, topLeft],
+    [endBottomLeft, endTopRight, endBottomRight], [endBottomLeft, endTopLeft, endTopRight]
+  );
+  return triangles;
 }
 
 function boxTriangles({ position: [x, y, z], size: [w, d, h] }: CadPrimitive): Triangle[] {
