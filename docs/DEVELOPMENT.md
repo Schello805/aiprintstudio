@@ -59,6 +59,9 @@ macOS-Version des jeweiligen Build-Macs zur Mindestversion des Releases.
 - Farbdreiecke besitzen explizite Core-3MF-Materialreferenzen.
 - Orca-/Anycubic-Metadaten müssen Palette und Extruderzuordnung aller
   Farbkörper enthalten.
+- Erzeugte Modelle werden zunächst nur im temporären Vorschauverzeichnis
+  abgelegt. Dauerhafte STL-/3MF-Dateien dürfen erst über `export:save` und den
+  nativen Speicherdialog entstehen.
 - Exportänderungen müssen mindestens mit `electron/relief.test.ts` geprüft werden.
 - Änderungen an IPC-Verträgen müssen Main Process, Preload und
   `src/vite-env.d.ts` gemeinsam aktualisieren.

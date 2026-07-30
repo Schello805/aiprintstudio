@@ -143,6 +143,7 @@ interface Window {
       detail: string;
       progress: number;
     }) => void) => () => void;
+    saveGeneratedFile: (path: string) => Promise<string | null>;
     showItemInFolder: (path: string) => Promise<void>;
     openExternal: (url: string) => Promise<void>;
   };

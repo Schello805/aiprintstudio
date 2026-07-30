@@ -57,7 +57,7 @@ function formatStorage(bytes: number): string {
 type QualityProfile = "fast" | "balanced" | "fine" | "photo" | "logo";
 type ProcessingMode = "auto" | "vector" | "wordmark" | "depth" | "height";
 type HistoryEntry = {
-  id: string; name: string; createdAt: string; stlPath: string; threeMfPath: string;
+  id: string; name: string; createdAt: string;
   triangleCount: number; widthMm: number; heightMm: number; profile: QualityProfile; score: number;
 };
 type StudioProject = {
@@ -300,7 +300,7 @@ export function App() {
         setResult(next);
         const entry: HistoryEntry = {
           id: crypto.randomUUID(), name: file.name, createdAt: new Date().toISOString(),
-          stlPath: next.stlPath, threeMfPath: next.threeMfPath, triangleCount: next.triangleCount,
+          triangleCount: next.triangleCount,
           widthMm: next.widthMm, heightMm: next.heightMm, profile, score: next.printability.score
         };
         setHistory((current) => {
@@ -874,6 +874,35 @@ function ReliefPreview({ result }: { result: NonNullable<ReliefResult> }) {
   );
 }
 
+function SaveExportButton({ path, label }: { path: string; label: string }) {
+  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState<"idle" | "saved" | "error">("idle");
+  const save = async () => {
+    if (!window.desktop || busy) return;
+    setBusy(true);
+    setStatus("idle");
+    try {
+      const savedPath = await window.desktop.saveGeneratedFile(path);
+      if (savedPath) setStatus("saved");
+    } catch {
+      setStatus("error");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <button
+      className={`secondary-button export-save-button ${status}`}
+      onClick={() => void save()}
+      disabled={busy}
+      title={status === "saved" ? "Gespeichert – erneut klicken, um einen anderen Speicherort zu wählen." : undefined}
+    >
+      <Save size={14} />
+      {busy ? "Speichern …" : status === "saved" ? `${label} gespeichert` : status === "error" ? "Erneut versuchen" : label}
+    </button>
+  );
+}
+
 function ReliefResultCard({ result, optimize }: { result: NonNullable<ReliefResult>; optimize: () => void }) {
   return (
     <div className={`result-card preview-result ${result.printability.status}`}>
@@ -886,7 +915,10 @@ function ReliefResultCard({ result, optimize }: { result: NonNullable<ReliefResu
       </div>
       <img className="heightmap-preview" src={result.heightmapDataUrl} alt="Berechnete Höhenkarte" title="Berechnete Höhenkarte" />
       {result.printability.score < 100 && <button className="optimize-button" onClick={optimize}><Wrench /> Automatisch optimieren</button>}
-      <button className="secondary-button" onClick={() => void window.desktop?.showItemInFolder(result.stlPath)}>Im Finder zeigen</button>
+      <div className="export-save-actions">
+        <SaveExportButton path={result.stlPath} label="STL speichern" />
+        <SaveExportButton path={result.threeMfPath} label="3MF speichern" />
+      </div>
     </div>
   );
 }
@@ -1147,7 +1179,7 @@ function Ai3dDialog({ close }: { close: () => void }) {
             <div><strong>{result.plan.title}</strong><small>{result.plan.primitives.length} Bauteile · {result.plan.widthMm} × {result.plan.depthMm} × {result.plan.heightMm} mm</small></div>
             <div className="ai3d-result-actions">
               {previousResults.length > 0 && <button className="secondary-button" onClick={undoRevision} disabled={busy}>Letzte Änderung zurück</button>}
-              <button className="secondary-button" onClick={() => void window.desktop?.showItemInFolder(result.stlPath)}>STL im Finder</button>
+              <SaveExportButton path={result.stlPath} label="STL speichern" />
             </div>
           </div>
           <div className="ai3d-follow-up">
@@ -1340,7 +1372,6 @@ function HistoryView({ entries, clear }: { entries: HistoryEntry[]; clear: () =>
             <div className="history-icon"><Layers3 /></div>
             <div><strong>{entry.name}</strong><span>{new Date(entry.createdAt).toLocaleString("de-DE")} · {entry.profile} · {entry.triangleCount.toLocaleString("de-DE")} Dreiecke</span></div>
             <span className={`score score-${entry.score >= 80 ? "good" : "warn"}`}>{entry.score}/100</span>
-            <button className="secondary-button" onClick={() => void window.desktop?.showItemInFolder(entry.stlPath)}>Im Finder</button>
           </article>
         ))}
       </div>

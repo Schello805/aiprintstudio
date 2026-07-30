@@ -28,6 +28,7 @@ contextBridge.exposeInMainWorld("desktop", Object.freeze({
     ipcRenderer.on("relief:progress", listener);
     return () => ipcRenderer.removeListener("relief:progress", listener);
   },
+  saveGeneratedFile: (path) => ipcRenderer.invoke("export:save", path),
   showItemInFolder: (path) => ipcRenderer.invoke("shell:showItem", path),
   openExternal: (url) => ipcRenderer.invoke("shell:openExternal", url)
 }));

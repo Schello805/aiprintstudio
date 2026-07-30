@@ -1,9 +1,9 @@
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, shell } from "electron";
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
-import { appendFile, mkdir, mkdtemp, readFile, rename, rm, statfs, writeFile } from "node:fs/promises";
+import { appendFile, copyFile, mkdir, mkdtemp, readFile, rename, rm, statfs, writeFile } from "node:fs/promises";
 import { arch, platform, tmpdir, totalmem } from "node:os";
-import { basename, dirname, join } from "node:path";
+import { basename, dirname, extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { Worker } from "node:worker_threads";
@@ -29,6 +29,17 @@ type StoredSettings = {
 const settingsDirectoryName = "de.michaelschellenberger.aiprintstudio";
 let sessionOpenAiKey: string | null = null;
 const reliefJobs = new Map<string, { controller: AbortController; worker?: Worker }>();
+const previewDirectoryName = "AI Print Studio Preview";
+
+function previewDirectory(): string {
+  return join(app.getPath("temp"), previewDirectoryName);
+}
+
+function isPreviewExportPath(path: string): boolean {
+  const root = resolve(previewDirectory());
+  const candidate = resolve(path);
+  return candidate === root || candidate.startsWith(`${root}/`);
+}
 type Ai3dProgress = {
   phase: string;
   progress: number;
@@ -465,17 +476,18 @@ function createWindow(): void {
           const bridge = typeof window.desktop === "object";
           const selectImage = typeof window.desktop?.selectImage === "function";
           const saveOpenAiKey = typeof window.desktop?.saveOpenAiKey === "function";
+          const saveGeneratedFile = typeof window.desktop?.saveGeneratedFile === "function";
           let sessionKeyActive = false;
           if (saveOpenAiKey) {
             await window.desktop.saveOpenAiKey("sk-test_abcdefghijklmnopqrstuvwxyz0123456789", "smoke-test-passwort");
             sessionKeyActive = (await window.desktop.getSettingsStatus()).openAiConfigured;
           }
-          return JSON.stringify({ bridge, selectImage, saveOpenAiKey, sessionKeyActive });
+          return JSON.stringify({ bridge, selectImage, saveOpenAiKey, saveGeneratedFile, sessionKeyActive });
         })()`
       ).then((result: string) => {
         console.log(`SMOKE_RESULT:${result}`);
-        const parsed = JSON.parse(result) as { bridge: boolean; selectImage: boolean; saveOpenAiKey: boolean; sessionKeyActive: boolean };
-        app.exit(parsed.bridge && parsed.selectImage && parsed.saveOpenAiKey && parsed.sessionKeyActive ? 0 : 1);
+        const parsed = JSON.parse(result) as { bridge: boolean; selectImage: boolean; saveOpenAiKey: boolean; saveGeneratedFile: boolean; sessionKeyActive: boolean };
+        app.exit(parsed.bridge && parsed.selectImage && parsed.saveOpenAiKey && parsed.saveGeneratedFile && parsed.sessionKeyActive ? 0 : 1);
       }).catch((error: unknown) => {
         console.error("SMOKE_ERROR", error);
         app.exit(1);
@@ -487,6 +499,8 @@ function createWindow(): void {
 app.whenReady().then(async () => {
   if (!(await ensureCompatibleSystem())) return;
   if (!(await ensureApplicationLocation())) return;
+  await rm(previewDirectory(), { recursive: true, force: true });
+  await mkdir(previewDirectory(), { recursive: true });
   await removeLegacyStoredOpenAiKey();
   // Frühere Versionen konnten ein optionales Modell laden, dessen öffentliche
   // Lizenz die Nutzung in der EU ausschließt. Das Update entfernt diese
@@ -718,7 +732,7 @@ app.whenReady().then(async () => {
         stage = progress.phase;
         if (!event.sender.isDestroyed()) event.sender.send("ai3d:progress", progress);
       });
-      const outputDirectory = join(app.getPath("downloads"), "AI Print Studio");
+      const outputDirectory = join(previewDirectory(), "prompt");
       await mkdir(outputDirectory, { recursive: true });
       const stlPath = join(outputDirectory, `ki-${Date.now()}.stl`);
       await writeFile(stlPath, encodeCadStl(plan));
@@ -781,7 +795,7 @@ app.whenReady().then(async () => {
   ipcMain.handle("relief:create", async (event, jobId: string, imagePath: string, options: Partial<ReliefOptions>) => {
     if (!/^[a-f0-9-]{20,64}$/i.test(jobId)) throw new Error("Ungültige Job-ID.");
     if (reliefJobs.has(jobId)) throw new Error("Dieser Relief-Job läuft bereits.");
-    const outputDirectory = join(app.getPath("downloads"), "AI Print Studio");
+    const outputDirectory = join(previewDirectory(), "relief", jobId);
     let depthMap: Awaited<ReturnType<typeof createDepthMap>> | undefined;
     const controller = new AbortController();
     const job: { controller: AbortController; worker?: Worker } = { controller };
@@ -841,12 +855,35 @@ app.whenReady().then(async () => {
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unbekannter Exportfehler";
-      throw new Error(`Das Relief konnte nicht unter „${outputDirectory}“ gespeichert werden: ${message}`);
+      throw new Error(`Die Relief-Vorschau konnte nicht erstellt werden: ${message}`);
     } finally {
       if (reliefJobs.get(jobId) === job) reliefJobs.delete(jobId);
       await job.worker?.terminate();
       await depthMap?.cleanup();
     }
+  });
+  ipcMain.handle("export:save", async (event, sourcePath: string) => {
+    if (typeof sourcePath !== "string" || !isPreviewExportPath(sourcePath)) {
+      throw new Error("Diese Vorschaudatei darf nicht exportiert werden.");
+    }
+    const extension = extname(sourcePath).toLowerCase();
+    if (![".stl", ".3mf"].includes(extension)) {
+      throw new Error("Nur STL- und 3MF-Dateien können gespeichert werden.");
+    }
+    const options = {
+      title: extension === ".3mf" ? "3MF speichern" : "STL speichern",
+      defaultPath: join(app.getPath("downloads"), basename(sourcePath)),
+      filters: extension === ".3mf"
+        ? [{ name: "3MF-Modell", extensions: ["3mf"] }]
+        : [{ name: "STL-Modell", extensions: ["stl"] }]
+    };
+    const owner = BrowserWindow.fromWebContents(event.sender);
+    const selection = owner
+      ? await dialog.showSaveDialog(owner, options)
+      : await dialog.showSaveDialog(options);
+    if (selection.canceled || !selection.filePath) return null;
+    await copyFile(sourcePath, selection.filePath);
+    return selection.filePath;
   });
   ipcMain.handle("shell:showItem", (_event, path: string) => shell.showItemInFolder(path));
   ipcMain.handle("shell:openExternal", (_event, url: string) => {

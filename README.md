@@ -125,7 +125,13 @@ Nutzung des eigenen OpenAI-Kontos.
    **Foto & 3D-Tiefe** wählen.
 3. Für Mehrfarbdruck **AMS-Farbdruck** aktivieren und Filamentfarben festlegen.
 4. **Relief erstellen** anklicken.
-5. STL oder 3MF unter `Downloads/AI Print Studio` im Slicer öffnen.
+5. Unter der Vorschau **STL speichern** oder **3MF speichern** wählen und im
+   macOS-Dialog Dateinamen sowie Speicherort festlegen.
+
+Die App legt während der Berechnung ausschließlich temporäre Vorschaudateien
+an. Erst der ausdrückliche Klick auf einen Speichern-Button erzeugt eine
+dauerhafte Datei am gewählten Ort. Alte Vorschaudateien werden beim nächsten
+App-Start automatisch entfernt.
 
 Für Logos mit Text ist die Optimierung für eine **0,4-mm-Düse** standardmäßig
 aktiv. Feine Stege werden dabei auf mindestens 0,8 mm verbreitert. Der Schalter

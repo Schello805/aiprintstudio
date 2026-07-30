@@ -138,9 +138,12 @@ Text-zu-3D-Rekonstruktion ist nicht Teil der aktuellen Architektur.
 
 `validating → analysing → reconstructing → repairing → exporting → completed`
 
-Der Renderer zeigt den aktuellen Zustand. Abgeschlossene Exporte werden mit
-Metadaten im lokalen Verlauf erfasst; temporäre Zwischenstände werden nicht als
-fertige Modelle angeboten.
+Der Renderer zeigt den aktuellen Zustand. Berechnete STL- und 3MF-Dateien
+liegen zunächst ausschließlich im temporären Vorschauverzeichnis. Der Main
+Process kopiert sie erst nach einer ausdrücklichen Benutzeraktion über den
+nativen macOS-Speicherdialog an einen dauerhaften Ort. Beim nächsten App-Start
+wird das Vorschauverzeichnis bereinigt. Im lokalen Verlauf bleiben nur
+Metadaten, keine dauerhaften Modelldateien oder veralteten Dateipfade.
 
 ## Erweiterbarkeit
 
