@@ -557,6 +557,7 @@ export function App() {
                     <NumberField label="GRUNDPLATTE" tooltip={parameterTooltips.base} value={baseMm} unit="mm" min={0.8} max={10} step={0.2} setValue={setBaseMm} />
                     <NumberField label="RELIEF" tooltip={parameterTooltips.relief} value={reliefMm} unit="mm" min={0.5} max={20} step={0.5} setValue={setReliefMm} />
                   </div>
+                  <div className="compact-option-grid">
                   {processingMode === "wordmark" && (
                     <button
                       className={includeLogoBackground ? "background-toggle selected" : "background-toggle"}
@@ -648,10 +649,14 @@ export function App() {
                       </div>
                     )}
                   </div>
+                  </div>
+                  <div className="conversion-footer">
                   <button className="advanced-toggle has-tooltip" onClick={() => setAdvancedOpen((current) => !current)} aria-expanded={advancedOpen}>
                     <Settings2 /> {advancedOpen ? "Erweiterte Einstellungen schließen" : "Erweiterte Einstellungen"}
                     <SettingTooltip text={"Optionale Feineinstellungen für Sonderfälle. Die Automatik ist normalerweise die beste Wahl.\nBeispiel: Nur öffnen, wenn Helligkeitsrichtung oder Glättung bewusst geändert werden soll."} />
                   </button>
+                  <div className="compact-cost"><strong>0,00 €</strong><span>lokal · keine API-Kosten</span></div>
+                  </div>
                   {advancedOpen && (
                     <div className="advanced-options">
                       <div className="parameter-grid advanced-parameters">
@@ -673,7 +678,6 @@ export function App() {
                     </div>
                   )}
                 </>
-              <div className="compact-cost"><strong>0,00 €</strong><span>lokal · keine API-Kosten</span></div>
             </div>
             <div className="action-bar">
               <div><Box size={20} /><div><strong>{file ? file.name : "Noch kein Bild gewählt"}</strong><span>{file ? `${(file.size / 1_048_576).toFixed(1)} MB · ${file.width} × ${file.height} px · bereit` : "Wähle zuerst eine geeignete Aufnahme aus."}</span></div></div>
