@@ -214,6 +214,24 @@ describe("relief mesh", () => {
     expect(Math.max(...(redSkin?.mesh.vertices.map((vertex) => vertex[2]) ?? []))).toBeCloseTo(5);
   });
 
+  it("removes isolated raised cells from the outer rim of stepped logos", () => {
+    const columns = 8, rows = 8;
+    const cellColumns = columns - 1, cellRows = rows - 1;
+    const mask = Array(cellColumns * cellRows).fill(true) as boolean[];
+    const heights = Array(cellColumns * cellRows).fill(1.6);
+    heights[0 * cellColumns + 3] = 5.6;
+    heights[3 * cellColumns + 0] = 5.6;
+    heights[6 * cellColumns + 5] = 5.6;
+    heights[3 * cellColumns + 3] = 5.6;
+
+    const flattened = reliefInternals.flattenSteppedOuterRim(heights, mask, columns, rows, 2);
+
+    expect(flattened[0 * cellColumns + 3]).toBe(1.6);
+    expect(flattened[3 * cellColumns + 0]).toBe(1.6);
+    expect(flattened[6 * cellColumns + 5]).toBe(1.6);
+    expect(flattened[3 * cellColumns + 3]).toBe(5.6);
+  });
+
   it("assigns every outer and color-transition edge to the configured side color", () => {
     const columns = 7, rows = 7;
     const mask = Array((columns - 1) * (rows - 1)).fill(true) as boolean[];

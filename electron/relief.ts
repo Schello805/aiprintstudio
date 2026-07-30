@@ -251,7 +251,7 @@ export async function createRelief(
   }
   const steppedLogo = Boolean(useWordmarkMask && options.includeBackground && wordmarkPixels && !editorHeightmap);
   const steppedCellHeights = steppedLogo
-    ? buildBinaryCellHeights(heights, gridWidth, gridHeight)
+    ? flattenSteppedOuterRim(buildBinaryCellHeights(heights, gridWidth, gridHeight), cellMask, gridWidth, gridHeight)
     : undefined;
   const mesh = steppedCellHeights
     ? buildSteppedCellMesh(gridWidth, gridHeight, options.widthMm, heightMm, steppedCellHeights, cellMask)
@@ -787,7 +787,9 @@ function buildColoredMeshes(
   // zusätzlich aufgesetzt (z. B. 4,4 statt 4,0 mm). Der Tragkörper endet nun
   // 0,4 mm tiefer, die jeweilige Farbe schließt exakt auf Sollhöhe ab.
   const structureHeights = heights.map((height) => Math.max(0, height - colorSkinMm));
-  const topCellHeights = stepped ? buildBinaryCellHeights(heights, columns, rows) : undefined;
+  const topCellHeights = stepped
+    ? flattenSteppedOuterRim(buildBinaryCellHeights(heights, columns, rows), cellMask, columns, rows)
+    : undefined;
   const structureCellHeights = topCellHeights?.map((height) => Math.max(0, height - colorSkinMm));
   const structure = structureCellHeights
     ? buildSteppedCellMesh(columns, rows, widthMm, heightMm, structureCellHeights, cellMask)
@@ -817,6 +819,40 @@ function buildBinaryCellHeights(heights: number[], columns: number, rows: number
     const index = y * columns + x;
     const values = [heights[index], heights[index + 1], heights[index + columns], heights[index + columns + 1]];
     result.push(values.filter((height) => height > split).length >= 2 ? maximum : minimum);
+  }
+  return result;
+}
+
+function flattenSteppedOuterRim(
+  cellHeights: number[],
+  cellMask: boolean[],
+  columns: number,
+  rows: number,
+  radius = 2
+): number[] {
+  const cellColumns = columns - 1, cellRows = rows - 1;
+  let minimum = Number.POSITIVE_INFINITY;
+  for (let index = 0; index < cellHeights.length; index += 1) {
+    if (cellMask[index]) minimum = Math.min(minimum, cellHeights[index]);
+  }
+  if (!Number.isFinite(minimum)) return cellHeights.slice();
+
+  const result = cellHeights.slice();
+  const occupiedAt = (x: number, y: number) =>
+    x >= 0 && y >= 0 && x < cellColumns && y < cellRows && Boolean(cellMask[y * cellColumns + x]);
+  for (let y = 0; y < cellRows; y += 1) for (let x = 0; x < cellColumns; x += 1) {
+    const index = y * cellColumns + x;
+    if (!cellMask[index]) continue;
+    let nearOuterEdge = false;
+    for (let offsetY = -radius; offsetY <= radius && !nearOuterEdge; offsetY += 1) {
+      for (let offsetX = -radius; offsetX <= radius; offsetX += 1) {
+        if (!occupiedAt(x + offsetX, y + offsetY)) {
+          nearOuterEdge = true;
+          break;
+        }
+      }
+    }
+    if (nearOuterEdge) result[index] = minimum;
   }
   return result;
 }
@@ -1217,7 +1253,7 @@ function buildPreviewSurface(
   if (stepped && cellMask && (!colorAssignments || !colors.length)) {
     const mesh = buildSteppedCellMesh(
       columns, rows, widthMm, heightMm,
-      buildBinaryCellHeights(heights, columns, rows), cellMask
+      flattenSteppedOuterRim(buildBinaryCellHeights(heights, columns, rows), cellMask, columns, rows), cellMask
     );
     const positions = mesh.vertices.flatMap(([x, y, z]) => [x - widthMm / 2, z, y - heightMm / 2]);
     const indices = mesh.triangles.flatMap(([a, b, c]) => [a, c, b]);
@@ -1396,6 +1432,6 @@ export const reliefInternals = {
   expandPixelMask,
   buildVectorLevels, buildSmoothedBoundaryPositions, buildColorCellAssignments, buildColoredMeshes, mergeMeshes,
   enforceUniformEdgeColor,
-  buildWatertightHeightMesh, buildBinaryCellHeights, buildSteppedCellMesh, buildPreviewSurface, orientMeshLikePreview, encodeBinaryStl, encodeThreeMf,
+  buildWatertightHeightMesh, buildBinaryCellHeights, flattenSteppedOuterRim, buildSteppedCellMesh, buildPreviewSurface, orientMeshLikePreview, encodeBinaryStl, encodeThreeMf,
   smoothHeightField, analysePrintability, profileSettings
 };
