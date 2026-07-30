@@ -484,7 +484,6 @@ export function App() {
             openImage={() => void selectFile()}
             openText={() => { setStudioTool("text"); setTextDialogOpen(true); }}
             openPrompt={() => { setStudioTool("prompt"); setAi3dDialogOpen(true); }}
-            openProject={() => void openProject()}
           />
         )}
 
@@ -816,13 +815,11 @@ function InfoView({ version }: { version: string }) {
 function StudioHub({
   openImage,
   openText,
-  openPrompt,
-  openProject
+  openPrompt
 }: {
   openImage: () => void;
   openText: () => void;
   openPrompt: () => void;
-  openProject: () => void;
 }) {
   const tools = [
     {
@@ -877,7 +874,6 @@ function StudioHub({
         <span><ShieldCheck /> Lokale Werkzeuge bleiben auf deinem Mac</span>
         <span><Palette /> AMS-fähiger 3MF-Export</span>
         <span><CheckCircle2 /> Druckbarkeit wird automatisch geprüft</span>
-        <button onClick={openProject}><FolderOpen /> Projekt öffnen</button>
       </div>
     </section>
   );

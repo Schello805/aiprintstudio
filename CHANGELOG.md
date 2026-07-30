@@ -2,6 +2,9 @@
 
 ## Unveröffentlicht
 
+- Der missverständliche, redundante Button **Projekt öffnen** wurde aus dem
+  unteren Bereich der Werkzeugauswahl entfernt. Projektdateien bleiben bei
+  Bedarf direkt im jeweiligen Arbeitsbereich verfügbar.
 - **Prompt zu 3D** ist im Werkzeugmenü, im Arbeitsbereich und im Dialog klar
   als Beta gekennzeichnet. Der Text weist auf vereinfachte Ergebnisse hin.
 - Der Flächeneditor übernimmt beim Öffnen jetzt exakt die Höhenkarte des
