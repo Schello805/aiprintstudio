@@ -4,10 +4,8 @@
 
 Ein einzelnes Bild enthält keine vollständige Rückseiten- oder
 Tiefeninformation. **Bild zu 3D** erzeugt deshalb heute vor allem kontrollierte
-2,5D-Reliefs. Für vollständige Objekte steht **Prompt zu 3D** mit einem
-einfachen CAD-Weg und einer optionalen komplexen Formrekonstruktion zur
-Verfügung. Externe Referenzerzeugung wird strikt von lokaler Geometrieerzeugung
-und Prüfung getrennt.
+2,5D-Reliefs. **Prompt zu 3D** erstellt einen validierten CAD-Bauplan aus
+druckbaren Grundkörpern. Die Geometrieerzeugung und Prüfung bleiben lokal.
 
 ## Komponenten
 
@@ -19,14 +17,13 @@ Electron Main Process
   ├── Einstellungen / lokaler AES-GCM-Tresor für OpenAI
   ├── Verlauf / Updateprüfung
   ├── Dateivalidierung
-  ├── OpenAI CAD-Planung oder Referenzbild (optional)
+  ├── OpenAI CAD-Planung (optional)
   ├── Native Worker
-  │     ├── Depth Anything V2 / Core ML
-  │     └── Hunyuan3D Shape Small / MLX (optional)
+  │     └── Depth Anything V2 / Core ML
   └── lokale 3D-Pipelines
         ├── Relief / Kontur / Höhenkarte
         ├── Flächen- und Farbeditor
-        ├── CAD-Körpergenerator / GLB-zu-STL
+        ├── CAD-Körpergenerator
         ├── Druckbarkeitsanalyse
         └── STL / 3MF
 ```

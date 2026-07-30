@@ -9,7 +9,7 @@ CAD-Pläne und Mesh-Dateien bleiben standardmäßig auf dem eigenen Mac.
 
 [![Quality](https://github.com/Schello805/aiprintstudio/actions/workflows/quality.yml/badge.svg)](https://github.com/Schello805/aiprintstudio/actions/workflows/quality.yml)
 
-> Aktueller Stand: Version 0.20.1. Bild- und Schrift-Reliefs, mehrfarbige
+> Aktueller Stand: Version 0.21.9. Bild- und Schrift-Reliefs, mehrfarbige
 > AMS-3MF-Dateien sowie einfache, per OpenAI geplante und lokal konstruierte
 > Prompt-zu-3D-Modelle sind testbar. Die vollständige Rundum-Rekonstruktion aus
 > einem einzelnen Bild bleibt eine spätere Ausbaustufe.
@@ -22,8 +22,8 @@ Vor dem Download bitte kurz prüfen:
 | --- | --- | --- |
 | Mac | **Apple Silicon (M1 oder neuer)** | Intel-Macs werden vom ARM64-Build nicht unterstützt. |
 | Betriebssystem | **macOS 13 Ventura oder neuer** | Ein aktuelles macOS wird empfohlen. |
-| Arbeitsspeicher | **8 GB empfohlen**, 16 GB für große Modelle | Unter 8 GB startet die App mit einem Ressourcenhinweis. |
-| Freier Speicher | **mindestens 4 GB**, für komplexes lokales 3D **5,5 GB** | Das optionale Modell benötigt ca. 3,82 GB plus temporären Speicher. |
+| Arbeitsspeicher | **8 GB empfohlen**, 16 GB für große Reliefs | Unter 8 GB startet die App mit einem Ressourcenhinweis. |
+| Freier Speicher | **mindestens 4 GB** | Für Exporte und temporäre Arbeitsdateien sollte zusätzlicher Platz verfügbar sein. |
 | Grafik | In Apple Silicon integriert | Keine separate Grafikkarte erforderlich. |
 | Internet | Für Installation/Updates und optional Prompt zu 3D | Bild zu 3D, Schrift zu 3D und lokale Exporte funktionieren offline. |
 
@@ -125,21 +125,6 @@ Versuche gewählt werden. Das Dropdown zeigt die offiziellen Ein- und
 Ausgabepreise sowie einen typischen Beispielbetrag auf Basis von 1.000 Eingabe-
 und 2.000 Ausgabetoken. Die tatsächliche Abrechnung richtet sich nach der
 Nutzung des eigenen OpenAI-Kontos.
-
-### Komplexe Prompt-Modelle
-
-Für komplexere Außenformen erzeugt OpenAI zunächst ein sichtbares Referenzbild.
-Der Nutzer prüft dieses Bild; erst danach rekonstruiert das optionale lokale
-Hunyuan3D-Shape-Modell das Mesh auf Apple Silicon.
-
-Vor dem erstmaligen Download zeigt AI Print Studio Modellname, Quelle,
-Downloadgröße, Speicherbedarf und vollständige Lizenzlinks. Die ca. 3,82 GB
-großen Modellgewichte werden nur nach ausdrücklicher Zustimmung geladen und
-können wieder entfernt werden. Details: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
-
-Komplexe Ergebnisse sind KI-Näherungen und keine maßhaltigen Hersteller-CAD-
-Dateien. Bei Markenprodukten müssen Bild-, Design-, Urheber- und Markenrechte
-vor Nutzung oder Verkauf eigenständig geprüft werden.
 
 ## Bild zu 3D ausprobieren
 

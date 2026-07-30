@@ -122,8 +122,6 @@ export function App() {
     processCount: number;
     freeStorageBytes: number;
     totalStorageBytes: number;
-    requiredDownloadBytes: number;
-    downloadStorageSufficient: boolean;
   } | null>(null);
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
   const [updateCheckFailed, setUpdateCheckFailed] = useState(false);
@@ -452,14 +450,10 @@ export function App() {
             <div><MemoryStick /><span>APP RAM</span><strong>{appMetrics ? `${Math.round(appMetrics.ramMb)} MB` : "–"}</strong></div>
             <span className="monitor-track memory"><span style={{ width: `${Math.min(100, appMetrics ? appMetrics.ramMb / appMetrics.totalMemoryMb * 100 : 0)}%` }} /></span>
           </div>
-          <div className={`monitor-metric storage ${appMetrics && !appMetrics.downloadStorageSufficient ? "insufficient" : ""}`}>
+          <div className="monitor-metric storage">
             <div><HardDrive /><span>FREIER SPEICHER</span><strong>{appMetrics?.freeStorageBytes ? formatStorage(appMetrics.freeStorageBytes) : "–"}</strong></div>
             <span className="monitor-track storage"><span style={{ width: `${Math.min(100, appMetrics?.totalStorageBytes ? appMetrics.freeStorageBytes / appMetrics.totalStorageBytes * 100 : 0)}%` }} /></span>
-            {appMetrics?.freeStorageBytes ? (
-              <em>{appMetrics.downloadStorageSufficient
-                ? `Bereit für Downloads · mindestens ${formatStorage(appMetrics.requiredDownloadBytes)} benötigt`
-                : `Zu wenig für das 3D-Modell · ${formatStorage(appMetrics.requiredDownloadBytes)} benötigt`}</em>
-            ) : <em>Speicherprüfung nicht verfügbar</em>}
+            <em>{appMetrics?.freeStorageBytes ? "Freier Speicher auf deinem Mac" : "Speicherprüfung nicht verfügbar"}</em>
           </div>
           <div className={`monitor-update ${updateInfo?.available ? "available" : ""}`}>
             <UploadCloud />
@@ -739,10 +733,7 @@ export function App() {
         <Footer version={version} openLegal={setLegalPage} />
       </main>
       {textDialogOpen && <TextToStlDialog close={() => { setTextDialogOpen(false); if (!file) setStudioTool("home"); }} create={createTextSource} />}
-      {ai3dDialogOpen && <Ai3dDialog
-        close={() => { setAi3dDialogOpen(false); if (studioTool === "prompt") setStudioTool("home"); }}
-        openSettings={() => { setAi3dDialogOpen(false); setStudioTool("home"); setView("settings"); }}
-      />}
+      {ai3dDialogOpen && <Ai3dDialog close={() => { setAi3dDialogOpen(false); if (studioTool === "prompt") setStudioTool("home"); }} />}
     </div>
   );
 }
@@ -754,8 +745,7 @@ function InfoView({ version }: { version: string }) {
     ["3D-Vorschau", "Three.js · React Three Fiber · Drei", "Dreh- und zoombare Mesh-Vorschau", "MIT"],
     ["Bildverarbeitung", "Sharp", "Rasterung, Masken, Höhenkarten und Farbanalyse", "Apache-2.0"],
     ["Lokale Foto-Tiefe", "Depth Anything V2 Small · Core ML", "Monokulare Tiefenschätzung auf Apple Silicon", "Apache-2.0"],
-    ["Komplexe Form", "Hunyuan3D Shape Small · MLX", "Optionale lokale Rekonstruktion aus einer bestätigten Referenz", "Tencent Hunyuan Community License / MIT"],
-    ["Prompt zu 3D", "OpenAI Responses API · GPT Image", "Einfacher CAD-Bauplan oder sichtbares Referenzbild; Mesh entsteht lokal", "optional, nutzungsabhängige API-Kosten"],
+    ["Prompt zu 3D", "OpenAI Responses API", "Validierter CAD-Bauplan; Vorschau und Mesh entstehen lokal", "optional, nutzungsabhängige API-Kosten"],
     ["3MF-Verpackung", "JSZip", "Mehrfarbige 3MF-Archive und Slicer-Metadaten", "MIT/GPL-3.0+"]
   ];
   return (
@@ -799,7 +789,7 @@ function InfoView({ version }: { version: string }) {
             <li><CheckCircle2 /> Kein Benutzerkonto und keine Werbe- oder Analyse-Tracker</li>
             <li><CheckCircle2 /> Bilder, Meshes, Höhenkarten und Exporte bleiben lokal</li>
             <li><CheckCircle2 /> OpenAI nur nach bewusst gestarteter Prompt-zu-3D-Aktion</li>
-            <li><CheckCircle2 /> Optionale 3D-Gewichte erst nach Lizenzanzeige und ausdrücklicher Zustimmung</li>
+          <li><CheckCircle2 /> Keine externen 3D-Modellgewichte oder nachgeladenen KI-Worker</li>
             <li><CheckCircle2 /> API-Key lokal mit App-Passwort, scrypt und AES-256-GCM geschützt</li>
           </ul>
         </div>
@@ -808,14 +798,14 @@ function InfoView({ version }: { version: string }) {
           <ul className="info-checklist neutral">
             <li><Info /> Ein einzelnes Bild liefert keine echte Rückseiteninformation</li>
             <li><Info /> Reliefs sind kontrollierte 2,5D-Modelle, keine vollständigen Scans</li>
-            <li><Info /> Komplexe Prompt-Modelle sind KI-Näherungen, keine maßhaltigen Hersteller-CAD-Dateien</li>
+            <li><Info /> Prompt-Modelle bestehen aus validierten Grundkörpern und ersetzen keine Hersteller-CAD-Dateien</li>
             <li><Info /> Vor dem Druck sollte jedes Modell im Slicer kontrolliert werden</li>
           </ul>
         </div>
       </div>
 
       <div className="info-legal-note">
-        <ShieldCheck /><div><strong>Lizenzen und rechtliche Hinweise</strong><p>Open-Source-Komponenten und optionale Modellgewichte behalten ihre jeweiligen Lizenzen. Hunyuan3D wird nur nach Anzeige der Tencent-Hunyuan-Lizenz geladen. Produktnamen dienen nur der Beschreibung; eine Partnerschaft oder Autorisierung wird nicht behauptet. Nutzer müssen Rechte an Referenzen, Designs und Marken selbst prüfen. Details stehen in THIRD_PARTY_NOTICES.md.</p></div>
+        <ShieldCheck /><div><strong>Lizenzen und rechtliche Hinweise</strong><p>Open-Source-Komponenten behalten ihre jeweiligen Lizenzen. Produktnamen dienen nur der Beschreibung; eine Partnerschaft oder Autorisierung wird nicht behauptet. Nutzer müssen Rechte an Referenzen, Designs und Marken selbst prüfen. Details stehen in THIRD_PARTY_NOTICES.md.</p></div>
       </div>
     </section>
   );
@@ -1064,22 +1054,7 @@ function TextToStlDialog({
   );
 }
 
-type Complex3dStatus = {
-  name: string; sizeBytes: number; sourceUrl: string; licenseUrl: string; codeUrl: string;
-  installed: boolean; workerAvailable: boolean; accepted: boolean; acceptedAt: string | null;
-  installedBytes: number; version: string; weightsSha256: string; notice: string;
-};
-type ComplexReference = {
-  path: string;
-  dataUrl: string;
-  disclaimer: string;
-  billing: {
-    model: string; textTokens: number; imageTokens: number; outputTokens: number;
-    costUsd: number; estimatedCostEur: number; exactUsageAvailable: boolean;
-  };
-};
-
-function Ai3dDialog({ close, openSettings }: { close: () => void; openSettings: () => void }) {
+function Ai3dDialog({ close }: { close: () => void }) {
   const [prompt, setPrompt] = useState("Ein kleines Haus mit vier Fenstern, einem Stockwerk und einem Spitzdach");
   const [followUp, setFollowUp] = useState("");
   const [busy, setBusy] = useState(false);
@@ -1091,16 +1066,6 @@ function Ai3dDialog({ close, openSettings }: { close: () => void; openSettings: 
   const [unlockPassword, setUnlockPassword] = useState("");
   const [unlockBusy, setUnlockBusy] = useState(false);
   const [models, setModels] = useState<Ai3dModel[]>([]);
-  const [complexMode, setComplexMode] = useState(true);
-  const [complexStatus, setComplexStatus] = useState<Complex3dStatus | null>(null);
-  const [complexReference, setComplexReference] = useState<ComplexReference | null>(null);
-  const [previousReferences, setPreviousReferences] = useState<ComplexReference[]>([]);
-  const [referenceInstruction, setReferenceInstruction] = useState("");
-  const [referenceCostsEur, setReferenceCostsEur] = useState(0);
-  const [complexStage, setComplexStage] = useState<"idle" | "reference" | "mesh">("idle");
-  const [complexResult, setComplexResult] = useState<{ stlPath: string; triangleCount: number; preview: { positions: number[]; indices: number[] } } | null>(null);
-  const [complexProgress, setComplexProgress] = useState({ phase: "", progress: 0, loadedBytes: 0, totalBytes: 0 });
-  const complexJob = useRef<string | null>(null);
   const [selectedModel, setSelectedModel] = useState<Ai3dModel["id"]>(() => {
     const saved = localStorage.getItem("ai-print-studio.ai3d-model");
     return saved === "gpt-5.6-sol" || saved === "gpt-5.6-luna" ? saved : "gpt-5.6-terra";
@@ -1122,12 +1087,8 @@ function Ai3dDialog({ close, openSettings }: { close: () => void; openSettings: 
   useEffect(() => {
     void refreshApiStatus();
     void window.desktop?.getAi3dModels().then(setModels);
-    void window.desktop?.getComplex3dStatus().then(setComplexStatus);
   }, [refreshApiStatus]);
   useEffect(() => window.desktop?.onAi3dProgress((nextProgress) => setProgress(nextProgress)), []);
-  useEffect(() => window.desktop?.onComplex3dProgress((jobId, nextProgress) => {
-    if (complexJob.current === jobId) setComplexProgress(nextProgress);
-  }), []);
   useEffect(() => localStorage.setItem("ai-print-studio.ai3d-model", selectedModel), [selectedModel]);
 
   async function unlockApiKey() {
@@ -1140,45 +1101,6 @@ function Ai3dDialog({ close, openSettings }: { close: () => void; openSettings: 
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : "Der API-Schlüssel konnte nicht entsperrt werden.");
     } finally { setUnlockBusy(false); }
-  }
-  async function createComplexReference(editExisting = false) {
-    if (!window.desktop) return;
-    setBusy(true); setComplexStage("reference"); setError(null); setComplexResult(null);
-    try {
-      const next = await window.desktop.createComplex3dReference(
-        prompt,
-        editExisting ? complexReference?.path : undefined,
-        editExisting ? referenceInstruction : undefined
-      );
-      if (complexReference) setPreviousReferences((current) => [...current, complexReference]);
-      setComplexReference(next);
-      setReferenceCostsEur((current) => current + next.billing.estimatedCostEur);
-      setReferenceInstruction("");
-    } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "Die Referenz konnte nicht erzeugt werden.");
-    } finally { setBusy(false); setComplexStage("idle"); }
-  }
-  function undoReference() {
-    setPreviousReferences((current) => {
-      const previous = current.at(-1);
-      if (previous) setComplexReference(previous);
-      return current.slice(0, -1);
-    });
-    setComplexResult(null);
-  }
-  async function createComplexModel() {
-    if (!window.desktop || !complexReference) return;
-    setBusy(true); setComplexStage("mesh"); setError(null);
-    const jobId = crypto.randomUUID();
-    complexJob.current = jobId;
-    try {
-      setComplexResult(await window.desktop.createComplex3dMesh(jobId, complexReference.path));
-    } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "Die lokale 3D-Rekonstruktion ist fehlgeschlagen.");
-    } finally { complexJob.current = null; setBusy(false); setComplexStage("idle"); }
-  }
-  async function cancelComplex() {
-    if (complexJob.current) await window.desktop?.cancelComplex3d(complexJob.current);
   }
   async function submit(instruction: string, existing?: Ai3dResult) {
     setProgress({
@@ -1248,17 +1170,8 @@ function Ai3dDialog({ close, openSettings }: { close: () => void; openSettings: 
         )}
         {apiStatus?.openAiConfigured && !result && <div className="notice"><CheckCircle2 /> Der gespeicherte OpenAI API-Schlüssel ist für diese Sitzung entsperrt.</div>}
         {!result && <>
-          <div className="ai-workflow-choice">
-            <button className={complexMode ? "selected" : ""} onClick={() => setComplexMode(true)}><Sparkles /><span><strong>Komplexe Außenform</strong><small>KI-Referenz + lokales 3D-Modell</small></span></button>
-            <button className={!complexMode ? "selected" : ""} onClick={() => setComplexMode(false)}><Box /><span><strong>Einfaches CAD</strong><small>Grundkörper, schnell und exakt</small></span></button>
-          </div>
-          <p>{complexMode ? "OpenAI erzeugt zunächst eine sichtbare Referenz. Erst nach deiner Prüfung rekonstruiert das optionale lokale Modell daraus ein Mesh." : "OpenAI erstellt einen validierten CAD-Bauplan aus einfachen Grundkörpern; die App erzeugt das STL lokal."}</p>
-          {complexMode && complexStatus && !complexStatus.installed && <div className="complex-model-compact">
-            <div><strong>Lokales 3D-Modell noch nicht installiert</strong><span>Download und Lizenzverwaltung findest du übersichtlich in den Einstellungen.</span></div>
-            <button className="secondary-button" onClick={openSettings}><Settings2 /> Zu den Einstellungen</button>
-          </div>}
-          {complexMode && complexStatus?.installed && <div className="complex-model-ready"><CheckCircle2 /><span>Lokales 3D-Modell bereit</span></div>}
-          {!complexMode && <div className="ai-model-picker">
+          <p>OpenAI erstellt einen validierten CAD-Bauplan aus druckbaren Grundkörpern; Vorschau, Geometrie und STL erzeugt die App anschließend lokal.</p>
+          <div className="ai-model-picker">
             <label htmlFor="ai3d-model">OPENAI-MODELL</label>
             <select id="ai3d-model" value={selectedModel} onChange={(event) => setSelectedModel(event.target.value as Ai3dModel["id"])} disabled={busy}>
               {models.map((model) => <option key={model.id} value={model.id}>{model.name} · {model.role} · typisch ca. {formatApiCost(model.typicalCostEur)}</option>)}
@@ -1269,41 +1182,9 @@ function Ai3dDialog({ close, openSettings }: { close: () => void; openSettings: 
               <div><small>PREIS JE 1 MIO. TOKEN</small><span>${selectedModelDetails.inputUsdPerMillion} Eingabe · ${selectedModelDetails.outputUsdPerMillion} Ausgabe</span></div>
             </div>}
             <small className="ai-model-disclaimer">„Typisch“ rechnet beispielhaft mit 1.000 Eingabe- und 2.000 Ausgabetoken. Komplexe Modelle und Folgeänderungen können abweichen.</small>
-          </div>}
+          </div>
           <label htmlFor="ai3d-prompt">OBJEKT BESCHREIBEN</label>
           <textarea id="ai3d-prompt" rows={5} maxLength={800} value={prompt} onChange={(event) => setPrompt(event.target.value)} disabled={busy} />
-          {complexMode && complexReference && <div className="complex-reference-workspace">
-            <div className="complex-reference">
-              <img src={complexReference.dataUrl} alt="Von OpenAI erzeugte 3D-Referenz" />
-              <div>
-                <strong>Referenz prüfen und bei Bedarf verbessern</strong>
-                <p>{complexReference.disclaimer} Form, Proportionen, Markenmerkmale und Details können abweichen. Verwende das Ergebnis nur, wenn du die nötigen Bild-, Design- und Markenrechte besitzt.</p>
-                <div className="reference-cost-summary">
-                  <span>Diese Referenz: <b>{formatApiCost(complexReference.billing.estimatedCostEur)}{complexReference.billing.exactUsageAvailable ? "" : " geschätzt"}</b></span>
-                  <span>Referenzrunde gesamt: <b>{formatApiCost(referenceCostsEur)}</b></span>
-                </div>
-                <small className="reference-usage">
-                  {complexReference.billing.exactUsageAvailable
-                    ? `${(complexReference.billing.textTokens + complexReference.billing.imageTokens).toLocaleString("de-DE")} Eingabe-Token · ${complexReference.billing.outputTokens.toLocaleString("de-DE")} Ausgabe-Token · aus OpenAI-Nutzung berechnet`
-                    : "OpenAI hat für diese Antwort keine Token-Nutzung geliefert; angezeigt wird deshalb die Vorabschätzung."}
-                </small>
-              </div>
-            </div>
-            {!complexResult && <div className="reference-editor">
-              <label htmlFor="reference-instruction">REFERENZ GEZIELT ÄNDERN</label>
-              <textarea id="reference-instruction" rows={3} maxLength={600} value={referenceInstruction} onChange={(event) => setReferenceInstruction(event.target.value)} placeholder="Zum Beispiel: Verwende die Kombi-Karosserie, mache die Räder größer und behalte den Blickwinkel bei." disabled={busy} />
-              <div className="reference-actions">
-                <button className="primary-button" disabled={busy || referenceInstruction.trim().length < 3} onClick={() => void createComplexReference(true)}>Änderung anwenden</button>
-                <button className="secondary-button" disabled={busy} onClick={() => void createComplexReference(false)}>Komplett neu erzeugen</button>
-                {previousReferences.length > 0 && <button className="secondary-button" disabled={busy} onClick={undoReference}>Letzte Referenz zurück</button>}
-              </div>
-              <small>Jede Änderung oder Neuerzeugung ist eine neue kostenpflichtige OpenAI-Bildanfrage. Vor dem Start voraussichtlich ca. 0,12–0,18 €.</small>
-            </div>}
-          </div>}
-          {complexMode && complexResult && <div className="ai3d-workspace">
-            <ComplexMeshPreview mesh={complexResult.preview} />
-            <div className="ai3d-result-summary"><div><strong>Komplexes Mesh lokal erstellt</strong><small>{complexResult.triangleCount.toLocaleString("de-DE")} Dreiecke · KI-Näherung</small></div><button className="secondary-button" onClick={() => void window.desktop?.showItemInFolder(complexResult.stlPath)}>STL im Finder</button></div>
-          </div>}
         </>}
         {result && <div className="ai3d-workspace">
           <CadPlanPreview plan={result.plan} />
@@ -1330,12 +1211,12 @@ function Ai3dDialog({ close, openSettings }: { close: () => void; openSettings: 
             </button>
           </div>
         </div>}
-        <div className="notice">{complexMode ? "An OpenAI wird nur deine Beschreibung übertragen. OpenAI erzeugt daraus ein Referenzbild. Dieses Bild wird erst nach deiner Bestätigung lokal in 3D rekonstruiert." : result ? "Für Änderungen werden deine Folgeanweisung und der aktuelle CAD-Bauplan an OpenAI übertragen. Vorschau, Geometrie und STL werden lokal erzeugt." : "Nur deine Beschreibung wird an OpenAI übertragen. Geometrie und STL werden anschließend lokal auf deinem Mac erzeugt."}</div>
+        <div className="notice">{result ? "Für Änderungen werden deine Folgeanweisung und der aktuelle CAD-Bauplan an OpenAI übertragen. Vorschau, Geometrie und STL werden lokal erzeugt." : "Nur deine Beschreibung wird an OpenAI übertragen. Geometrie und STL werden anschließend lokal auf deinem Mac erzeugt."}</div>
         <div className="api-cost-notice">
           <strong>OpenAI-API-Kosten</strong>
-          <span>{complexMode ? "Eine hochwertige GPT-Image-2-Referenz kostet vorab geschätzt etwa 0,12–0,18 €. Jede Änderung ist eine neue kostenpflichtige Bildanfrage. Nach der Antwort zeigt die App die von OpenAI gemeldete Nutzung und die daraus berechneten Kosten." : "OpenAI rechnet jede Erstellung und Folgeänderung direkt über deinen eigenen API-Account ab. Während der Erstellung zeigt AI Print Studio eine laufende Schätzung in Euro; der Tokenverbrauch wird nach Abschluss korrigiert. AI Print Studio erhebt keine zusätzlichen Gebühren."}</span>
+          <span>OpenAI rechnet jede Erstellung und Folgeänderung direkt über deinen eigenen API-Account ab. Während der Erstellung zeigt AI Print Studio eine laufende Schätzung in Euro; der Tokenverbrauch wird nach Abschluss korrigiert. AI Print Studio erhebt keine zusätzlichen Gebühren.</span>
         </div>
-        {busy && !complexMode && <div className="ai-live-progress" aria-live="polite">
+        {busy && <div className="ai-live-progress" aria-live="polite">
           <div className="ai-progress-heading">
             <div>
               <strong>{progress.phase}</strong>
@@ -1355,8 +1236,6 @@ function Ai3dDialog({ close, openSettings }: { close: () => void; openSettings: 
           </div>
           <p>Der Balken zeigt den Arbeitsabschnitt, da OpenAI keinen exakten Gesamtfortschritt liefert. Die Euro-Anzeige nutzt die gemeldeten bzw. während des Streams geschätzten Token und einen festen USD/EUR-Schätzkurs.</p>
         </div>}
-        {busy && complexMode && complexStage === "reference" && <div className="ai-live-progress" aria-live="polite"><div className="ai-progress-heading"><div><strong>OpenAI erzeugt die Referenz …</strong><small>GPT Image 2 · hohe Qualität</small></div><span>ca. 0,12–0,18 €</span></div><div className="indeterminate-progress"><span /></div><p>OpenAI liefert bei der Bilderzeugung keinen verlässlichen Prozentfortschritt. Die tatsächliche gemeldete Nutzung wird direkt nach Abschluss angezeigt.</p></div>}
-        {busy && complexMode && complexStage === "mesh" && complexProgress.phase && <div className="ai-live-progress"><strong>{complexProgress.phase}</strong><div className="ai-progress-track"><span style={{ width: `${Math.max(2, complexProgress.progress)}%` }} /></div><span>{Math.round(complexProgress.progress)} %</span><button className="secondary-button" onClick={() => void cancelComplex()}>Abbrechen</button></div>}
         {!busy && result?.billing && <div className="ai-cost-result">
           <span>Letzte OpenAI-Anfrage</span>
           <strong>ca. {formatApiCost(result.billing.estimatedCostEur)}</strong>
@@ -1382,9 +1261,7 @@ function Ai3dDialog({ close, openSettings }: { close: () => void; openSettings: 
         </div>}
         <div className="modal-actions">
           <button className="secondary-button" onClick={close} disabled={busy}>{result ? "Schließen" : "Abbrechen"}</button>
-          {!result && complexMode && !complexReference && <button className="primary-button" disabled={busy || apiStatus?.openAiConfigured !== true || prompt.trim().length < 10} onClick={() => void createComplexReference(false)}>{busy ? "Referenz wird erstellt …" : "KI-Referenz erstellen · ca. 0,12–0,18 €"} <ChevronRight /></button>}
-          {!result && complexMode && complexReference && !complexResult && <button className="primary-button" disabled={busy || complexStatus?.installed !== true} onClick={() => void createComplexModel()}>{busy ? "Lokal wird rekonstruiert …" : "Referenz lokal in 3D umwandeln"} <ChevronRight /></button>}
-          {!result && !complexMode && <button className="primary-button" disabled={busy || apiStatus?.openAiConfigured !== true || prompt.trim().length < 10} onClick={() => void submit(prompt)}>{busy ? "OpenAI konstruiert …" : "3D-Modell erstellen"} <ChevronRight /></button>}
+          {!result && <button className="primary-button" disabled={busy || apiStatus?.openAiConfigured !== true || prompt.trim().length < 10} onClick={() => void submit(prompt)}>{busy ? "OpenAI konstruiert …" : "3D-Modell erstellen"} <ChevronRight /></button>}
         </div>
       </section>
     </div>
@@ -1408,29 +1285,6 @@ function CadPlanPreview({ plan }: { plan: CadPlan }) {
       </Canvas>
     </div>
   );
-}
-
-function ComplexMeshPreview({ mesh }: { mesh: { positions: number[]; indices: number[] } }) {
-  const geometry = useMemo(() => {
-    const next = new THREE.BufferGeometry();
-    next.setAttribute("position", new THREE.Float32BufferAttribute(mesh.positions, 3));
-    next.setIndex(mesh.indices);
-    next.computeVertexNormals();
-    next.computeBoundingSphere();
-    return next;
-  }, [mesh]);
-  const radius = geometry.boundingSphere?.radius ?? 100;
-  return <div className="cad-preview">
-    <div className="panel-label">LOKALE 3D-VORSCHAU · ZIEHEN ZUM DREHEN</div>
-    <Canvas camera={{ position: [radius * 1.5, radius, radius * 1.7], fov: 42 }}>
-      <color attach="background" args={["#090d13"]} />
-      <ambientLight intensity={1.2} />
-      <directionalLight position={[radius, radius * 1.5, radius]} intensity={2.2} />
-      <mesh geometry={geometry}><meshStandardMaterial color="#d9e5cf" roughness={0.7} /></mesh>
-      <gridHelper args={[radius * 3, 24, "#344151", "#202936"]} />
-      <OrbitControls makeDefault enableDamping />
-    </Canvas>
-  </div>;
 }
 
 function CadPrimitiveMesh({ primitive }: { primitive: CadPrimitive }) {
@@ -1510,57 +1364,13 @@ function Settings() {
     storageVersion: 0
     ,depthModelAvailable: false
   });
-  const [complexStatus, setComplexStatus] = useState<Complex3dStatus | null>(null);
-  const [complexConsent, setComplexConsent] = useState(false);
-  const [complexBusy, setComplexBusy] = useState(false);
-  const [complexError, setComplexError] = useState<string | null>(null);
-  const [complexProgress, setComplexProgress] = useState({ phase: "", progress: 0, loadedBytes: 0, totalBytes: 0 });
-  const complexJob = useRef<string | null>(null);
-
   async function refreshStatus() {
     if (!window.desktop) return;
     const next = await window.desktop.getSettingsStatus();
     setStatus(next);
-    setComplexStatus(await window.desktop.getComplex3dStatus());
   }
 
   useEffect(() => { void refreshStatus(); }, []);
-  useEffect(() => window.desktop?.onComplex3dProgress((jobId, progress) => {
-    if (complexJob.current === jobId) setComplexProgress(progress);
-  }), []);
-
-  async function installComplexModel() {
-    if (!window.desktop || !complexConsent) return;
-    setComplexBusy(true); setComplexError(null);
-    const jobId = crypto.randomUUID();
-    complexJob.current = jobId;
-    try {
-      await window.desktop.acceptComplex3dLicense(true);
-      await window.desktop.downloadComplex3dModel(jobId);
-      setComplexStatus(await window.desktop.getComplex3dStatus());
-      setComplexConsent(false);
-    } catch (error) {
-      setComplexError(error instanceof Error ? error.message : "Das lokale 3D-Modell konnte nicht installiert werden.");
-    } finally {
-      complexJob.current = null;
-      setComplexBusy(false);
-    }
-  }
-
-  async function removeComplexModelFromDisk() {
-    if (!window.desktop || !window.confirm("Lokales 3D-Modell entfernen?\n\nDie etwa 3,82 GB großen Modellgewichte werden gelöscht. Prompt zu 3D kann weiterhin das einfache CAD verwenden.")) return;
-    setComplexBusy(true); setComplexError(null);
-    try {
-      await window.desktop.removeComplex3dModel();
-      setComplexStatus(await window.desktop.getComplex3dStatus());
-    } catch (error) {
-      setComplexError(error instanceof Error ? error.message : "Das lokale Modell konnte nicht entfernt werden.");
-    } finally { setComplexBusy(false); }
-  }
-
-  async function cancelComplexDownload() {
-    if (complexJob.current) await window.desktop?.cancelComplex3d(complexJob.current);
-  }
 
   return (
     <>
@@ -1568,37 +1378,6 @@ function Settings() {
         <article><div className="setting-icon"><Sparkles /></div><div><h3>OpenAI · Prompt zu 3D</h3><p>{status.openAiConfigured ? "Der lokal verschlüsselte API-Schlüssel ist für diese Sitzung entsperrt." : status.openAiStored ? "Der API-Schlüssel ist lokal verschlüsselt und aktuell gesperrt." : "Speichert den API-Schlüssel lokal verschlüsselt – ohne macOS-Schlüsselbund."}</p></div><div className="setting-action">{status.openAiConfigured ? <span className="tag"><CheckCircle2 /> Entsperrt</span> : status.openAiStored ? <span className="tag neutral">Gesperrt</span> : <span className="tag neutral">Nicht eingerichtet</span>}<button onClick={() => setDialog("openai")}>{status.openAiStored ? "Verwalten" : "Einrichten"}</button></div></article>
         <article><div className="setting-icon"><Layers3 /></div><div><h3>Lokale Relief-Engine</h3><p>Integriert · erzeugt wasserdichte STL- und 3MF-Dateien vollständig offline.</p></div><button onClick={() => setDialog("model")}>Details</button></article>
         <article><div className="setting-icon"><Box /></div><div><h3>Tiefenerkennung für Fotos</h3><p>Erzeugt räumliche Tiefe direkt auf deinem Mac · keine Cloud.</p></div><span className={status.depthModelAvailable ? "tag" : "tag neutral"}>{status.depthModelAvailable ? "Bereit" : "Aktuelles Update nötig"}</span></article>
-        <article className="complex-settings-card">
-          <div className="setting-icon"><Sparkles /></div>
-          <div className="complex-settings-content">
-            <div className="complex-settings-heading">
-              <div><h3>Komplexe Außenformen · lokales 3D-Modell</h3><p>{complexStatus?.installed ? `${complexStatus.name} ist lokal installiert und einsatzbereit.` : "Optional für komplexe Prompt-Modelle. Einfaches Prompt-CAD funktioniert weiterhin ohne diesen Download."}</p></div>
-              <span className={complexStatus?.installed ? "tag" : "tag neutral"}>{complexStatus?.installed ? "Installiert" : "Optional"}</span>
-            </div>
-            {!complexStatus?.installed && complexStatus && <>
-              <div className="model-facts">
-                <span><b>Download</b> ca. {(complexStatus.sizeBytes / 1_000_000_000).toFixed(2)} GB</span>
-                <span><b>Freier Speicher</b> mindestens 5,5 GB</span>
-                <span><b>Quelle</b> Hugging Face / Hunyuan3D</span>
-                <span><b>Lizenz</b> Tencent Hunyuan Community License</span>
-              </div>
-              <p className="model-legal-copy">Das optionale Modell läuft nach dem Download lokal. Ergebnisse sind KI-Näherungen; prüfe vor einer Veröffentlichung die Rechte an verwendeten Referenzen, Designs und Marken.</p>
-              <div className="complex-license-links">
-                <button onClick={() => void window.desktop?.openExternal(complexStatus.sourceUrl)}>Modellquelle</button>
-                <button onClick={() => void window.desktop?.openExternal(complexStatus.licenseUrl)}>Lizenz vollständig lesen</button>
-              </div>
-              <label className="license-confirm"><input type="checkbox" checked={complexConsent} onChange={(event) => setComplexConsent(event.target.checked)} disabled={complexBusy} /><span>Ich habe Quelle und Lizenzbedingungen gelesen und stimme dem Download der optionalen Modellgewichte ausdrücklich zu.</span></label>
-              <div className="complex-settings-actions">
-                <button className="primary-button" disabled={!complexConsent || complexBusy || !complexStatus.workerAvailable} onClick={() => void installComplexModel()}>{complexBusy ? "Modell wird geladen …" : "Lokales 3D-Modell herunterladen"}</button>
-                {complexBusy && <button className="secondary-button" onClick={() => void cancelComplexDownload()}>Download abbrechen</button>}
-              </div>
-            </>}
-            {complexStatus?.installed && <div className="complex-settings-actions"><button className="secondary-button danger-button" disabled={complexBusy} onClick={() => void removeComplexModelFromDisk()}>Lokales Modell entfernen</button></div>}
-            {complexBusy && complexProgress.phase && <div className="settings-download-progress"><div><strong>{complexProgress.phase}</strong><span>{Math.round(complexProgress.progress)} %</span></div><div className="ai-progress-track"><span style={{ width: `${Math.max(2, complexProgress.progress)}%` }} /></div>{complexProgress.totalBytes > 0 && <small>{(complexProgress.loadedBytes / 1_000_000_000).toFixed(2)} von {(complexProgress.totalBytes / 1_000_000_000).toFixed(2)} GB</small>}</div>}
-            {complexError && <div className="notice error">{complexError}</div>}
-            {complexStatus && !complexStatus.workerAvailable && <div className="notice error">Dieser App-Version fehlt eine benötigte Komponente. Bitte installiere das aktuelle vollständige Update.</div>}
-          </div>
-        </article>
         <UpdateSettings />
       </section>
       {dialog === "openai" && <OpenAiDialog status={status} close={() => setDialog(null)} refresh={refreshStatus} />}
@@ -1758,7 +1537,7 @@ function Footer({ version, openLegal }: { version: string; openLegal: (page: Leg
 function LegalView({ page, onClose, version }: { page: Exclude<LegalPage, null>; onClose: () => void; version: string }) {
   const content = {
     imprint: { title: "Impressum", body: "Die für eine öffentliche Veröffentlichung erforderlichen Anbieter- und Kontaktdaten werden vor dem ersten Release in der App-Konfiguration hinterlegt." },
-    privacy: { title: "Datenschutz", body: "Bilder und 3D-Modelle werden grundsätzlich lokal auf diesem Mac verarbeitet. Bei Prompt zu 3D wird nur nach einer bewusst gestarteten Aktion die eingegebene Beschreibung an OpenAI übertragen; für komplexe Formen erzeugt OpenAI daraus ein sichtbares Referenzbild. Erst nach der Prüfung durch den Nutzer wird diese Referenz lokal rekonstruiert. Das optionale Hunyuan3D-Modell wird erst nach Anzeige von Quelle, Größe und Lizenz sowie ausdrücklicher Zustimmung heruntergeladen. Dabei werden Modellgewichte von Hugging Face bezogen; keine eigenen Bilder, Prompts oder Modelle werden an Hugging Face übertragen." },
+    privacy: { title: "Datenschutz", body: "Bilder und 3D-Modelle werden grundsätzlich lokal auf diesem Mac verarbeitet. Bei Prompt zu 3D werden nur nach einer bewusst gestarteten Aktion die eingegebene Beschreibung und bei Folgeänderungen der aktuelle CAD-Bauplan an OpenAI übertragen. Vorschau, Geometrie und STL entstehen anschließend lokal. Die App lädt keine externen 3D-Modellgewichte nach." },
     cookies: { title: "Cookiehinweise", body: "Diese Desktop-App verwendet keine Cookies und keine browserbasierte Nachverfolgung. Lokale Einstellungen werden ausschließlich auf dem Gerät gespeichert." }
   }[page];
   return (
