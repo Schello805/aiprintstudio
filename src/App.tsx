@@ -404,11 +404,6 @@ export function App() {
     setEditorHeightmap(dataUrl);
     setResult(null);
   }, []);
-  const updateEditorColorMap = useCallback((dataUrl: string | null) => {
-    setEditorColorMap(dataUrl);
-    setResult(null);
-  }, []);
-
   function returnToToolSelection() {
     const hasProgress = Boolean(file || result || editorHeightmap || editorColorMap);
     if (hasProgress && !window.confirm("Aktuellen Studio-Stand verwerfen?\n\nBild, Einstellungen, Farbauswahl und noch nicht exportierte Änderungen gehen dabei verloren.")) return;
@@ -558,11 +553,8 @@ export function App() {
               <RegionEditor
                 imageUrl={preview}
                 initialHeightmapUrl={editorHeightmap ?? result?.heightmapDataUrl}
-                initialColorMapUrl={editorColorMap}
                 reliefMm={reliefMm}
-                colors={multicolorEnabled ? colors : []}
                 onHeightmapChange={updateEditorHeightmap}
-                onColorMapChange={updateEditorColorMap}
                 onClose={() => setEditorOpen(false)}
               />
             )}

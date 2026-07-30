@@ -2,6 +2,10 @@
 
 ## Unveröffentlicht
 
+- Der Flächeneditor ist bewusst auf seinen Kern reduziert: erkannte Fläche
+  anklicken, Höhe einstellen, anheben oder absenken.
+- Pinsel, Radierer, Farbpinsel, Auswahl-Automatik, Verbinden/Trennen, Glätten
+  und weitere Spezialwerkzeuge wurden aus dem normalen Editor entfernt.
 - Die Live-3D-Vorschau im Flächeneditor verwendet jetzt bis zu 320 statt nur
   etwa 90 Abtastpunkte. Schrift, Rundungen und diagonale Logo-Kanten erscheinen
   dadurch erheblich sauberer.
