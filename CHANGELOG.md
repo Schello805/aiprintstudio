@@ -2,6 +2,18 @@
 
 ## Unveröffentlicht
 
+- **Prompt zu 3D** ist im Werkzeugmenü, im Arbeitsbereich und im Dialog klar
+  als Beta gekennzeichnet. Der Text weist auf vereinfachte Ergebnisse hin.
+- Der Flächeneditor übernimmt beim Öffnen jetzt exakt die Höhenkarte des
+  bereits berechneten Modells. Er erzeugt nicht länger eine abweichende Form
+  aus einer zweiten, unabhängigen Bildschätzung.
+- Transparente und entfernte Bildbereiche werden auch in der Live-Vorschau des
+  Editors ausgeblendet. Höhe und Maßstab entsprechen der Export-Höhenkarte.
+- Bereits vorhandene Höhen- und AMS-Farbkorrekturen werden beim erneuten Öffnen
+  wiederhergestellt. Das bloße Öffnen des Editors verwirft kein fertiges Modell.
+- Höhenregler, Vertiefen, gleiche Höhe, Trennen, Glätten, Abrunden sowie
+  Auswahl-Erweitern und -Reduzieren wurden neu verdrahtet und durch zusätzliche
+  Editor-Tests abgesichert.
 - Fehlgeschlagene Prompt-zu-3D-Aufträge zeigen jetzt Diagnose-ID, letzte Phase,
   Modell, Laufzeit und die technische Netzwerkursache direkt im Dialog.
 - Ein datensparsames JSONL-Protokoll kann aus der Fehlermeldung im Finder

@@ -27,6 +27,7 @@ const editorTooltips = {
   higher: "Hebt die Auswahl um eine kleine Höhenstufe an.\nBeispiel: Eine Kontur schrittweise stärker hervorheben.",
   lower: "Senkt die Auswahl um eine kleine Höhenstufe ab.\nBeispiel: Einen zu dominanten Hintergrund zurücknehmen.",
   base: "Setzt die Auswahl vollständig auf die Grundfläche.\nBeispiel: Unerwünschte Bilddetails verschwinden aus dem Relief.",
+  recess: "Senkt die Auswahl um eine Höhenstufe unter ihre Umgebung.\nBeispiel: Eine Nut oder vertiefte Schrift sichtbar einprägen.",
   smooth: "Gleicht kleine Höhenunterschiede innerhalb der Auswahl aus.\nBeispiel: Bildrauschen auf einer großen Fläche reduzieren.",
   round: "Glättet die Auswahl zweimal für weichere Übergänge.\nBeispiel: Harte Stufen an einer runden Rolle abrunden."
 };
@@ -38,6 +39,8 @@ type EditorData = {
 
 export function RegionEditor({
   imageUrl,
+  initialHeightmapUrl,
+  initialColorMapUrl,
   reliefMm,
   colors,
   onHeightmapChange,
@@ -45,6 +48,8 @@ export function RegionEditor({
   onClose
 }: {
   imageUrl: string;
+  initialHeightmapUrl?: string | null;
+  initialColorMapUrl?: string | null;
   reliefMm: number;
   colors: string[];
   onHeightmapChange: (dataUrl: string | null) => void;
@@ -53,6 +58,13 @@ export function RegionEditor({
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const sliderStartRef = useRef<Uint8ClampedArray | null>(null);
+  // Die beim Öffnen sichtbare, bereits berechnete Form ist die verbindliche
+  // Ausgangsbasis. Änderungen, die wir nach oben melden, dürfen den Editor
+  // nicht erneut mit einer neuen Prop-Version initialisieren.
+  const initialHeightmapRef = useRef(initialHeightmapUrl);
+  const initialColorMapRef = useRef(initialColorMapUrl);
+  const heightmapReadyRef = useRef(false);
+  const colorMapReadyRef = useRef(false);
   const [data, setData] = useState<EditorData | null>(null);
   const [levels, setLevels] = useState<Uint8ClampedArray | null>(null);
   const [selection, setSelection] = useState<Set<number>>(new Set());
@@ -68,7 +80,7 @@ export function RegionEditor({
   useEffect(() => {
     let active = true;
     const image = new Image();
-    image.onload = () => {
+    image.onload = async () => {
       if (!active) return;
       const scale = Math.min(1, 480 / Math.max(image.naturalWidth, image.naturalHeight));
       const width = Math.max(16, Math.round(image.naturalWidth * scale));
@@ -81,13 +93,33 @@ export function RegionEditor({
       context.drawImage(image, 0, 0, width, height);
       const source = context.getImageData(0, 0, width, height).data;
       const segmentation = segmentRgba(source, width, height);
-      const initial = initialRegionLevels(segmentation);
+      const loadMap = async (url: string | null | undefined, fallback: Uint8ClampedArray) => {
+        if (!url) return fallback;
+        try {
+          const map = new Image();
+          map.src = url;
+          await map.decode();
+          if (!active) return fallback;
+          const mapCanvas = document.createElement("canvas");
+          mapCanvas.width = width; mapCanvas.height = height;
+          const mapContext = mapCanvas.getContext("2d", { willReadFrequently: true });
+          if (!mapContext) return fallback;
+          mapContext.drawImage(map, 0, 0, width, height);
+          const pixels = mapContext.getImageData(0, 0, width, height).data;
+          return Uint8ClampedArray.from({ length: width * height }, (_, index) => pixels[index * 4]);
+        } catch {
+          return fallback;
+        }
+      };
+      const initial = await loadMap(initialHeightmapRef.current, initialRegionLevels(segmentation));
+      const initialColors = await loadMap(initialColorMapRef.current, new Uint8ClampedArray(width * height).fill(255));
+      if (!active) return;
       setData({ segmentation, source: source.slice() });
       setLevels(initial);
       setSelection(new Set());
       setUndoStack([]);
       setRedoStack([]);
-      setColorAssignments(new Uint8ClampedArray(width * height).fill(255));
+      setColorAssignments(initialColors);
     };
     image.src = imageUrl;
     return () => { active = false; };
@@ -95,6 +127,10 @@ export function RegionEditor({
 
   useEffect(() => {
     if (!data || !levels) return;
+    if (!heightmapReadyRef.current) {
+      heightmapReadyRef.current = true;
+      return;
+    }
     const canvas = document.createElement("canvas");
     canvas.width = data.segmentation.width; canvas.height = data.segmentation.height;
     const context = canvas.getContext("2d");
@@ -112,7 +148,11 @@ export function RegionEditor({
 
   useEffect(() => {
     if (!data || !colorAssignments || !colors.length) {
-      onColorMapChange(null);
+      if (colorMapReadyRef.current) onColorMapChange(null);
+      return;
+    }
+    if (!colorMapReadyRef.current) {
+      colorMapReadyRef.current = true;
       return;
     }
     const canvas = document.createElement("canvas");
@@ -183,6 +223,7 @@ export function RegionEditor({
   };
   const beginSliderDrag = () => {
     if (!levels || !selection.size) return;
+    if (sliderStartRef.current) return;
     sliderStartRef.current = levels.slice();
   };
   const endSliderDrag = () => {
@@ -297,7 +338,7 @@ export function RegionEditor({
             onPointerCancel={() => { paintingRef.current = false; }}
           /> : <div className="editor-loading">Flächen werden erkannt …</div>}
         </div>
-        <EditorReliefPreview segmentation={data?.segmentation ?? null} levels={levels} />
+        <EditorReliefPreview segmentation={data?.segmentation ?? null} source={data?.source ?? null} levels={levels} reliefMm={reliefMm} />
       </div>
       <div className="selection-toolbar">
         <button className="has-tooltip" disabled={!selection.size || !data} onClick={() => data && setSelection(expandRegionSelection(selection, data.segmentation.regions))}><Plus /> Angrenzend erweitern<SettingTooltip text={editorTooltips.expand} /></button>
@@ -305,12 +346,12 @@ export function RegionEditor({
         <button className="has-tooltip" disabled={selection.size !== 1 || !data} onClick={() => data && setSelection(selectSimilarRegions([...selection][0], data.segmentation.regions))}><WandSparkles /> Ähnliche Farbe<SettingTooltip text={editorTooltips.similar} /></button>
         <button className="has-tooltip" disabled={!data} onClick={() => data && setSelection(new Set(data.segmentation.regions.map((region) => region.id).filter((id) => !selection.has(id))))}><RotateCcw /> Umkehren<SettingTooltip text={editorTooltips.invert} /></button>
         <button className="has-tooltip" disabled={!selection.size} onClick={() => setSelection(new Set())}><X /> Auswahl aufheben<SettingTooltip text={editorTooltips.clear} /></button>
-        <button disabled={selection.size < 2 || !data || !levels} onClick={() => {
+        <button title="Setzt alle ausgewählten Flächen auf dieselbe Höhe" disabled={selection.size < 2 || !data || !levels} onClick={() => {
           if (!data || !levels || selection.size < 2) return;
           const value = Math.max(...[...selection].map((id) => levels[data.segmentation.regions[id]?.pixels[0] ?? 0]));
           commitLevels(setSelectedRegionLevel(levels, selection, data.segmentation.regions, value));
-        }}><Link2 /> Verbinden</button>
-        <button disabled={!selection.size} onClick={() => setLevel(0)}><Unlink2 /> Trennen</button>
+        }}><Link2 /> Höhe verbinden</button>
+        <button title="Löst die Auswahl vom Motiv, indem sie auf die Grundfläche gesetzt wird" disabled={!selection.size} onClick={() => setLevel(0)}><Unlink2 /> Vom Motiv trennen</button>
       </div>
       {colors.length > 0 && (
         <div className="editor-color-toolbar">
@@ -359,7 +400,7 @@ export function RegionEditor({
         <button className="has-tooltip" disabled={!selection.size} onClick={() => setLevel(currentLevel + 20)}><ChevronUp /> Höher<SettingTooltip text={editorTooltips.higher} /></button>
         <button className="has-tooltip" disabled={!selection.size} onClick={() => setLevel(currentLevel - 20)}><ChevronDown /> Tiefer<SettingTooltip text={editorTooltips.lower} /></button>
         <button className="has-tooltip" disabled={!selection.size} onClick={() => setLevel(0)}>Auf Grundfläche<SettingTooltip text={editorTooltips.base} /></button>
-        <button className="has-tooltip" disabled={!selection.size} onClick={() => setLevel(0)}><Scissors /> Vertiefen<SettingTooltip text={"Senkt die Auswahl auf die Grundfläche und erzeugt eine sichtbare Vertiefung.\nBeispiel: Eine ausgesparte Schriftfläche oder Nut vorbereiten."} /></button>
+        <button className="has-tooltip" disabled={!selection.size} onClick={() => setLevel(currentLevel - 40)}><Scissors /> Vertiefen<SettingTooltip text={editorTooltips.recess} /></button>
         <button className="has-tooltip" disabled={!selection.size || !data || !levels} onClick={() => data && levels && commitLevels(smoothSelectedLevels(levels, selection, data.segmentation))}>Glätten<SettingTooltip text={editorTooltips.smooth} /></button>
         <button className="has-tooltip" disabled={!selection.size || !data || !levels} onClick={() => {
           if (!data || !levels) return;
@@ -380,10 +421,20 @@ function hexToRgb(color: string): [number, number, number] {
   return [Number.parseInt(color.slice(1, 3), 16), Number.parseInt(color.slice(3, 5), 16), Number.parseInt(color.slice(5, 7), 16)];
 }
 
-function EditorReliefPreview({ segmentation, levels }: { segmentation: Segmentation | null; levels: Uint8ClampedArray | null }) {
+function EditorReliefPreview({
+  segmentation,
+  source,
+  levels,
+  reliefMm
+}: {
+  segmentation: Segmentation | null;
+  source: Uint8ClampedArray | null;
+  levels: Uint8ClampedArray | null;
+  reliefMm: number;
+}) {
   const geometry = useMemo(() => {
     const next = new THREE.BufferGeometry();
-    if (!segmentation || !levels) return next;
+    if (!segmentation || !source || !levels) return next;
     const stride = Math.max(1, Math.ceil(Math.max(segmentation.width, segmentation.height) / 90));
     const columns = Math.ceil((segmentation.width - 1) / stride) + 1;
     const rows = Math.ceil((segmentation.height - 1) / stride) + 1;
@@ -391,17 +442,28 @@ function EditorReliefPreview({ segmentation, levels }: { segmentation: Segmentat
     for (let y = 0; y < rows; y += 1) for (let x = 0; x < columns; x += 1) {
       const sourceX = Math.min(segmentation.width - 1, x * stride);
       const sourceY = Math.min(segmentation.height - 1, y * stride);
-      positions.push(x - columns / 2, levels[sourceY * segmentation.width + sourceX] / 32, y - rows / 2);
+      positions.push(
+        x - columns / 2,
+        levels[sourceY * segmentation.width + sourceX] / 255 * reliefMm,
+        y - rows / 2
+      );
     }
     for (let y = 0; y < rows - 1; y += 1) for (let x = 0; x < columns - 1; x += 1) {
       const a = y * columns + x, b = a + 1, c = a + columns, d = c + 1;
+      const sample = (column: number, row: number) => {
+        const sourceX = Math.min(segmentation.width - 1, column * stride);
+        const sourceY = Math.min(segmentation.height - 1, row * stride);
+        const index = sourceY * segmentation.width + sourceX;
+        return source[index * 4 + 3] >= 24 && levels[index] > 1;
+      };
+      if (![sample(x, y), sample(x + 1, y), sample(x, y + 1), sample(x + 1, y + 1)].some(Boolean)) continue;
       indices.push(a, d, b, a, c, d);
     }
     next.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
     next.setIndex(indices);
     next.computeVertexNormals();
     return next;
-  }, [segmentation, levels]);
+  }, [levels, reliefMm, segmentation, source]);
   useEffect(() => () => geometry.dispose(), [geometry]);
   const size = Math.min(92, Math.max(segmentation?.width ?? 92, segmentation?.height ?? 92));
   return (

@@ -82,6 +82,7 @@ h1,h2,h3 { font-family:Manrope, sans-serif; margin:0; }
 .text-source-button.ai { border-color:#52783c; color:#c9ff9f; background:#142012; }
 .text-source-button svg { width:16px; }
 .ai3d-modal { width:min(640px,calc(100vw - 40px)); }
+.beta-badge { display:inline-flex; vertical-align:middle; margin-left:8px; border:1px solid #c68b35; border-radius:99px; padding:3px 7px; background:#2a1d0d; color:#ffc66d; font-size:8px; font-weight:900; letter-spacing:.12em; }
 .modal textarea { width:100%; box-sizing:border-box; resize:vertical; border:1px solid #343b46; border-radius:9px; background:#0b0e13; color:#e7ebf2; padding:11px 12px; font:inherit; line-height:1.45; outline:none; }
 .modal textarea:focus { border-color:#78a65b; box-shadow:0 0 0 3px #9df36716; }
 .ai-progress { display:flex; align-items:center; gap:12px; padding:12px; border:1px solid #405c32; border-radius:10px; background:#121b10; }

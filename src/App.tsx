@@ -492,7 +492,7 @@ export function App() {
           <section className="workspace">
             <div className="tool-context">
               <button onClick={returnToToolSelection}>← Alle Werkzeuge</button>
-              <span>{studioTool === "image" ? <ImagePlus /> : studioTool === "text" ? <Type /> : <Sparkles />}{studioTool === "image" ? "Bild zu 3D" : studioTool === "text" ? "Schrift zu 3D" : "Prompt zu 3D"}</span>
+              <span>{studioTool === "image" ? <ImagePlus /> : studioTool === "text" ? <Type /> : <Sparkles />}{studioTool === "image" ? "Bild zu 3D" : studioTool === "text" ? "Schrift zu 3D" : <>Prompt zu 3D <b className="beta-badge">BETA</b></>}</span>
               {studioTool !== "prompt" && <div className="project-actions">
                 <button onClick={() => void openProject()}><FolderOpen /> Projekt öffnen</button>
                 <button disabled={!file} onClick={() => void saveProject()}><Save /> Projekt speichern</button>
@@ -558,6 +558,8 @@ export function App() {
             {file && preview && editorOpen && (
               <RegionEditor
                 imageUrl={preview}
+                initialHeightmapUrl={editorHeightmap ?? result?.heightmapDataUrl}
+                initialColorMapUrl={editorColorMap}
                 reliefMm={reliefMm}
                 colors={multicolorEnabled ? colors : []}
                 onHeightmapChange={updateEditorHeightmap}
@@ -844,10 +846,10 @@ function StudioHub({
     {
       id: "prompt",
       icon: Sparkles,
-      eyebrow: "KI · VOLLSTÄNDIGES OBJEKT",
+      eyebrow: "KI · BETA",
       title: "Prompt zu 3D",
-      description: "Eine Idee beschreiben und als vollständiges räumliches Modell erzeugen.",
-      detail: "OpenAI-Bauplan + lokale STL",
+      description: "Experimentelle Vorschau: Eine Idee beschreiben und als räumliches Modell erzeugen.",
+      detail: "Beta · Ergebnisse können vereinfacht sein",
       action: openPrompt
     }
   ];
@@ -864,7 +866,7 @@ function StudioHub({
             <span className="tool-card-glow" />
             <div className="tool-card-icon"><Icon /></div>
             <span className="tool-card-eyebrow">{eyebrow}</span>
-            <h3>{title}</h3>
+            <h3>{title}{id === "prompt" && <span className="beta-badge">BETA</span>}</h3>
             <p>{description}</p>
             <small>{detail}</small>
             <strong>Öffnen <ChevronRight /></strong>
@@ -1139,7 +1141,7 @@ function Ai3dDialog({ close }: { close: () => void }) {
         <button className="modal-close" onClick={close} disabled={busy} aria-label="Dialog schließen"><X /></button>
         <div className="modal-icon"><Sparkles /></div>
         <p className="eyebrow">KI · VOLLSTÄNDIGES 3D-OBJEKT</p>
-        <h2 id="ai3d-title">{result ? "3D-Modell prüfen und weiterentwickeln" : "Prompt zu druckbarer STL"}</h2>
+        <h2 id="ai3d-title">{result ? "3D-Modell prüfen und weiterentwickeln" : "Prompt zu druckbarer STL"} <span className="beta-badge">BETA</span></h2>
         {apiStatus?.openAiStored && !apiStatus.openAiConfigured && (
           <div className="ai-unlock-panel">
             <ShieldCheck />

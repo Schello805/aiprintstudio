@@ -5,7 +5,8 @@ import {
   reduceRegionSelection,
   segmentRgba,
   selectSimilarRegions,
-  setSelectedRegionLevel
+  setSelectedRegionLevel,
+  smoothSelectedLevels
 } from "./region-editor";
 
 function rgba(colors: Array<readonly [number, number, number]>): Uint8ClampedArray {
@@ -41,5 +42,30 @@ describe("region editor", () => {
     expect(levels[0]).toBe(123);
     expect(levels[2]).toBe(123);
     expect(levels[1]).not.toBe(123);
+  });
+
+  it("inverts, clears and reconnects selections without changing unrelated regions", () => {
+    const segmentation = segmentRgba(rgba([
+      [255, 0, 0], [0, 0, 0], [255, 255, 255],
+      [255, 0, 0], [0, 0, 0], [255, 255, 255]
+    ]), 3, 2);
+    const selected = new Set([0, 2]);
+    const levels = setSelectedRegionLevel(initialRegionLevels(segmentation), selected, segmentation.regions, 180);
+    expect(segmentation.regions[0].pixels.every((pixel) => levels[pixel] === 180)).toBe(true);
+    expect(segmentation.regions[2].pixels.every((pixel) => levels[pixel] === 180)).toBe(true);
+    expect(segmentation.regions[1].pixels.some((pixel) => levels[pixel] !== 180)).toBe(true);
+  });
+
+  it("smooths only the selected area and keeps values in the valid height range", () => {
+    const segmentation = segmentRgba(rgba([
+      [255, 0, 0], [255, 0, 0], [0, 0, 0],
+      [255, 0, 0], [255, 0, 0], [0, 0, 0]
+    ]), 3, 2);
+    const levels = new Uint8ClampedArray([255, 0, 90, 255, 0, 90]);
+    const next = smoothSelectedLevels(levels, new Set([0]), segmentation);
+    expect(next[2]).toBe(90);
+    expect(next[5]).toBe(90);
+    expect([...next].every((value) => value >= 0 && value <= 255)).toBe(true);
+    expect(next[0]).not.toBe(levels[0]);
   });
 });
