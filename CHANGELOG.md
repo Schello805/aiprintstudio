@@ -2,6 +2,11 @@
 
 ## Unveröffentlicht
 
+- Die Live-3D-Vorschau im Flächeneditor verwendet jetzt bis zu 320 statt nur
+  etwa 90 Abtastpunkte. Schrift, Rundungen und diagonale Logo-Kanten erscheinen
+  dadurch erheblich sauberer.
+- Kamera, Kantenglättung, Pixeldichte und Beleuchtung der Editor-Vorschau passen
+  sich an die tatsächliche Modellauflösung an.
 - Der missverständliche, redundante Button **Projekt öffnen** wurde aus dem
   unteren Bereich der Werkzeugauswahl entfernt. Projektdateien bleiben bei
   Bedarf direkt im jeweiligen Arbeitsbereich verfügbar.

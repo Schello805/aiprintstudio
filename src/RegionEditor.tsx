@@ -432,10 +432,14 @@ function EditorReliefPreview({
   levels: Uint8ClampedArray | null;
   reliefMm: number;
 }) {
-  const geometry = useMemo(() => {
+  const preview = useMemo(() => {
     const next = new THREE.BufferGeometry();
-    if (!segmentation || !source || !levels) return next;
-    const stride = Math.max(1, Math.ceil(Math.max(segmentation.width, segmentation.height) / 90));
+    if (!segmentation || !source || !levels) return { geometry: next, extent: 92 };
+    // 90 Abtastpunkte waren für kleine Logos ausreichend, ließen aber gerade
+    // Schriftkanten im Editor sichtbar ausfransen. 320 bleibt auf Apple
+    // Silicon interaktiv und bewahrt Rundungen sowie diagonale Konturen.
+    const previewResolution = 320;
+    const stride = Math.max(1, Math.ceil(Math.max(segmentation.width, segmentation.height) / previewResolution));
     const columns = Math.ceil((segmentation.width - 1) / stride) + 1;
     const rows = Math.ceil((segmentation.height - 1) / stride) + 1;
     const positions: number[] = [], indices: number[] = [];
@@ -462,17 +466,21 @@ function EditorReliefPreview({
     next.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
     next.setIndex(indices);
     next.computeVertexNormals();
-    return next;
+    next.computeBoundingSphere();
+    return { geometry: next, extent: Math.max(columns, rows) };
   }, [levels, reliefMm, segmentation, source]);
-  useEffect(() => () => geometry.dispose(), [geometry]);
-  const size = Math.min(92, Math.max(segmentation?.width ?? 92, segmentation?.height ?? 92));
+  useEffect(() => () => preview.geometry.dispose(), [preview]);
+  const size = preview.extent;
   return (
     <div className="editor-preview-panel">
       <span className="panel-label">LIVE-3D-VORSCHAU</span>
-      <Canvas camera={{ position: [size * 0.65, size * 0.55, size * 0.9], fov: 42 }}>
-        <ambientLight intensity={1.7} />
-        <directionalLight position={[40, 80, 50]} intensity={3} />
-        <mesh geometry={geometry}><meshStandardMaterial color="#b7f58a" roughness={0.65} side={THREE.DoubleSide} /></mesh>
+      <Canvas dpr={[1, 2]} gl={{ antialias: true, powerPreference: "high-performance" }} camera={{ position: [size * 0.64, size * 0.5, size * 0.88], fov: 38 }}>
+        <ambientLight intensity={1.45} />
+        <directionalLight position={[size * 0.35, size * 0.75, size * 0.5]} intensity={3.4} />
+        <directionalLight position={[-size * 0.4, size * 0.2, -size * 0.2]} intensity={0.7} />
+        <mesh geometry={preview.geometry}>
+          <meshStandardMaterial color="#c8f59d" roughness={0.58} metalness={0.02} side={THREE.DoubleSide} flatShading={false} />
+        </mesh>
         <OrbitControls makeDefault enableDamping />
       </Canvas>
     </div>
