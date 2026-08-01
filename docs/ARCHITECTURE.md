@@ -50,8 +50,11 @@ Die Reliefpipeline nimmt ein validiertes Bild und ein Qualitätsprofil entgegen:
 2. Motivmaske und Verarbeitungsprofil bestimmen
 3. Konturen oder Tiefenwerte glätten und Höhen rekonstruieren
 4. geschlossenes Reliefmesh mit Grund- und Seitenflächen erzeugen
-5. Druckbarkeit, Mindestdimensionen und Volumen bewerten
-6. STL und/oder materialisiertes 3MF exportieren
+5. Druckbarkeit, Mindestdimensionen, Konturqualität und Volumen bewerten
+6. Topologie auf ungültige, degenerierte und doppelte Dreiecke prüfen
+7. STL und/oder materialisiertes 3MF im Speicher erzeugen und deren Container,
+   Einheiten, Koordinaten und Dreieckszahl validieren
+8. nur validierte Vorschaudateien temporär bereitstellen
 
 Bei **Logo mit Text** kann die Pixelmaske vor der Vermaschung druckgerecht
 erweitert werden. Der Standardwert von 0,8 mm entspricht zwei Extrusionslinien
@@ -73,9 +76,14 @@ analysiert und danach in echte Polygone überführt.
 Die lokale Reparatur verändert den gewählten Modus nicht. Sie erzeugt für
 Kontur- und Höhenverfahren mehrere Kandidaten mit unterschiedlicher Glättung in
 reduzierter Prüfauflösung, bewertet Druckscore, erkannte Probleme und
-Meshaufwand und rendert den besten Kandidaten anschließend in voller
+Meshaufwand sowie eine quantitative Konturmetrik und rendert den besten Kandidaten anschließend in voller
 Zielauflösung. Die Konturglättung wirkt bei Wappen direkt auf die Polygonringe,
 nicht nur auf das Höhenfeld.
+
+Wappen- und Schriftlogo-Referenzen sind als Golden Master versioniert. Die
+Tests vergleichen neben Geometrie- und Konturwerten auch die SHA-256-Prüfsumme
+des binären STL. Unbeabsichtigte Änderungen an der Exportgeometrie werden damit
+vor einem Release sichtbar.
 
 Bei explizit ausgewähltem **Wappen & Emblem** wird die Außenkontur des
 Tragkörpers unabhängig von den inneren Farb- und Höhenflächen aufgebaut. Jede

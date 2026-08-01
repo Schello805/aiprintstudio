@@ -329,6 +329,7 @@ export function App() {
           const recommended = effectiveMode === "vector" ? 3 : automaticSmoothing;
           const rank = rankReliefCandidate({
             score: candidate.printability.score,
+            contourScore: candidate.contourQuality.score,
             issueCount: candidate.printability.issues.length,
             triangleCount: candidate.triangleCount,
             smoothing: candidateSmoothing,
@@ -970,9 +971,9 @@ function ReliefResultCard({ result, optimize }: { result: NonNullable<ReliefResu
       <div className="result-check"><CheckCircle2 /></div>
       <div>
         <strong>Modell erfolgreich erstellt · Druckscore {result.printability.score}/100</strong>
-        <p>{result.triangleCount.toLocaleString("de-DE")} Dreiecke · {result.widthMm.toFixed(0)} × {result.heightMm.toFixed(0)} mm · ca. {result.printability.estimatedVolumeCm3.toFixed(1)} cm³{result.options.colors.length ? ` · ${result.options.colors.length} AMS-Farben` : ""}</p>
+        <p>{result.triangleCount.toLocaleString("de-DE")} Dreiecke · {result.widthMm.toFixed(0)} × {result.heightMm.toFixed(0)} mm · ca. {result.printability.estimatedVolumeCm3.toFixed(1)} cm³ · Kontur {result.contourQuality.score}/100{result.options.colors.length ? ` · ${result.options.colors.length} AMS-Farben` : ""}</p>
         <p>{result.printability.issues.join(" ")}</p>
-        <div className="print-checks">{result.printability.checks.map((check) => <span className={check.status} key={check.label} title={check.detail}>{check.status === "ok" ? "✓" : "!"} {check.label}</span>)}</div>
+        <div className="print-checks"><span className="ok" title="Dateistruktur, Koordinaten und grundlegende Meshintegrität von STL und 3MF wurden geprüft.">✓ Exportprüfung</span>{result.printability.checks.map((check) => <span className={check.status} key={check.label} title={check.detail}>{check.status === "ok" ? "✓" : "!"} {check.label}</span>)}</div>
       </div>
       <img className="heightmap-preview" src={result.heightmapDataUrl} alt="Berechnete Höhenkarte" title="Berechnete Höhenkarte" />
       {result.printability.score < 100 && <button className="optimize-button" onClick={optimize}><Wrench /> Automatisch optimieren</button>}

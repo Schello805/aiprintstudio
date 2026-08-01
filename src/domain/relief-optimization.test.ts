@@ -14,8 +14,14 @@ describe("local relief optimization", () => {
   });
 
   it("prefers a printable candidate before a marginally smaller mesh", () => {
-    const printable = rankReliefCandidate({ score: 100, issueCount: 0, triangleCount: 300_000, smoothing: 3, recommendedSmoothing: 3 });
-    const smaller = rankReliefCandidate({ score: 95, issueCount: 1, triangleCount: 100_000, smoothing: 2, recommendedSmoothing: 3 });
+    const printable = rankReliefCandidate({ score: 100, contourScore: 96, issueCount: 0, triangleCount: 300_000, smoothing: 3, recommendedSmoothing: 3 });
+    const smaller = rankReliefCandidate({ score: 95, contourScore: 70, issueCount: 1, triangleCount: 100_000, smoothing: 2, recommendedSmoothing: 3 });
     expect(printable).toBeGreaterThan(smaller);
+  });
+
+  it("prefers the smoother measured contour when printability is equal", () => {
+    const smooth = rankReliefCandidate({ score: 100, contourScore: 98, issueCount: 0, triangleCount: 200_000, smoothing: 4, recommendedSmoothing: 3 });
+    const rough = rankReliefCandidate({ score: 100, contourScore: 70, issueCount: 0, triangleCount: 200_000, smoothing: 3, recommendedSmoothing: 3 });
+    expect(smooth).toBeGreaterThan(rough);
   });
 });

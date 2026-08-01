@@ -1,6 +1,6 @@
 # Roadmap
 
-## Aktueller Stand 0.25.0
+## Aktueller Stand 0.26.0
 
 - Bild zu 3D mit Kontur-, Höhenkarten- und lokaler KI-Tiefe
 - Schrift zu 3D mit gemeinsamem Relief- und AMS-Workflow
@@ -23,6 +23,26 @@
 - lokale Variantenprüfung für Konturglättung ohne Wechsel des gewählten Modus
 - lokale Schicht-, Zeit- und Materialschätzung
 - bedarfsgesteuerte Reduzierung auf höchstens 250.000 Dreiecke
+- Golden-Master-Tests für Wappen und Schriftlogos mit reproduzierbaren
+  STL-Prüfsummen
+- Geometrie- und Dateiprüfung vor Vorschau und Speichern; ungültige STL-/3MF-
+  Dateien werden nicht angeboten
+- messbare Konturqualität als zusätzliches Kriterium der lokalen
+  Variantenoptimierung
+
+## Verbindliche Qualitäts-To-dos
+
+- [ ] Wappen-, Schrift-, Foto-/Tiefen- und Prompt-Pipeline technisch stärker
+  trennen und mit eigenen Ein-/Ausgabeverträgen absichern
+- [ ] Release-Gate um einen installierten App-Smoke-Test sowie stichprobenartige
+  externe Slicer-Imports der Golden-Master-Dateien erweitern
+- [ ] datensparsame, ausdrücklich zustimmungspflichtige Absturzberichte mit
+  verständlicher lokaler Diagnose ergänzen
+- [ ] Wiederherstellung nach Abbruch oder App-Neustart für lange Berechnungen
+  vervollständigen
+- [ ] Developer-ID-Signatur und Apple-Notarisierung vor einer öffentlichen
+  Verkaufs- oder Testversion verbindlich machen
+- [ ] strenge Selbstüberschneidungsprüfung für sehr komplexe Meshes ergänzen
 
 ## Als Nächstes: präzisere Slicer- und Druckerprofile
 

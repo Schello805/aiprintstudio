@@ -17,12 +17,14 @@ export function smoothingCandidates(mode: ReliefProcessingMode): number[] {
 
 export function rankReliefCandidate(input: {
   score: number;
+  contourScore: number;
   issueCount: number;
   triangleCount: number;
   smoothing: number;
   recommendedSmoothing: number;
 }): number {
   return input.score * 1_000
+    + input.contourScore * 20
     - input.issueCount * 50
     - input.triangleCount / 100_000
     - Math.abs(input.smoothing - input.recommendedSmoothing) * 10;

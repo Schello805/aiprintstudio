@@ -176,7 +176,14 @@ Höhenkarten-Vorschau, einen Druckscore und eine Materialschätzung.
 **Automatisch optimieren** behält den gewählten Modus bei und vergleicht lokal
 mehrere Glättungsvarianten in reduzierter Prüfauflösung. Die beste Variante wird
 anschließend in voller Qualität neu erzeugt; Bilder werden dafür nicht an einen
-externen Dienst übertragen.
+externen Dienst übertragen. Neben Druckscore und Meshaufwand bewertet die App
+die Konturen dabei quantitativ und bevorzugt nachweislich sauberere Kandidaten.
+
+Vor dem Speichern prüft die App die erzeugte Geometrie sowie Aufbau, Einheit,
+Koordinaten und Dreieckszahl der STL- und 3MF-Datei. Beschädigte oder ungültige
+Vorschaudateien werden nicht zum Download angeboten. Versionierte
+Golden-Master-Motive für Wappen und Schriftlogos schützen bereits erreichte
+Exportqualität vor unbeabsichtigten Regressionen.
 
 Nach der Erstellung bleiben Original und 3D-Vorschau beim Scrollen sichtbar.
 Der Druckscore steht direkt unter der Vorschau, sodass Einstellungen und
