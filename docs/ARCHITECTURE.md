@@ -72,6 +72,13 @@ die Wordmark-Pipeline, aktiviert Hintergrund und Mindestbreite und nutzt 384
 Rasterpunkte. Explizit ausgewählte Wappen verbleiben für maximale
 Konturauflösung bei 512 Rasterpunkten.
 
+Bei explizit ausgewähltem **Wappen & Emblem** wird die Außenkontur des
+Tragkörpers unabhängig von den inneren Farb- und Höhenflächen aufgebaut. Die
+äußersten belegten Punkte jeder Bildzeile bilden eine geschlossene Silhouette;
+deren linke und rechte Kurve wird vor der Vermaschung separat geglättet. So
+bleiben Innenflächen hochauflösend, während Antialiasing und einzelne
+Farbpixel keine geriffelte Außenwand mehr erzeugen.
+
 Schrift wird zunächst lokal als eng zugeschnittene transparente Vorlage
 gerendert und anschließend durch dieselbe Reliefpipeline verarbeitet. SVG wird
 beim Import sicher gerastert, bevor die Verarbeitung beginnt.

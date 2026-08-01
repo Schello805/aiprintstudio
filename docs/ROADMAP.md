@@ -1,6 +1,6 @@
 # Roadmap
 
-## Aktueller Stand 0.23.2
+## Aktueller Stand 0.23.3
 
 - Bild zu 3D mit Kontur-, Höhenkarten- und lokaler KI-Tiefe
 - Schrift zu 3D mit gemeinsamem Relief- und AMS-Workflow

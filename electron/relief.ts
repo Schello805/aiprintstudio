@@ -167,6 +167,15 @@ export async function createRelief(
     : hasTransparency || preserveThinVectorStrokes
       ? rawSubjectPixels
     : cleanSubjectPixelMask(rawSubjectPixels, gridWidth, gridHeight);
+  if (options.processingMode === "vector" && options.profile === "logo") {
+    // Ein explizit ausgewähltes Wappen besitzt einen geschlossenen Tragkörper.
+    // Dessen Außenwand darf nicht jede Antialias- oder Farbschwankung des
+    // Quellbilds nachzeichnen. Pro Bildzeile wird deshalb nur die äußere
+    // Silhouette übernommen und deren linke/rechte Kontur separat geglättet.
+    // Die hochauflösenden Farb- und Höheninformationen im Inneren bleiben
+    // vollständig erhalten.
+    subjectPixels = buildSolidOuterSilhouette(subjectPixels, gridWidth, gridHeight);
+  }
   if (options.outputMode === "lithophane" || options.outputMode === "stamp" || options.shape !== "source") {
     const shape = options.shape === "source" ? "rectangle" : options.shape;
     subjectPixels = buildProductPixelMask(
@@ -1240,6 +1249,39 @@ function cleanSubjectPixelMask(pixels: boolean[], width: number, height: number)
   return current;
 }
 
+function buildSolidOuterSilhouette(pixels: boolean[], width: number, height: number): boolean[] {
+  const left = Array(height).fill(Number.POSITIVE_INFINITY) as number[];
+  const right = Array(height).fill(Number.NEGATIVE_INFINITY) as number[];
+  for (let y = 0; y < height; y += 1) for (let x = 0; x < width; x += 1) {
+    if (!pixels[y * width + x]) continue;
+    left[y] = Math.min(left[y], x);
+    right[y] = Math.max(right[y], x);
+  }
+  const radius = Math.max(2, Math.min(12, Math.round(height / 70)));
+  const smooth = (values: number[], fallback: number) => values.map((value, y) => {
+    if (!Number.isFinite(value)) return fallback;
+    let weighted = 0, weight = 0;
+    for (let offset = -radius; offset <= radius; offset += 1) {
+      const row = y + offset;
+      if (row < 0 || row >= height || !Number.isFinite(values[row])) continue;
+      const sampleWeight = radius + 1 - Math.abs(offset);
+      weighted += values[row] * sampleWeight;
+      weight += sampleWeight;
+    }
+    return weight ? weighted / weight : value;
+  });
+  const smoothLeft = smooth(left, 0);
+  const smoothRight = smooth(right, width - 1);
+  const result = Array(width * height).fill(false) as boolean[];
+  for (let y = 0; y < height; y += 1) {
+    if (!Number.isFinite(left[y]) || !Number.isFinite(right[y])) continue;
+    const from = Math.max(0, Math.floor(smoothLeft[y]));
+    const to = Math.min(width - 1, Math.ceil(smoothRight[y]));
+    for (let x = from; x <= to; x += 1) result[y * width + x] = true;
+  }
+  return result;
+}
+
 function expandPixelMask(pixels: boolean[], width: number, height: number, radius: number): boolean[] {
   if (radius <= 0) return pixels.slice();
   const expanded = pixels.slice();
@@ -1581,5 +1623,5 @@ export const reliefInternals = {
   enforceUniformEdgeColor,
   buildWatertightHeightMesh, buildBinaryCellHeights, flattenSteppedOuterRim, buildSteppedCellMesh, buildPreviewSurface, orientMeshLikePreview, encodeBinaryStl, encodeThreeMf,
   smoothHeightField, analysePrintability, profileSettings, buildProductPixelMask, applyRaisedBorder,
-  transformProductMesh, transformProductPreview, addHangerLoop
+  transformProductMesh, transformProductPreview, addHangerLoop, buildSolidOuterSilhouette
 };

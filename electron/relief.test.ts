@@ -171,6 +171,25 @@ describe("relief mesh", () => {
     expect(rimmed[8]).toBe(0);
   });
 
+  it("builds a solid emblem carrier with calm outer scanlines", () => {
+    const width = 61, height = 61;
+    const noisy = Array(width * height).fill(false) as boolean[];
+    for (let y = 5; y < 56; y += 1) {
+      const taper = y < 30 ? 0 : Math.floor((y - 30) * 0.55);
+      const wobble = y % 2 === 0 ? 2 : -2;
+      for (let x = 7 + taper + wobble; x <= 53 - taper + wobble; x += 1) noisy[y * width + x] = true;
+    }
+    for (let y = 18; y < 28; y += 1) for (let x = 25; x < 36; x += 1) noisy[y * width + x] = false;
+    const solid = reliefInternals.buildSolidOuterSilhouette(noisy, width, height);
+    expect(solid[22 * width + 30]).toBe(true);
+    const edges = Array.from({ length: 51 }, (_, offset) => {
+      const y = offset + 5;
+      return solid.slice(y * width, (y + 1) * width).findIndex(Boolean);
+    });
+    const alternatingMovement = edges.slice(1).filter((edge, index) => Math.abs(edge - edges[index]) > 2);
+    expect(alternatingMovement).toHaveLength(0);
+  });
+
   it("turns flat logo colors into stable discrete height levels", () => {
     const rgba = Buffer.from([
       0, 0, 0, 255, 0, 0, 0, 255,
