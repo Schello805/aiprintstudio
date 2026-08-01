@@ -382,7 +382,7 @@ h1,h2,h3 { font-family:Manrope, sans-serif; margin:0; }
 .export-save-button.error { border-color:#8a4249; color:#ffb4bb; }
 .optimize-button { min-height:36px; display:flex; align-items:center; gap:6px; border:1px solid #6c8d46; border-radius:8px; background:#203017; color:#d9ffbd; padding:8px 10px; font-size:9px; font-weight:800; cursor:pointer; white-space:nowrap; }
 .optimize-button svg { width:14px; }
-.slicer-card { margin-top:7px; display:grid; grid-template-columns:1fr 235px; gap:12px; align-items:center; border:1px solid #273340; border-radius:12px; background:#0d141c; padding:11px 13px; }
+.slicer-card { margin-top:7px; display:grid; grid-template-columns:1fr; gap:8px; align-items:center; border:1px solid #273340; border-radius:12px; background:#0d141c; padding:11px 13px; }
 .slicer-title>div>strong,.slicer-title>div>span { display:block; }
 .slicer-title>div>strong { color:#e5edf7; font-size:11px; }
 .slicer-title>div>span { color:#7d8997; margin-top:2px; font-size:8px; }
@@ -390,17 +390,11 @@ h1,h2,h3 { font-family:Manrope, sans-serif; margin:0; }
 .slicer-summary dl>div { border:1px solid #25303a; border-radius:7px; background:#111922; padding:6px 7px; }
 .slicer-summary dt { color:#6f7c89; font-size:7px; text-transform:uppercase; letter-spacing:.08em; }
 .slicer-summary dd { color:#d9e5ef; margin:3px 0 0; font-size:9px; font-weight:700; }
-.layer-inspector { display:grid; grid-template-columns:62px 1fr; gap:9px; align-items:center; }
-.layer-image { position:relative; width:62px; height:48px; overflow:hidden; border:1px solid #33404d; border-radius:7px; background:#080c11; }
 .slicer-title { display:flex; align-items:flex-start; gap:6px; }
 .slicer-title>.tooltip-trigger { margin-left:2px; }
 .slicer-summary dt { display:flex; align-items:center; gap:4px; }
 .slicer-summary dt>.tooltip-trigger { width:14px; height:14px; flex-basis:14px; margin-left:0; }
 .slicer-summary dt>.tooltip-trigger .tooltip-i { font-size:9px; line-height:12px; }
-.layer-image img { width:100%; height:100%; object-fit:cover; }
-.layer-image span { position:absolute; right:3px; bottom:3px; border-radius:4px; background:#05080bcc; color:#b9ff91; padding:2px 4px; font-size:7px; }
-.layer-inspector label span { display:block; color:#9aa7b5; font-size:8px; }
-.layer-inspector input { width:100%; accent-color:#9aef69; }
 .slicer-card>small { grid-column:1/-1; color:#596674; font-size:7px; }
 .progress-card>span { width:28px; height:28px; border:3px solid #2d3730; border-top-color:#a5f36d; border-radius:50%; animation:spin .8s linear infinite; }
 .progress-card strong,.result-card strong { font-size:12px; }

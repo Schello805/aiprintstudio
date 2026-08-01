@@ -1062,23 +1062,16 @@ function ReliefResultCard({ result, optimize }: { result: NonNullable<ReliefResu
 }
 
 function SlicerAnalysisCard({ result }: { result: NonNullable<ReliefResult> }) {
-  const [layer, setLayer] = useState(result.slicer.layerCount);
-  const height = layer * result.slicer.layerHeightMm;
-  const visibleRatio = Math.min(1, height / Math.max(0.1, result.options.baseMm + result.options.reliefMm));
   return (
     <section className="slicer-card">
       <div className="slicer-summary">
-        <div className="slicer-title"><div><strong>Lokale Schichtsimulation</strong><span>0,4-mm-Düse · {result.slicer.layerHeightMm.toFixed(1).replace(".", ",")} mm Schichthöhe</span></div><SettingTooltip text={"Schätzt den späteren Druck lokal aus der Modellgeometrie und zeigt einen einfachen Schichtdurchlauf.\nBeispiel: Prüfe vor dem Export grob Druckdauer, Materialbedarf und Farbwechsel."} /></div>
+        <div className="slicer-title"><div><strong>Lokale Druckschätzung</strong><span>0,4-mm-Düse · {result.slicer.layerHeightMm.toFixed(1).replace(".", ",")} mm Schichthöhe</span></div><SettingTooltip text={"Schätzt den späteren Druck lokal aus der Modellgeometrie.\nBeispiel: Prüfe vor dem Export grob Druckdauer, Materialbedarf, Schichten und Farbwechsel."} /></div>
         <dl>
           <div><dt>Druckzeit <SettingTooltip text={"Geometriebasierte Näherung für die reine Druckdauer.\nBeispiel: Bewegungs- und Beschleunigungswerte deines Druckerprofils können die echte Zeit verändern."} /></dt><dd>ca. {Math.floor(result.slicer.estimatedMinutes / 60)} h {result.slicer.estimatedMinutes % 60} min</dd></div>
           <div><dt>Material <SettingTooltip text={"Schätzt Gewicht und Filamentlänge mit PLA-Dichte und 1,75-mm-Filament.\nBeispiel: Andere Materialien und die Fülldichte im Slicer verändern den realen Verbrauch."} /></dt><dd>{result.slicer.materialGrams.toFixed(1)} g · {result.slicer.filamentMeters.toFixed(1)} m</dd></div>
           <div><dt>Schichten <SettingTooltip text={"Berechnet die Zahl der horizontalen Lagen aus Modellhöhe und 0,2-mm-Schichthöhe.\nBeispiel: 5,4 mm Modellhöhe ergeben ungefähr 27 Schichten."} /></dt><dd>{result.slicer.layerCount}</dd></div>
           <div><dt>Farbwechsel <SettingTooltip text={"Schätzt notwendige Wechsel zwischen den aktivierten AMS-Farben über alle Schichten.\nBeispiel: Mehr gleichzeitig sichtbare Farben erhöhen Wechsel und Druckdauer."} /></dt><dd>{result.slicer.colorChanges}</dd></div>
         </dl>
-      </div>
-      <div className="layer-inspector">
-        <div className="layer-image"><img src={result.heightmapDataUrl} alt="Schichtvorschau" style={{ opacity: 0.3 + visibleRatio * 0.7, filter: `contrast(${1 + visibleRatio}) brightness(${0.55 + visibleRatio * 0.7})` }} /><span>{height.toFixed(1)} mm</span></div>
-        <label><span>Schicht {layer} / {result.slicer.layerCount}</span><input type="range" min={1} max={result.slicer.layerCount} value={layer} onChange={(event) => setLayer(Number(event.target.value))} /></label>
       </div>
       <small>Geometriebasierte lokale Schätzung – die endgültige Druckzeit hängt vom Druckerprofil im Slicer ab.</small>
     </section>
