@@ -54,6 +54,7 @@ export type ReliefResult = {
   printability: PrintabilityReport;
   geometryValidation: GeometryValidationReport;
   contourQuality: ContourQualityReport;
+  fileBytes: { stl: number; threeMf: number };
   slicer: {
     layerHeightMm: number;
     layerCount: number;
@@ -399,6 +400,7 @@ export async function createRelief(
     printability,
     geometryValidation,
     contourQuality,
+    fileBytes: { stl: stlBuffer.length, threeMf: threeMfBuffer.length },
     slicer: { layerHeightMm, layerCount, estimatedMinutes, filamentMeters, materialGrams, colorChanges },
     heightmapDataUrl: `data:image/png;base64,${heightmapPng.toString("base64")}`,
     preview

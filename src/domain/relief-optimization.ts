@@ -15,6 +15,13 @@ export function smoothingCandidates(mode: ReliefProcessingMode): number[] {
   return mode === "depth" ? [3] : [1, 2, 3, 4];
 }
 
+export function minimumFeatureForMode(mode: ReliefProcessingMode, suggestedProfile: "logo" | "photo", optimize: boolean): number {
+  if (!optimize) return 0;
+  // Eine Mindestbreite ist für Schriftzüge sinnvoll. Bei Wappen würde dieselbe
+  // Flächenerweiterung jedoch eine umlaufende, brim-artige Kontur erzeugen.
+  return mode === "wordmark" || (mode === "auto" && suggestedProfile === "logo") ? 0.8 : 0;
+}
+
 export function rankReliefCandidate(input: {
   score: number;
   contourScore: number;

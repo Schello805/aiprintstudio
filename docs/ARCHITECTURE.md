@@ -99,6 +99,12 @@ Relieffehler erhalten eine lokale Diagnose-ID. Das Log enthält Zeitpunkt,
 Verarbeitungsmodus, Profil, Dateiendung und technische Ursache, aber weder das
 Bild noch seinen Pfad. Eine Übertragung findet nicht statt.
 
+Die Renderer-Orchestrierung prüft Dreieckszahl und tatsächliche Puffergröße
+nach jeder Erzeugung. Bei Überschreitung wird mit einer aus beiden Grenzwerten
+berechneten Zielauflösung neu erzeugt. Unabhängig davon prüft der Hauptprozess
+beim Speichern erneut und verweigert Dateien über 250.000 Dreiecken oder
+25.000.000 Byte. Damit kann die UI diese Grenze nicht umgehen.
+
 Bei explizit ausgewähltem **Wappen & Emblem** wird die Außenkontur des
 Tragkörpers unabhängig von den inneren Farb- und Höhenflächen aufgebaut. Jede
 binäre Farbmaske wird mit Marching Squares (`d3-contour`) in geschlossene

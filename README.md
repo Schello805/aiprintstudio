@@ -191,6 +191,13 @@ Farben erhalten. Relief-Fehler erhalten eine Diagnose-ID; der zugehörige lokale
 Logordner lässt sich direkt aus der Fehlermeldung öffnen. Bilder und vollständige
 Dateipfade werden nicht in das Diagnose-Log geschrieben.
 
+Jeder angebotene STL-/3MF-Export ist auf höchstens **250.000 Dreiecke** und
+**25 MB** begrenzt. Überschreitet ein Relief diese Werte, reduziert die App die
+Arbeitsauflösung automatisch und berechnet das Modell erneut. Kann das Limit
+nicht ohne einen Abbruch erreicht werden, wird Speichern blockiert. Die
+Mindestbreitenverstärkung greift nur bei Schriftlogos; Wappen werden dadurch
+nicht mehr außen zu einer brim-artigen Kontur erweitert.
+
 Nach der Erstellung bleiben Original und 3D-Vorschau beim Scrollen sichtbar.
 Der Druckscore steht direkt unter der Vorschau, sodass Einstellungen und
 Ergebnis ohne Springen miteinander verglichen werden können.

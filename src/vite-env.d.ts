@@ -151,6 +151,7 @@ interface Window {
       printability: { score: number; status: "ready" | "warning" | "critical"; issues: string[]; estimatedVolumeCm3: number; checks: Array<{ label: string; status: "ok" | "warning" | "error"; detail: string }> };
       geometryValidation: { valid: boolean; errors: string[]; warnings: string[]; stats: { boundaryEdges: number; nonManifoldEdges: number; degenerateTriangles: number; invalidTriangles: number; duplicateTriangles: number; connectedComponents: number } };
       contourQuality: { score: number; shortEdgeRatio: number; sliverTriangleRatio: number; edgeLengthVariation: number };
+      fileBytes: { stl: number; threeMf: number };
       slicer: { layerHeightMm: number; layerCount: number; estimatedMinutes: number; filamentMeters: number; materialGrams: number; colorChanges: number };
       heightmapDataUrl: string;
       preview: {

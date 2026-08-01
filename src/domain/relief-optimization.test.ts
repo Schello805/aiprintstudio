@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { rankReliefCandidate, resolveReliefMode, smoothingCandidates } from "./relief-optimization";
+import { minimumFeatureForMode, rankReliefCandidate, resolveReliefMode, smoothingCandidates } from "./relief-optimization";
 
 describe("local relief optimization", () => {
   it("never replaces an explicitly selected emblem with wordmark processing", () => {
@@ -11,6 +11,11 @@ describe("local relief optimization", () => {
   it("avoids repeating the expensive local depth model", () => {
     expect(smoothingCandidates("depth")).toEqual([3]);
     expect(smoothingCandidates("vector")).toEqual([1, 2, 3, 4]);
+  });
+
+  it("never grows an emblem into a brim during automatic optimization", () => {
+    expect(minimumFeatureForMode("vector", "logo", true)).toBe(0);
+    expect(minimumFeatureForMode("wordmark", "logo", true)).toBe(0.8);
   });
 
   it("prefers a printable candidate before a marginally smaller mesh", () => {

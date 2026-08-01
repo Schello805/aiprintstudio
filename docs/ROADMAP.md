@@ -1,6 +1,6 @@
 # Roadmap
 
-## Aktueller Stand 0.27.0
+## Aktueller Stand 0.28.0
 
 - Bild zu 3D mit Kontur-, Höhenkarten- und lokaler KI-Tiefe
 - Schrift zu 3D mit gemeinsamem Relief- und AMS-Workflow
@@ -37,6 +37,10 @@
   Logordner
 - Release-Smoke-Test für Bundle-Version, arm64-Binary, Signatur,
   Electron-Laufzeit und mitgelieferte Core-ML-Ressourcen
+- automatische Komplexitätsbegrenzung und harte Speichersperre bei mehr als
+  250.000 Dreiecken oder 25 MB pro STL-/3MF-Datei
+- getrennte Mindestbreitenbehandlung: Schrift wird druckgerecht verstärkt,
+  Wappenkonturen werden nicht mehr zu einem Brim erweitert
 
 ## Verbindliche Qualitäts-To-dos
 

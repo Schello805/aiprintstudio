@@ -1,6 +1,12 @@
 import JSZip from "jszip";
 
 export type ExportValidation = { valid: boolean; errors: string[]; triangleCount: number };
+export const maximumExportTriangles = 250_000;
+export const maximumExportBytes = 25_000_000;
+
+export function exportFitsLimits(validation: ExportValidation, byteLength: number): boolean {
+  return validation.valid && validation.triangleCount <= maximumExportTriangles && byteLength <= maximumExportBytes;
+}
 
 export async function validateGeneratedExportBuffer(extension: ".stl" | ".3mf", data: Buffer): Promise<ExportValidation> {
   const errors: string[] = [];

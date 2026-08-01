@@ -28,7 +28,7 @@ import {
 } from "lucide-react";
 import { SettingTooltip } from "./SettingTooltip";
 import { extractColorPalette } from "./domain/color-palette";
-import { rankReliefCandidate, resolveReliefMode, smoothingCandidates } from "./domain/relief-optimization";
+import { minimumFeatureForMode, rankReliefCandidate, resolveReliefMode, smoothingCandidates } from "./domain/relief-optimization";
 import appLogoMark from "../build/icon-mark.png";
 type View = "studio" | "history" | "settings" | "info";
 type StudioTool = "home" | "image" | "text" | "lithophane" | "prompt";
@@ -307,7 +307,7 @@ export function App() {
         processingMode: effectiveMode,
         includeBackground: effectiveMode === "wordmark" && (repair || includeLogoBackground),
         nozzleMm: 0.4,
-        minimumFeatureMm: repair || (optimizeForStandardNozzle && (effectiveMode === "wordmark" || (effectiveMode === "auto" && file.suggestedProfile === "logo"))) ? 0.8 : 0,
+        minimumFeatureMm: minimumFeatureForMode(effectiveMode, file.suggestedProfile, repair || optimizeForStandardNozzle),
         sourceColors: multicolorEnabled ? sourceColors : [],
         colors: multicolorEnabled ? colors : [],
         sideColorIndex: multicolorEnabled ? sideColorIndex : 0,
@@ -362,14 +362,10 @@ export function App() {
       request.smoothing = selectedSmoothing;
       request.detail = selectedDetail;
       let next = await window.desktop.createRelief(jobId, file.path, request);
-      const preserveEmblemContour = effectiveMode === "vector"
-        || (effectiveMode === "auto" && file.suggestedProfile === "logo");
-      // Wappen leben von ihrer geglätteten Außenkontur. Eine erneute
-      // Rasterung auf niedrigere Auflösung machte genau diese Kante wieder
-      // sichtbar polygonal. Die optionale Meshbegrenzung darf daher niemals
-      // das explizite Emblem-Profil verschlechtern.
-      for (let attempt = 0; next && reduceTo250kTriangles && !preserveEmblemContour && next.triangleCount > 250_000 && attempt < 3; attempt += 1) {
-        const reducedResolution = Math.max(64, Math.floor(currentResolution * Math.sqrt(235_000 / next.triangleCount)));
+      for (let attempt = 0; next && reduceTo250kTriangles && (next.triangleCount > 250_000 || next.fileBytes.stl > 25_000_000 || next.fileBytes.threeMf > 25_000_000) && attempt < 4; attempt += 1) {
+        const triangleFactor = Math.sqrt(225_000 / Math.max(1, next.triangleCount));
+        const fileFactor = Math.sqrt(23_000_000 / Math.max(1, next.fileBytes.stl, next.fileBytes.threeMf));
+        const reducedResolution = Math.max(64, Math.floor(currentResolution * Math.min(0.9, triangleFactor, fileFactor)));
         if (reducedResolution >= currentResolution) break;
         setReliefProgress({
           phase: "Meshgröße reduzieren",
@@ -383,6 +379,9 @@ export function App() {
         });
       }
       if (next) {
+        if (next.triangleCount > 250_000 || next.fileBytes.stl > 25_000_000 || next.fileBytes.threeMf > 25_000_000) {
+          throw new Error("Das Modell überschreitet trotz automatischer Reduzierung 250.000 Dreiecke oder 25 MB. Bitte wähle ein weniger komplexes Motiv.");
+        }
         setResult(next);
         const entry: HistoryEntry = {
           id: crypto.randomUUID(), name: file.name, createdAt: new Date().toISOString(),

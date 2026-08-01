@@ -9,7 +9,7 @@ import { promisify } from "node:util";
 import { Worker } from "node:worker_threads";
 import sharp, { type Metadata } from "sharp";
 import type { ReliefOptions, ReliefProgress, ReliefResult } from "./relief.js";
-import { validateGeneratedExportBuffer } from "./export-validation.js";
+import { exportFitsLimits, validateGeneratedExportBuffer } from "./export-validation.js";
 import { renderTextImage, type TextImageOptions } from "./text-image.js";
 import { buildCadPlanningRequest, encodeCadStl, validateCadPlan, type CadPlan } from "./cad.js";
 import { checkSystemCompatibility } from "./system-check.js";
@@ -929,9 +929,13 @@ app.whenReady().then(async () => {
     if (![".stl", ".3mf"].includes(extension)) {
       throw new Error("Nur STL- und 3MF-Dateien können gespeichert werden.");
     }
-    const validation = await validateGeneratedExportBuffer(extension as ".stl" | ".3mf", await readFile(sourcePath));
+    const sourceBytes = await readFile(sourcePath);
+    const validation = await validateGeneratedExportBuffer(extension as ".stl" | ".3mf", sourceBytes);
     if (!validation.valid) {
       throw new Error(`Die Vorschaudatei ist beschädigt und wird nicht gespeichert: ${validation.errors.join(" ")}`);
+    }
+    if (!exportFitsLimits(validation, sourceBytes.length)) {
+      throw new Error("Die Datei überschreitet das Exportlimit von 250.000 Dreiecken oder 25 MB.");
     }
     const options = {
       title: extension === ".3mf" ? "3MF speichern" : "STL speichern",
