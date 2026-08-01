@@ -90,13 +90,11 @@ wappenförmige Außenkonturen. Optional erzeugt die App einen erhöhten Rahmen,
 ein mittiges Aufhängeloch und eine gleichmäßige Wölbung bis 90 Grad. Die
 Lichtansicht der 3D-Vorschau erleichtert die Kontrolle vor dem Export.
 
-### Stempel & Anhänger
+### Optional als Anhänger
 
-Klare Logos und Motive werden binär getrennt und als robuste Konturplatte
-aufgebaut. Für Stempel lässt sich das Motiv spiegeln, damit der Abdruck später
-lesbar ist. Für Anhänger stehen dieselben sechs Außenformen sowie ein
-Aufhängeloch zur Verfügung. Die Mindestbreitenoptimierung für eine 0,4-mm-Düse
-bleibt Teil der gemeinsamen Reliefpipeline.
+Ein Bild- oder Logo-Relief kann direkt im normalen Workflow als Anhänger
+ausgeführt werden. Die App ergänzt dafür eine stabile, mit dem Motiv verbundene
+Öse und ein 5-mm-Aufhängeloch. Ein eigener Werkzeugwechsel ist nicht nötig.
 
 ### Vorschau und Diagnose
 

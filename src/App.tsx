@@ -30,7 +30,7 @@ import { SettingTooltip } from "./SettingTooltip";
 import { extractColorPalette } from "./domain/color-palette";
 import appLogoMark from "../build/icon-mark.png";
 type View = "studio" | "history" | "settings" | "info";
-type StudioTool = "home" | "image" | "text" | "lithophane" | "stamp" | "prompt";
+type StudioTool = "home" | "image" | "text" | "lithophane" | "prompt";
 type ProductShape = "source" | "rectangle" | "rounded" | "circle" | "shield" | "hexagon" | "heart";
 type LegalPage = "imprint" | "privacy" | "cookies" | null;
 type SelectedImage = { path: string; name: string; size: number; width: number; height: number; suggestedProfile: "logo" | "photo"; dataUrl: string };
@@ -65,7 +65,7 @@ type StudioProject = {
   schemaVersion: 1;
   savedAt: string;
   source: SelectedImage;
-  tool: "image" | "text" | "lithophane" | "stamp";
+  tool: "image" | "text" | "lithophane";
   settings: {
     widthMm: number; baseMm: number; reliefMm: number; smoothing: number; detail: number;
     processingMode: ProcessingMode; profile: QualityProfile; raiseLightAreas: boolean;
@@ -73,7 +73,7 @@ type StudioProject = {
     sideColorIndex: number; includeLogoBackground: boolean; optimizeForStandardNozzle: boolean;
     reduceTo250kTriangles: boolean;
     productShape?: ProductShape; borderMm?: number; holeDiameterMm?: number;
-    curveAngle?: number; mirrorX?: boolean;
+    curveAngle?: number;
   };
 };
 
@@ -149,7 +149,6 @@ export function App() {
   const [borderMm, setBorderMm] = useState(0);
   const [holeDiameterMm, setHoleDiameterMm] = useState(0);
   const [curveAngle, setCurveAngle] = useState(0);
-  const [mirrorX, setMirrorX] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [multicolorEnabled, setMulticolorEnabled] = useState(false);
   const [colorCount, setColorCount] = useState(4);
@@ -241,12 +240,9 @@ export function App() {
       setStudioTool(targetTool);
       if (targetTool === "lithophane") {
         setProfile("photo"); setProcessingMode("height"); setBaseMm(0.8); setReliefMm(2.4);
-        setRaiseLightAreas(false); setProductShape("rectangle"); setBorderMm(2); setHoleDiameterMm(0); setCurveAngle(0); setMirrorX(false);
-      } else if (targetTool === "stamp") {
-        setProfile("logo"); setProcessingMode("wordmark"); setBaseMm(2); setReliefMm(2);
-        setRaiseLightAreas(false); setIncludeLogoBackground(true); setProductShape("rounded"); setBorderMm(0); setHoleDiameterMm(0); setCurveAngle(0); setMirrorX(true);
+        setRaiseLightAreas(false); setProductShape("rectangle"); setBorderMm(2); setHoleDiameterMm(0); setCurveAngle(0);
       } else {
-        setProductShape("source"); setBorderMm(0); setHoleDiameterMm(0); setCurveAngle(0); setMirrorX(false);
+        setProductShape("source"); setBorderMm(0); setHoleDiameterMm(0); setCurveAngle(0);
       }
     } catch (error) {
       setFileError(error instanceof Error ? error.message : "Das Bild konnte nicht geöffnet werden.");
@@ -298,18 +294,24 @@ export function App() {
         sourceColors: multicolorEnabled ? sourceColors : [],
         colors: multicolorEnabled ? colors : [],
         sideColorIndex: multicolorEnabled ? sideColorIndex : 0,
-        outputMode: studioTool === "lithophane" ? "lithophane" : studioTool === "stamp" ? "stamp" : "relief",
+        outputMode: studioTool === "lithophane" ? "lithophane" : "relief",
         shape: productShape,
         borderMm,
         borderHeightMm: borderMm > 0 ? reliefMm : 0,
         holeDiameterMm,
         holePosition: "top-center",
         curveAngle: studioTool === "lithophane" ? curveAngle : 0,
-        mirrorX: studioTool === "stamp" && mirrorX
+        mirrorX: false
       };
       let currentResolution = effectiveResolution;
       let next = await window.desktop.createRelief(jobId, file.path, request);
-      for (let attempt = 0; next && reduceTo250kTriangles && next.triangleCount > 250_000 && attempt < 3; attempt += 1) {
+      const preserveEmblemContour = effectiveMode === "vector"
+        || (effectiveMode === "auto" && file.suggestedProfile === "logo");
+      // Wappen leben von ihrer geglätteten Außenkontur. Eine erneute
+      // Rasterung auf niedrigere Auflösung machte genau diese Kante wieder
+      // sichtbar polygonal. Die optionale Meshbegrenzung darf daher niemals
+      // das explizite Emblem-Profil verschlechtern.
+      for (let attempt = 0; next && reduceTo250kTriangles && !preserveEmblemContour && next.triangleCount > 250_000 && attempt < 3; attempt += 1) {
         const reducedResolution = Math.max(64, Math.floor(currentResolution * Math.sqrt(235_000 / next.triangleCount)));
         if (reducedResolution >= currentResolution) break;
         setReliefProgress({
@@ -368,7 +370,7 @@ export function App() {
         widthMm, baseMm, reliefMm, smoothing, detail, processingMode, profile, raiseLightAreas,
         multicolorEnabled, colorCount, sourceColors, colors, sideColorIndex,
         includeLogoBackground, optimizeForStandardNozzle,
-        reduceTo250kTriangles, productShape, borderMm, holeDiameterMm, curveAngle, mirrorX
+        reduceTo250kTriangles, productShape, borderMm, holeDiameterMm, curveAngle
       }
     };
   }
@@ -399,7 +401,7 @@ export function App() {
       setIncludeLogoBackground(settings.includeLogoBackground); setOptimizeForStandardNozzle(settings.optimizeForStandardNozzle);
       setReduceTo250kTriangles(settings.reduceTo250kTriangles ?? false);
       setProductShape(settings.productShape ?? "source"); setBorderMm(settings.borderMm ?? 0);
-      setHoleDiameterMm(settings.holeDiameterMm ?? 0); setCurveAngle(settings.curveAngle ?? 0); setMirrorX(settings.mirrorX ?? false);
+      setHoleDiameterMm(settings.holeDiameterMm ?? 0); setCurveAngle(settings.curveAngle ?? 0);
       setResult(null); setFileError(null); setUploadStatus("Projekt vollständig wiederhergestellt.");
     } catch (error) {
       setFileError(error instanceof Error ? error.message : "Das Projekt konnte nicht geöffnet werden.");
@@ -489,7 +491,6 @@ export function App() {
             openImage={() => void selectFile("image")}
             openText={() => { setStudioTool("text"); setTextDialogOpen(true); }}
             openLithophane={() => void selectFile("lithophane")}
-            openStamp={() => void selectFile("stamp")}
             openPrompt={() => { setStudioTool("prompt"); setAi3dDialogOpen(true); }}
           />
         )}
@@ -498,15 +499,15 @@ export function App() {
           <section className="workspace">
             <div className="tool-context">
               <button onClick={returnToToolSelection}>← Alle Werkzeuge</button>
-              <span>{studioTool === "prompt" ? <Sparkles /> : studioTool === "text" || studioTool === "stamp" ? <Type /> : <ImagePlus />}{studioTool === "image" ? "Bild zu 3D" : studioTool === "text" ? "Schrift zu 3D" : studioTool === "lithophane" ? "Foto zu Lithophan" : studioTool === "stamp" ? "Stempel & Anhänger" : <>Prompt zu 3D <b className="beta-badge">BETA</b></>}</span>
+              <span>{studioTool === "prompt" ? <Sparkles /> : studioTool === "text" ? <Type /> : <ImagePlus />}{studioTool === "image" ? "Bild zu 3D" : studioTool === "text" ? "Schrift zu 3D" : studioTool === "lithophane" ? "Foto zu Lithophan" : <>Prompt zu 3D <b className="beta-badge">BETA</b></>}</span>
               {studioTool !== "prompt" && <div className="project-actions">
                 <button onClick={() => void openProject()}><FolderOpen /> Projekt öffnen</button>
                 <button disabled={!file} onClick={() => void saveProject()}><Save /> Projekt speichern</button>
               </div>}
             </div>
             <div className="intro">
-              <h2>{studioTool === "text" ? "Von Schrift zum druckbaren Objekt." : studioTool === "prompt" ? "Von deiner Idee zum vollständigen 3D-Modell." : studioTool === "lithophane" ? "Vom Foto zum leuchtenden Lithophan." : studioTool === "stamp" ? "Vom Motiv zum Stempel oder Anhänger." : "Vom Bild zum druckbaren Objekt."}</h2>
-              <p>{studioTool === "text" ? "Gestalte saubere Schriftzüge und exportiere sie lokal als STL oder farbige 3MF." : studioTool === "prompt" ? "Beschreibe dein Objekt. Die KI optimiert die Konstruktion und erzeugt eine druckbare STL." : studioTool === "lithophane" ? "Helligkeit wird in Materialstärke übersetzt – flach oder sanft gewölbt und vollständig lokal." : studioTool === "stamp" ? "Klare Konturen werden gespiegelt und als robuste, druckbare Platte aufgebaut." : "Lade eine klare Aufnahme hoch. AI Print Studio rekonstruiert, repariert und exportiert dein Modell lokal."}</p>
+              <h2>{studioTool === "text" ? "Von Schrift zum druckbaren Objekt." : studioTool === "prompt" ? "Von deiner Idee zum vollständigen 3D-Modell." : studioTool === "lithophane" ? "Vom Foto zum leuchtenden Lithophan." : "Vom Bild zum druckbaren Objekt."}</h2>
+              <p>{studioTool === "text" ? "Gestalte saubere Schriftzüge und exportiere sie lokal als STL oder farbige 3MF." : studioTool === "prompt" ? "Beschreibe dein Objekt. Die KI optimiert die Konstruktion und erzeugt eine druckbare STL." : studioTool === "lithophane" ? "Helligkeit wird in Materialstärke übersetzt – flach oder sanft gewölbt und vollständig lokal." : "Lade eine klare Aufnahme hoch. AI Print Studio rekonstruiert, repariert und exportiert dein Modell lokal."}</p>
             </div>
             {studioTool === "prompt" && !ai3dDialogOpen && (
               <div className="prompt-workspace-card">
@@ -520,15 +521,15 @@ export function App() {
             <div className={result ? "comparison-grid" : "comparison-grid single"}>
               <div
                 className={preview ? "upload-card has-preview" : "upload-card"}
-                onClick={() => studioTool === "text" ? setTextDialogOpen(true) : void selectFile(studioTool === "lithophane" ? "lithophane" : studioTool === "stamp" ? "stamp" : "image")}
+                onClick={() => studioTool === "text" ? setTextDialogOpen(true) : void selectFile(studioTool === "lithophane" ? "lithophane" : "image")}
                 role="button"
                 tabIndex={0}
-                onKeyDown={(event) => event.key === "Enter" && (studioTool === "text" ? setTextDialogOpen(true) : void selectFile(studioTool === "lithophane" ? "lithophane" : studioTool === "stamp" ? "stamp" : "image"))}
+                onKeyDown={(event) => event.key === "Enter" && (studioTool === "text" ? setTextDialogOpen(true) : void selectFile(studioTool === "lithophane" ? "lithophane" : "image"))}
               >
                 {preview ? (
                   <><div className="panel-label">{sourcePreviewMode === "heightmap" && result ? "VERARBEITETE HÖHENKARTE" : "ORIGINALBILD"}</div><img src={sourcePreviewMode === "heightmap" && result ? result.heightmapDataUrl : preview} alt={sourcePreviewMode === "heightmap" ? "Verarbeitete Höhenkarte" : "Vorschau des ausgewählten Bildes"} />{result && <div className="source-preview-toggle" onClick={(event) => event.stopPropagation()}><button className={sourcePreviewMode === "original" ? "active" : ""} onClick={() => setSourcePreviewMode("original")}>Original</button><button className={sourcePreviewMode === "heightmap" ? "active" : ""} onClick={() => setSourcePreviewMode("heightmap")}>Höhenkarte</button></div>}<div className="file-overlay"><ImagePlus size={18} /> Bild wechseln</div></>
                 ) : (
-                  <><div className="upload-icon">{studioTool === "text" ? <Type size={32} /> : <UploadCloud size={32} />}</div><h3>{studioTool === "text" ? "Schriftzug gestalten" : "Bild oder SVG auswählen"}</h3><p>{studioTool === "text" ? "Text, Schriftart und Ausrichtung festlegen" : "PNG, JPG, WEBP oder SVG"}</p><div className="source-actions"><button className="choose-file-button" onClick={(event) => { event.stopPropagation(); if (studioTool === "text") setTextDialogOpen(true); else void selectFile(studioTool === "lithophane" ? "lithophane" : studioTool === "stamp" ? "stamp" : "image"); }}>{studioTool === "text" ? "Text eingeben" : "Datei auswählen"}</button></div><span>Die Verarbeitung erfolgt vollständig lokal</span></>
+                  <><div className="upload-icon">{studioTool === "text" ? <Type size={32} /> : <UploadCloud size={32} />}</div><h3>{studioTool === "text" ? "Schriftzug gestalten" : "Bild oder SVG auswählen"}</h3><p>{studioTool === "text" ? "Text, Schriftart und Ausrichtung festlegen" : "PNG, JPG, WEBP oder SVG"}</p><div className="source-actions"><button className="choose-file-button" onClick={(event) => { event.stopPropagation(); if (studioTool === "text") setTextDialogOpen(true); else void selectFile(studioTool === "lithophane" ? "lithophane" : "image"); }}>{studioTool === "text" ? "Text eingeben" : "Datei auswählen"}</button></div><span>Die Verarbeitung erfolgt vollständig lokal</span></>
                 )}
               </div>
               {result && <ReliefPreview result={result} />}
@@ -581,14 +582,14 @@ export function App() {
                     <Box /><div><strong>Foto & 3D-Tiefe</strong><span>Lokale KI-Tiefenschätzung</span></div><SettingTooltip text={modeTooltips.depth} />
                   </button>
                 </div>
-              </div> : studioTool === "text" ? <div className="text-quality-summary"><Type /><div><strong>Saubere Schriftkonturen automatisch aktiv</strong><span>Die App verwendet die lokale Logo-Engine mit hoher Konturauflösung.</span></div></div> : <div className="text-quality-summary"><Layers3 /><div><strong>{studioTool === "lithophane" ? "Lithophan-Profil automatisch aktiv" : "Stempel-Profil automatisch aktiv"}</strong><span>{studioTool === "lithophane" ? "Dunkle Bildbereiche werden stabiler und lichtundurchlässiger aufgebaut." : "Konturen werden binär getrennt, gespiegelt und druckbar verstärkt."}</span></div></div>}
+              </div> : studioTool === "text" ? <div className="text-quality-summary"><Type /><div><strong>Saubere Schriftkonturen automatisch aktiv</strong><span>Die App verwendet die lokale Logo-Engine mit hoher Konturauflösung.</span></div></div> : <div className="text-quality-summary"><Layers3 /><div><strong>Lithophan-Profil automatisch aktiv</strong><span>Dunkle Bildbereiche werden stabiler und lichtundurchlässiger aufgebaut.</span></div></div>}
               <>
                   <div className="parameter-grid essential-parameters">
                     <NumberField label="BREITE" tooltip={parameterTooltips.width} value={widthMm} unit="mm" min={20} max={300} step={5} setValue={setWidthMm} />
                     <NumberField label="GRUNDPLATTE" tooltip={parameterTooltips.base} value={baseMm} unit="mm" min={0.8} max={10} step={0.2} setValue={setBaseMm} />
                     <NumberField label="RELIEF" tooltip={parameterTooltips.relief} value={reliefMm} unit="mm" min={0.5} max={20} step={0.5} setValue={setReliefMm} />
                   </div>
-                  {(studioTool === "lithophane" || studioTool === "stamp") && <div className="product-options">
+                  {studioTool === "lithophane" && <div className="product-options">
                     <div className="product-shape-row">
                       <span>AUSSENFORM</span>
                       <div>{(["rectangle", "rounded", "circle", "shield", "hexagon", "heart"] as ProductShape[]).map((shape) => <button className={productShape === shape ? "selected" : ""} onClick={() => setProductShape(shape)} key={shape}>{({ rectangle: "Rechteck", rounded: "Abgerundet", circle: "Kreis", shield: "Wappen", hexagon: "Sechseck", heart: "Herz", source: "Motiv" })[shape]}</button>)}</div>
@@ -596,12 +597,11 @@ export function App() {
                     <div className="product-quick-options">
                       <button className={borderMm > 0 ? "selected" : ""} onClick={() => setBorderMm((current) => current > 0 ? 0 : 2)}><Layers3 /><span><strong>Rahmen</strong><small>{borderMm > 0 ? `${borderMm} mm aktiv` : "Ohne Rand"}</small></span><span className="toggle-track"><span /></span></button>
                       <button className={holeDiameterMm > 0 ? "selected" : ""} onClick={() => setHoleDiameterMm((current) => current > 0 ? 0 : 5)}><Box /><span><strong>Aufhängeloch</strong><small>{holeDiameterMm > 0 ? `${holeDiameterMm} mm mittig oben` : "Deaktiviert"}</small></span><span className="toggle-track"><span /></span></button>
-                      {studioTool === "stamp" && <button className={mirrorX ? "selected" : ""} onClick={() => setMirrorX((current) => !current)}><Type /><span><strong>Motiv spiegeln</strong><small>Für einen lesbaren Abdruck</small></span><span className="toggle-track"><span /></span></button>}
                     </div>
                     {studioTool === "lithophane" && <label className="curve-control"><span><strong>Wölbung</strong><small>{curveAngle}° · 0° ist flach</small></span><input type="range" min="0" max="90" step="5" value={curveAngle} onChange={(event) => setCurveAngle(Number(event.target.value))} /></label>}
                   </div>}
                   <div className="compact-option-grid">
-                  {processingMode === "wordmark" && studioTool !== "stamp" && (
+                  {processingMode === "wordmark" && (
                     <button
                       className={includeLogoBackground ? "background-toggle selected" : "background-toggle"}
                       onClick={() => setIncludeLogoBackground((current) => !current)}
@@ -616,6 +616,9 @@ export function App() {
                       <span className="toggle-track"><span /></span>
                     </button>
                   )}
+                  {studioTool === "image" && <button className={holeDiameterMm > 0 ? "background-toggle selected" : "background-toggle"} onClick={() => setHoleDiameterMm((current) => current > 0 ? 0 : 5)} aria-pressed={holeDiameterMm > 0}>
+                    <Box /><div><strong>Als Anhänger ausführen</strong><span>{holeDiameterMm > 0 ? "Stabile Öse mit 5-mm-Aufhängeloch wird ergänzt" : "Normales Modell ohne Aufhängeloch"}</span></div><span className="toggle-track"><span /></span>
+                  </button>}
                   <button
                     className={reduceTo250kTriangles ? "background-toggle selected" : "background-toggle"}
                     onClick={() => setReduceTo250kTriangles((current) => !current)}
@@ -761,12 +764,11 @@ function InfoView({ version }: { version: string }) {
       </div>
 
       <div className="info-section">
-        <div className="info-heading"><span>01</span><div><h3>Die fünf Arbeitswege</h3><p>Welcher Teil lokal läuft und wann ein externer Dienst beteiligt ist.</p></div></div>
+        <div className="info-heading"><span>01</span><div><h3>Die vier Arbeitswege</h3><p>Welcher Teil lokal läuft und wann ein externer Dienst beteiligt ist.</p></div></div>
         <div className="info-flow-grid">
           <article><ImagePlus /><h4>Bild zu 3D</h4><p>Das Bild wird lokal validiert, gerastert und in Motivmaske, Höhenwerte und optional AMS-Farben zerlegt. Daraus entsteht ein geschlossenes Reliefmesh.</p><strong>Vollständig lokal</strong></article>
           <article><Type /><h4>Schrift zu 3D</h4><p>Die Schrift wird lokal gerendert, konturiert, extrudiert und durch dieselbe Druckbarkeits- und Exportpipeline geführt.</p><strong>Vollständig lokal</strong></article>
           <article><ImagePlus /><h4>Foto zu Lithophan</h4><p>Bildhelligkeit wird in Materialstärke übersetzt. Außenform, Rahmen, Aufhängeloch und Wölbung entstehen gemeinsam mit dem wasserdichten Mesh.</p><strong>Vollständig lokal</strong></article>
-          <article><Layers3 /><h4>Stempel & Anhänger</h4><p>Klare Motive werden als robuste Konturplatte aufgebaut und für einen lesbaren Stempelabdruck auf Wunsch gespiegelt.</p><strong>Vollständig lokal</strong></article>
           <article><Sparkles /><h4>Prompt zu 3D</h4><p>Nur Beschreibung und bei Änderungen der aktuelle CAD-Bauplan gehen an OpenAI. Die Antwort wird streng validiert; STL und Vorschau erzeugt die App lokal.</p><strong>OpenAI optional</strong></article>
         </div>
       </div>
@@ -822,13 +824,11 @@ function StudioHub({
   openImage,
   openText,
   openLithophane,
-  openStamp,
   openPrompt
 }: {
   openImage: () => void;
   openText: () => void;
   openLithophane: () => void;
-  openStamp: () => void;
   openPrompt: () => void;
 }) {
   const tools = [
@@ -858,15 +858,6 @@ function StudioHub({
       description: "Fotos als durchscheinendes Relief für Fenster, LED-Licht oder Lampen drucken.",
       detail: "Materialstärke, Rahmen, Wölbung",
       action: openLithophane
-    },
-    {
-      id: "stamp",
-      icon: Layers3,
-      eyebrow: "LOKAL · KONTUR",
-      title: "Stempel & Anhänger",
-      description: "Klare Motive als gespiegelten Stempel oder geformten Anhänger aufbauen.",
-      detail: "Außenform, Rahmen, Aufhängeloch",
-      action: openStamp
     },
     {
       id: "prompt",

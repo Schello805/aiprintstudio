@@ -108,6 +108,16 @@ describe("relief mesh", () => {
     expect(withHole[50 * 101 + 50]).toBe(true);
   });
 
+  it("adds a connected hanger loop without replacing the original motif contour", () => {
+    const source = Array(101 * 101).fill(false) as boolean[];
+    for (let y = 28; y < 90; y += 1) for (let x = 20; x < 81; x += 1) source[y * 101 + x] = true;
+    const hanger = reliefInternals.addHangerLoop(source, 101, 101, 100, 6);
+    expect(hanger[70 * 101 + 30]).toBe(source[70 * 101 + 30]);
+    expect(hanger[28 * 101 + 50]).toBe(false);
+    expect(hanger[28 * 101 + 45]).toBe(true);
+    expect(hanger.some((occupied, index) => occupied && !source[index])).toBe(true);
+  });
+
   it("curves and mirrors a closed mesh without changing its topology", () => {
     const mesh = reliefInternals.buildWatertightHeightMesh(3, 3, 30, 20, Array(9).fill(3));
     const curved = reliefInternals.transformProductMesh(mesh, 30, 45, false);
@@ -116,6 +126,11 @@ describe("relief mesh", () => {
     const mirrored = reliefInternals.transformProductMesh(mesh, 30, 0, true);
     expect(mirrored.vertices[0][0]).toBeCloseTo(30 - mesh.vertices[0][0]);
     expect(mirrored.triangles[0]).toEqual([mesh.triangles[0][0], mesh.triangles[0][2], mesh.triangles[0][1]]);
+  });
+
+  it("leaves completed relief geometry byte-for-byte unchanged without a product transform", () => {
+    const mesh = reliefInternals.buildWatertightHeightMesh(4, 4, 30, 30, Array(16).fill(3));
+    expect(reliefInternals.transformProductMesh(mesh, 30, 0, false)).toEqual(mesh);
   });
 
   it("smooths noise while preserving the field dimensions", () => {
