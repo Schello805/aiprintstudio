@@ -28,7 +28,7 @@ import {
 } from "lucide-react";
 import { SettingTooltip } from "./SettingTooltip";
 import { extractColorPalette } from "./domain/color-palette";
-import { automaticSmoothingForMode, mapReliefPassProgress, minimumFeatureForMode, rankReliefCandidate, resolveReliefMode, smoothingCandidates } from "./domain/relief-optimization";
+import { automaticSmoothingForMode, isExcellentReliefCandidate, mapReliefPassProgress, minimumFeatureForMode, optimizationVariants, rankReliefCandidate, resolveReliefMode } from "./domain/relief-optimization";
 import appLogoMark from "../build/icon-mark.png";
 type View = "studio" | "history" | "settings" | "info";
 type StudioTool = "home" | "image" | "text" | "lithophane" | "prompt";
@@ -357,10 +357,11 @@ export function App() {
       let selectedSmoothing = automaticSmoothing;
       let selectedDetail = automaticDetail;
       if (repair) {
-        const candidates = smoothingCandidates(effectiveMode);
+        const optimizationMode = pipelineKind === "emblem" ? "vector" : effectiveMode;
+        const candidates = optimizationVariants(optimizationMode, effectiveResolution, automaticDetail);
         let bestRank = Number.NEGATIVE_INFINITY;
         for (let index = 0; index < candidates.length; index += 1) {
-          const candidateSmoothing = candidates[index];
+          const variant = candidates[index];
           const passStart = 4 + index / candidates.length * 46;
           const passEnd = 4 + (index + 1) / candidates.length * 46;
           reliefProgressWindow.current = { start: passStart, end: passEnd };
@@ -371,32 +372,41 @@ export function App() {
           });
           const candidate = await window.desktop.createRelief(jobId, file.path, {
             ...request,
-            resolution: Math.min(256, effectiveResolution),
-            smoothing: candidateSmoothing,
-            detail: automaticDetail
+            resolution: variant.resolution,
+            smoothing: variant.smoothing,
+            detail: variant.detail
           });
           if (!candidate) throw new Error("Vorgang abgebrochen");
-          const recommended = effectiveMode === "vector" ? 6 : automaticSmoothing;
+          const recommended = optimizationMode === "vector" ? 6 : automaticSmoothing;
           const rank = rankReliefCandidate({
             score: candidate.printability.score,
             contourScore: candidate.contourQuality.score,
             issueCount: candidate.printability.issues.length,
             triangleCount: candidate.triangleCount,
-            smoothing: candidateSmoothing,
+            smoothing: variant.smoothing,
             recommendedSmoothing: recommended
           });
           if (rank > bestRank) {
             bestRank = rank;
-            selectedSmoothing = candidateSmoothing;
-            selectedDetail = automaticDetail;
+            selectedSmoothing = variant.smoothing;
+            selectedDetail = variant.detail;
+            currentResolution = variant.resolution;
+          }
+          if (isExcellentReliefResult(candidate)) {
+            selectedSmoothing = variant.smoothing;
+            selectedDetail = variant.detail;
+            currentResolution = variant.resolution;
+            setReliefProgress({ phase: "Hervorragend", detail: `Variante ${index + 1} erfüllt alle lokalen Qualitätsprüfungen.`, progress: Math.round(passEnd) });
+            break;
           }
         }
         setSmoothing(selectedSmoothing);
         setDetail(selectedDetail);
-        setReliefProgress({ phase: "Beste Variante erstellen", detail: `Glättung ${selectedSmoothing} liefert lokal das beste Ergebnis.`, progress: 52 });
+        setReliefProgress({ phase: "Beste Variante erstellen", detail: `Glättung ${selectedSmoothing} und Detail ${selectedDetail.toFixed(2).replace(".", ",")} liefern lokal das beste Ergebnis.`, progress: 52 });
       }
       request.smoothing = selectedSmoothing;
       request.detail = selectedDetail;
+      request.resolution = currentResolution;
       reliefProgressWindow.current = { start: repair ? 52 : 2, end: 90 };
       let next = await window.desktop.createRelief(jobId, file.path, request);
       for (let attempt = 0; next && reduceTo250kTriangles && (next.triangleCount > 250_000 || next.fileBytes.stl > 25_000_000 || next.fileBytes.threeMf > 25_000_000) && attempt < 4; attempt += 1) {
@@ -1048,23 +1058,37 @@ function SaveExportButton({ path, label }: { path: string; label: string }) {
 }
 
 function ReliefResultCard({ result, optimize }: { result: NonNullable<ReliefResult>; optimize: () => void }) {
+  const excellent = isExcellentReliefResult(result);
   return (
     <div className={`result-card preview-result ${result.printability.status}`}>
       <div className="result-check"><CheckCircle2 /></div>
       <div>
-        <strong>Modell erfolgreich erstellt · Druckscore {result.printability.score}/100</strong>
+        <strong>{excellent ? "Hervorragendes Modell" : "Modell erfolgreich erstellt"} · Druckscore {result.printability.score}/100</strong>
         <p>{result.triangleCount.toLocaleString("de-DE")} Dreiecke · {result.widthMm.toFixed(0)} × {result.heightMm.toFixed(0)} mm · ca. {result.printability.estimatedVolumeCm3.toFixed(1)} cm³ · Kontur {result.contourQuality.score}/100{result.options.colors.length ? ` · ${result.options.colors.length} AMS-Farben` : ""}</p>
         <p>{result.printability.issues.join(" ")}</p>
         <div className="print-checks"><span className="ok" title="Dateistruktur, Koordinaten und grundlegende Meshintegrität von STL und 3MF wurden geprüft.">✓ Exportprüfung</span>{result.printability.checks.map((check) => <span className={check.status} key={check.label} title={check.detail}>{check.status === "ok" ? "✓" : "!"} {check.label}</span>)}</div>
       </div>
       <img className="heightmap-preview" src={result.heightmapDataUrl} alt="Berechnete Höhenkarte" title="Berechnete Höhenkarte" />
-      {result.printability.score < 100 && <button className="optimize-button" onClick={optimize}><Wrench /> Automatisch optimieren</button>}
+      {!excellent && <button className="optimize-button" onClick={optimize}><Wrench /> Automatisch optimieren</button>}
       <div className="export-save-actions">
         <SaveExportButton path={result.stlPath} label="STL speichern" />
         <SaveExportButton path={result.threeMfPath} label="3MF speichern" />
       </div>
     </div>
   );
+}
+
+function isExcellentReliefResult(result: NonNullable<ReliefResult>): boolean {
+  return isExcellentReliefCandidate({
+    score: result.printability.score,
+    contourScore: result.contourQuality.score,
+    issueCount: result.printability.issues.length,
+    triangleCount: result.triangleCount,
+    stlBytes: result.fileBytes.stl,
+    threeMfBytes: result.fileBytes.threeMf,
+    geometryValid: result.geometryValidation.valid,
+    transitionsOk: result.printability.checks.find((check) => check.label === "Übergänge")?.status === "ok"
+  });
 }
 
 function SlicerAnalysisCard({ result }: { result: NonNullable<ReliefResult> }) {

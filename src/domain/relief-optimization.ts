@@ -1,5 +1,18 @@
 export type ReliefProcessingMode = "auto" | "vector" | "wordmark" | "depth" | "height";
 
+export type ReliefOptimizationVariant = { smoothing: number; detail: number; resolution: number };
+
+export type ReliefQualityFacts = {
+  score: number;
+  contourScore: number;
+  issueCount: number;
+  triangleCount: number;
+  stlBytes: number;
+  threeMfBytes: number;
+  geometryValid: boolean;
+  transitionsOk: boolean;
+};
+
 export function resolveReliefMode(
   selected: ReliefProcessingMode,
   suggestedProfile: "logo" | "photo"
@@ -15,6 +28,30 @@ export function smoothingCandidates(mode: ReliefProcessingMode): number[] {
   if (mode === "depth") return [3];
   if (mode === "vector") return [5, 6];
   return [1, 2, 3, 4];
+}
+
+export function optimizationVariants(mode: ReliefProcessingMode, resolution: number, detail: number): ReliefOptimizationVariant[] {
+  if (mode === "depth") return [{ smoothing: 3, detail, resolution }];
+  if (mode === "vector") return [
+    { smoothing: 6, detail: 0.55, resolution },
+    { smoothing: 7, detail: 0.55, resolution },
+    { smoothing: 8, detail: 0.6, resolution },
+    { smoothing: 6, detail: 0.7, resolution },
+    { smoothing: 7, detail: 0.7, resolution },
+    { smoothing: 8, detail: 0.75, resolution }
+  ];
+  return smoothingCandidates(mode).map((smoothing) => ({ smoothing, detail, resolution }));
+}
+
+export function isExcellentReliefCandidate(facts: ReliefQualityFacts): boolean {
+  return facts.geometryValid
+    && facts.score >= 95
+    && facts.contourScore >= 75
+    && facts.issueCount === 0
+    && facts.transitionsOk
+    && facts.triangleCount <= 250_000
+    && facts.stlBytes <= 25_000_000
+    && facts.threeMfBytes <= 25_000_000;
 }
 
 export function automaticSmoothingForMode(mode: ReliefProcessingMode): number {

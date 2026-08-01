@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { automaticSmoothingForMode, mapReliefPassProgress, minimumFeatureForMode, rankReliefCandidate, resolveReliefMode, smoothingCandidates } from "./relief-optimization";
+import { automaticSmoothingForMode, isExcellentReliefCandidate, mapReliefPassProgress, minimumFeatureForMode, optimizationVariants, rankReliefCandidate, resolveReliefMode, smoothingCandidates } from "./relief-optimization";
 
 describe("local relief optimization", () => {
   it("never replaces an explicitly selected emblem with wordmark processing", () => {
@@ -21,6 +21,21 @@ describe("local relief optimization", () => {
   it("locks normal emblem generation to the proven smooth contour setting", () => {
     expect(automaticSmoothingForMode("vector")).toBe(6);
     expect(automaticSmoothingForMode("wordmark")).toBe(2);
+  });
+
+  it("tries a bounded set of genuinely different emblem variants", () => {
+    const variants = optimizationVariants("vector", 320, 1);
+    expect(variants).toHaveLength(6);
+    expect(new Set(variants.map(({ smoothing, detail }) => `${smoothing}:${detail}`)).size).toBe(6);
+    expect(variants.every((variant) => variant.resolution === 320)).toBe(true);
+  });
+
+  it("only calls a fully valid and size-limited result excellent", () => {
+    const excellent = { score: 100, contourScore: 82, issueCount: 0, triangleCount: 220_000, stlBytes: 11_000_000, threeMfBytes: 3_000_000, geometryValid: true, transitionsOk: true };
+    expect(isExcellentReliefCandidate(excellent)).toBe(true);
+    expect(isExcellentReliefCandidate({ ...excellent, contourScore: 70 })).toBe(false);
+    expect(isExcellentReliefCandidate({ ...excellent, transitionsOk: false })).toBe(false);
+    expect(isExcellentReliefCandidate({ ...excellent, threeMfBytes: 26_000_000 })).toBe(false);
   });
 
   it("prefers a printable candidate before a marginally smaller mesh", () => {
