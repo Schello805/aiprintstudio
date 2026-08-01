@@ -660,16 +660,6 @@ export function App() {
               <SlicerAnalysisCard result={result} />
             </>}
             </div>
-            <div className="workflow-row" aria-label="Verarbeitungsschritte">
-              {[
-                studioTool === "text" ? "Schrift rendern" : "Bild analysieren",
-                studioTool === "text" ? "Konturen extrudieren" : "3D rekonstruieren",
-                "Mesh reparieren",
-                "Exportieren"
-              ].map((step, index) => (
-                <div className="workflow-step" key={step}><span>{index + 1}</span><p>{step}</p>{index < 3 && <ChevronRight size={15} />}</div>
-              ))}
-            </div>
             <div className="conversion-options">
               {studioTool === "image" ? <div className="option-group">
                 <div className="option-heading"><span className="option-label">ERGEBNISART</span><span className="quality-pill">Optimale Qualität automatisch aktiv</span></div>
