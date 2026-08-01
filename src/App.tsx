@@ -28,7 +28,7 @@ import {
 } from "lucide-react";
 import { SettingTooltip } from "./SettingTooltip";
 import { extractColorPalette } from "./domain/color-palette";
-import { automaticSmoothingForMode, isExcellentReliefCandidate, mapReliefPassProgress, minimumFeatureForMode, optimizationVariants, rankReliefCandidate, resolveReliefMode } from "./domain/relief-optimization";
+import { automaticSmoothingForMode, isExcellentReliefCandidate, mapReliefPassProgress, meaningfulReliefIssueCount, minimumFeatureForMode, optimizationVariants, rankReliefCandidate, resolveReliefMode } from "./domain/relief-optimization";
 import appLogoMark from "../build/icon-mark.png";
 type View = "studio" | "history" | "settings" | "info";
 type StudioTool = "home" | "image" | "text" | "lithophane" | "prompt";
@@ -377,14 +377,18 @@ export function App() {
             detail: variant.detail
           });
           if (!candidate) throw new Error("Vorgang abgebrochen");
-          const recommended = optimizationMode === "vector" ? 6 : automaticSmoothing;
+          const recommended = optimizationMode === "vector" ? 1 : automaticSmoothing;
           const rank = rankReliefCandidate({
             score: candidate.printability.score,
             contourScore: candidate.contourQuality.score,
-            issueCount: candidate.printability.issues.length,
+            issueCount: meaningfulReliefIssueCount(candidate.printability.issues),
             triangleCount: candidate.triangleCount,
             smoothing: variant.smoothing,
-            recommendedSmoothing: recommended
+            recommendedSmoothing: recommended,
+            geometryValid: candidate.geometryValidation.valid,
+            transitionsOk: candidate.printability.checks.find((check) => check.label === "Übergänge")?.status === "ok",
+            stlBytes: candidate.fileBytes.stl,
+            threeMfBytes: candidate.fileBytes.threeMf
           });
           if (rank > bestRank) {
             bestRank = rank;
@@ -1082,7 +1086,7 @@ function isExcellentReliefResult(result: NonNullable<ReliefResult>): boolean {
   return isExcellentReliefCandidate({
     score: result.printability.score,
     contourScore: result.contourQuality.score,
-    issueCount: result.printability.issues.length,
+    issueCount: meaningfulReliefIssueCount(result.printability.issues),
     triangleCount: result.triangleCount,
     stlBytes: result.fileBytes.stl,
     threeMfBytes: result.fileBytes.threeMf,
