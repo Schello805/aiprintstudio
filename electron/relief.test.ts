@@ -301,6 +301,33 @@ describe("relief mesh", () => {
     expect(Math.max(...(redSkin?.mesh.vertices.map((vertex) => vertex[2]) ?? []))).toBeCloseTo(5);
   });
 
+  it("keeps one AMS color on every locally calculated emblem height", () => {
+    const columns = 7, rows = 4, cellColumns = columns - 1;
+    const mask = Array(cellColumns * (rows - 1)).fill(true) as boolean[];
+    const heights = Array.from({ length: columns * rows }, (_, index) =>
+      index % columns < 3 ? 2 : 5.6
+    );
+    // Rot kommt links auf der niedrigen Fläche und rechts auf der erhabenen
+    // Walze vor. Beide Bereiche müssen ihre STL-Höhe auch im AMS-3MF behalten.
+    const assignments = mask.map((_, index) => {
+      const x = index % cellColumns;
+      return x === 0 || x === cellColumns - 1 ? 1 : 0;
+    });
+    const colored = reliefInternals.buildVectorColorMeshes(
+      columns, rows, 60, 30, heights, mask,
+      assignments, ["#111111", "#FF2020"], 0, 2
+    );
+    const red = colored.find((part) => part.color === "#FF2020");
+    const horizontalLevels = new Set((red?.mesh.triangles ?? []).flatMap((triangle) => {
+      const levels = triangle.map((vertex) => red?.mesh.vertices[vertex][2] ?? 0);
+      return Math.max(...levels) - Math.min(...levels) < 1e-6
+        ? [Number(levels[0].toFixed(1))]
+        : [];
+    }));
+    expect(horizontalLevels).toContain(2);
+    expect(horizontalLevels).toContain(5.6);
+  });
+
   it("smooths every AMS color contour instead of keeping pixel stair steps", () => {
     const columns = 25, rows = 25, cellColumns = columns - 1;
     const mask = Array(cellColumns * (rows - 1)).fill(true) as boolean[];

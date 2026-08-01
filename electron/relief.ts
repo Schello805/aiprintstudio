@@ -1045,28 +1045,41 @@ function buildVectorColorMeshes(
     return (heights[vertex] + heights[vertex + 1] + heights[vertex + columns] + heights[vertex + columns + 1]) / 4;
   };
   const masks = colors.map((_, colorIndex) => assignments.map((assignment, cell) => cellMask[cell] && assignment === colorIndex));
-  const topHeights = masks.map((mask) => {
-    const samples = mask.flatMap((occupied, cell) => occupied ? [cellHeight(cell)] : []);
-    if (!samples.length) return 0;
-    samples.sort((a, b) => a - b);
-    return samples[Math.floor(samples.length / 2)];
+  // Eine Farbe kann in einem Wappen auf mehreren echten Höhen vorkommen:
+  // Schwarz liegt beispielsweise sowohl am niedrigen Außenrand als auch auf
+  // den erhabenen Walzen. Die frühere Medianhöhe pro AMS-Farbe zog deshalb
+  // alle schwarzen Walzendetails auf die Höhe des Randes herunter. Farben
+  // dürfen die bereits berechnete STL-Geometrie niemals verändern. Deshalb
+  // wird jede Farbe zusätzlich nach lokalen 0,2-mm-Druckschichten getrennt.
+  const heightBands = masks.map((mask) => {
+    const bands = new Map<number, boolean[]>();
+    mask.forEach((occupied, cell) => {
+      if (!occupied) return;
+      const top = Math.round(cellHeight(cell) / 0.2) * 0.2;
+      const band = bands.get(top) ?? Array(mask.length).fill(false) as boolean[];
+      band[cell] = true;
+      bands.set(top, band);
+    });
+    return [...bands].map(([top, bandMask]) => ({ top, mask: bandMask }));
   });
   const colorSkinMm = 0.4;
-  const bottoms = topHeights.map((height) => Math.max(0, height - colorSkinMm));
-  const positiveBottoms = bottoms.filter((height, index) => height > 0 && masks[index].some(Boolean));
+  const positiveBottoms = heightBands.flatMap((bands) => bands.map(({ top }) => Math.max(0, top - colorSkinMm))).filter((height) => height > 0);
   const baseTop = positiveBottoms.length ? Math.min(...positiveBottoms) : 0;
   const structureParts: Mesh[] = [buildVectorExtrudedMesh(cellMask, columns, rows, widthMm, heightMm, 0, baseTop, smoothing)];
-  masks.forEach((mask, index) => {
-    if (bottoms[index] > baseTop + 1e-6) {
-      structureParts.push(buildVectorExtrudedMesh(mask, columns, rows, widthMm, heightMm, baseTop, bottoms[index], smoothing));
-    }
+  heightBands.forEach((bands) => {
+    bands.forEach(({ top, mask }) => {
+      const bottom = Math.max(0, top - colorSkinMm);
+      if (bottom > baseTop + 1e-6) {
+        structureParts.push(buildVectorExtrudedMesh(mask, columns, rows, widthMm, heightMm, baseTop, bottom, smoothing));
+      }
+    });
   });
   const structure = mergeMeshes(structureParts.filter((mesh) => mesh.triangles.length));
   return colors.map((color, colorIndex) => {
-    const top = buildVectorExtrudedMesh(
-      masks[colorIndex], columns, rows, widthMm, heightMm,
-      bottoms[colorIndex], topHeights[colorIndex], smoothing
-    );
+    const top = mergeMeshes(heightBands[colorIndex].map((band) => buildVectorExtrudedMesh(
+      band.mask, columns, rows, widthMm, heightMm,
+      Math.max(0, band.top - colorSkinMm), band.top, smoothing
+    )).filter((mesh) => mesh.triangles.length));
     return {
       mesh: colorIndex === sideColorIndex ? mergeMeshes([structure, top]) : top,
       color,
