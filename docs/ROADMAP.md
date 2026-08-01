@@ -1,6 +1,6 @@
 # Roadmap
 
-## Aktueller Stand 0.29.0
+## Aktueller Stand 0.30.0
 
 - Bild zu 3D mit Kontur-, Höhenkarten- und lokaler KI-Tiefe
 - Schrift zu 3D mit gemeinsamem Relief- und AMS-Workflow
@@ -44,6 +44,10 @@
 - loch-erhaltende Mindestbreitenkorrektur für Wortmarken sowie motivbasierte
   Farbmessung ohne weißen Bildhintergrund
 - frei umschaltbarer schwarzer oder weißer Hintergrund in der 3D-Vorschau
+- semantisch erhabene, schwarz umrandete Wappenmotive auch bei kleinen
+  Antialias-Unterbrechungen der Kontur
+- dauerhaft zweispaltiger Upload-/Vorschaubereich mit integriertem
+  Ladefortschritt und Abbruch in der rechten Vorschau
 
 ## Verbindliche Qualitäts-To-dos
 

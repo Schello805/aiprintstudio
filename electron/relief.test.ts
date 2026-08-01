@@ -200,6 +200,23 @@ describe("relief mesh", () => {
     expect(levels).toEqual([1, 1, 0, 1]);
   });
 
+  it("raises an antialiased outlined emblem area above its surrounding field", () => {
+    const width = 30, height = 30;
+    const rgba = Buffer.alloc(width * height * 4, 255);
+    for (let y = 9; y <= 20; y += 1) for (let x = 9; x <= 20; x += 1) {
+      const offset = (y * width + x) * 4;
+      const border = x === 9 || x === 20 || y === 9 || y === 20;
+      rgba[offset] = border ? 20 : 235;
+      rgba[offset + 1] = border ? 20 : 35;
+      rgba[offset + 2] = border ? 20 : 45;
+      // Eine graue Antialias-Lücke darf die umrandete Fläche nicht mit dem
+      // großen weißen Wappenfeld verbinden.
+      if (x === 14 && y === 9) rgba[offset] = rgba[offset + 1] = rgba[offset + 2] = 172;
+    }
+    const levels = reliefInternals.buildVectorLevels(rgba, Array(width * height).fill(true), width, height, false);
+    expect(levels[15 * width + 15]).toBeGreaterThan(levels[3 * width + 3]);
+  });
+
   it("assigns subject cells to the nearest configured filament color", () => {
     const rgba = Buffer.from([
       250, 5, 5, 255, 250, 5, 5, 255,

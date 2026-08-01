@@ -102,6 +102,10 @@ umschalten, damit sowohl helle als auch dunkle Motive klar erkennbar bleiben.
 Bei freigestellten Wortmarken bleiben Buchstabeninnenräume offen; die
 Farbzuordnung wertet nur Motivpixel aus und übernimmt nicht versehentlich den
 weißen Bildhintergrund als Schriftfarbe.
+Upload und 3D-Ausgabe bleiben als feste linke und rechte Spalte sichtbar. Schon
+vor der ersten Berechnung reserviert die Oberfläche rechts den Vorschauplatz;
+während der Verarbeitung erscheinen Fortschritt, Animation und Abbruch dort,
+ohne dass das Layout springt.
 Nach der Berechnung kann das Quellbild außerdem mit der tatsächlich verwendeten
 Höhenkarte verglichen werden.
 

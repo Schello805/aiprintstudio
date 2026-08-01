@@ -593,7 +593,7 @@ export function App() {
             {studioTool !== "prompt" && (
               <>
             <div className={result ? "preview-stage sticky" : "preview-stage"}>
-            <div className={result ? "comparison-grid" : "comparison-grid single"}>
+            <div className="comparison-grid">
               <div
                 className={preview ? "upload-card has-preview" : "upload-card"}
                 onClick={() => studioTool === "text" ? setTextDialogOpen(true) : void selectFile(studioTool === "lithophane" ? "lithophane" : "image")}
@@ -607,24 +607,14 @@ export function App() {
                   <><div className="upload-icon">{studioTool === "text" ? <Type size={32} /> : <UploadCloud size={32} />}</div><h3>{studioTool === "text" ? "Schriftzug gestalten" : "Bild oder SVG auswählen"}</h3><p>{studioTool === "text" ? "Text, Schriftart und Ausrichtung festlegen" : "PNG, JPG, WEBP oder SVG"}</p><div className="source-actions"><button className="choose-file-button" onClick={(event) => { event.stopPropagation(); if (studioTool === "text") setTextDialogOpen(true); else void selectFile(studioTool === "lithophane" ? "lithophane" : "image"); }}>{studioTool === "text" ? "Text eingeben" : "Datei auswählen"}</button></div><span>Die Verarbeitung erfolgt vollständig lokal</span></>
                 )}
               </div>
-              {result && <ReliefPreview result={result} />}
+              {busy
+                ? <ReliefLoadingPreview progress={reliefProgress} onCancel={() => void cancelRelief()} />
+                : result
+                  ? <ReliefPreview result={result} />
+                  : <ReliefPreviewPlaceholder />}
             </div>
             {fileError && <div className="error-banner" role="alert"><strong>Verarbeitung fehlgeschlagen</strong><span>{fileError}</span><button className="diagnostic-log-button" onClick={() => void window.desktop?.showDiagnosticLogs()}>Lokale Diagnose</button><button onClick={() => setFileError(null)} aria-label="Fehlermeldung schließen"><X /></button></div>}
             {uploadStatus && !fileError && <div className="upload-status"><CheckCircle2 /> {uploadStatus}</div>}
-            {busy && (
-              <div className="progress-card relief-progress-card">
-                <div className="mesh-spinner" aria-hidden="true"><span /><span /><span /><Box /></div>
-                <div className="progress-copy">
-                  <strong>{reliefProgress.phase}</strong>
-                  <p>{reliefProgress.detail}</p>
-                  <div className="relief-progress-line">
-                    <div className="relief-progress-track"><span style={{ width: `${Math.max(2, reliefProgress.progress)}%` }} /></div>
-                    <small>{Math.round(reliefProgress.progress)} %</small>
-                  </div>
-                </div>
-                <button className="cancel-job-button" onClick={() => void cancelRelief()}><X /> Abbrechen</button>
-              </div>
-            )}
             {result && !busy && <>
               <ReliefResultCard result={result} optimize={() => void repairAndRegenerate()} />
               <SlicerAnalysisCard result={result} />
@@ -977,6 +967,39 @@ function ReliefPreview({ result }: { result: NonNullable<ReliefResult> }) {
         {showGrid && <gridHelper args={[modelSize * 1.6, 18, previewBackground === "dark" ? "#2e3944" : "#89939D", previewBackground === "dark" ? "#1b222b" : "#CDD2D6"]} />}
         <OrbitControls makeDefault autoRotate={autoRotate} autoRotateSpeed={1.6} target={[0, result.options.baseMm + result.options.reliefMm / 2, 0]} minDistance={modelSize * 0.65} maxDistance={modelSize * 3} enableDamping />
       </Canvas>
+    </div>
+  );
+}
+
+function ReliefPreviewPlaceholder() {
+  return (
+    <div className="preview-card preview-placeholder">
+      <div className="panel-label">3D-VORSCHAU</div>
+      <Box />
+      <strong>Dein Modell erscheint hier</strong>
+      <span>Links eine Datei auswählen und die Verarbeitung starten.</span>
+    </div>
+  );
+}
+
+function ReliefLoadingPreview({
+  progress,
+  onCancel
+}: {
+  progress: { phase: string; detail: string; progress: number };
+  onCancel: () => void;
+}) {
+  return (
+    <div className="preview-card preview-loading" aria-live="polite">
+      <div className="panel-label">3D-VORSCHAU WIRD ERSTELLT</div>
+      <div className="mesh-spinner" aria-hidden="true"><span /><span /><span /><Box /></div>
+      <strong>{progress.phase}</strong>
+      <p>{progress.detail}</p>
+      <div className="relief-progress-line">
+        <div className="relief-progress-track"><span style={{ width: `${Math.max(2, progress.progress)}%` }} /></div>
+        <small>{Math.round(progress.progress)} %</small>
+      </div>
+      <button className="cancel-job-button" onClick={onCancel}><X /> Abbrechen</button>
     </div>
   );
 }

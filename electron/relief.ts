@@ -591,11 +591,28 @@ function buildVectorLevels(rgba: Buffer, mask: boolean[], width: number, height:
     const level = levels.get(cleaned[index]) ?? 0;
     return invert ? level : 1 - level;
   });
-  const dark = mask.map((occupied, index) => {
+  const darkSeeds = mask.map((occupied, index) => {
     if (!occupied) return false;
     const offset = index * 4;
-    return Math.max(rgba[offset], rgba[offset + 1], rgba[offset + 2]) < 125;
+    const red = rgba[offset], green = rgba[offset + 1], blue = rgba[offset + 2];
+    const luminance = 0.2126 * red + 0.7152 * green + 0.0722 * blue;
+    return luminance < 150 && Math.max(red, green, blue) - Math.min(red, green, blue) < 85;
   });
+  // Antialiasing unterbricht schwarze Motivkonturen stellenweise mit einem
+  // einzelnen grauen Pixel. Solche echten Ein-Pixel-Lücken werden geschlossen,
+  // ohne die Kontur in die eingeschlossene Farbfläche hinein zu verbreitern.
+  const dark = darkSeeds.slice();
+  for (let y = 1; y < height - 1; y += 1) for (let x = 1; x < width - 1; x += 1) {
+    const index = y * width + x;
+    if (!mask[index] || darkSeeds[index]) continue;
+    const horizontalGap = darkSeeds[index - 1] && darkSeeds[index + 1];
+    const verticalGap = darkSeeds[index - width] && darkSeeds[index + width];
+    const offset = index * 4;
+    const red = rgba[offset], green = rgba[offset + 1], blue = rgba[offset + 2];
+    const luminance = 0.2126 * red + 0.7152 * green + 0.0722 * blue;
+    const neutralAntialias = luminance < 210 && Math.max(red, green, blue) - Math.min(red, green, blue) < 50;
+    if (neutralAntialias && (horizontalGap || verticalGap)) dark[index] = true;
+  }
   const visited = new Uint8Array(mask.length);
   const components: number[][] = [];
   for (let start = 0; start < mask.length; start += 1) {
