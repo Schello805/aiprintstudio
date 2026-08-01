@@ -28,7 +28,7 @@ import {
 } from "lucide-react";
 import { SettingTooltip } from "./SettingTooltip";
 import { extractColorPalette } from "./domain/color-palette";
-import { minimumFeatureForMode, rankReliefCandidate, resolveReliefMode, smoothingCandidates } from "./domain/relief-optimization";
+import { mapReliefPassProgress, minimumFeatureForMode, rankReliefCandidate, resolveReliefMode, smoothingCandidates } from "./domain/relief-optimization";
 import appLogoMark from "../build/icon-mark.png";
 type View = "studio" | "history" | "settings" | "info";
 type StudioTool = "home" | "image" | "text" | "lithophane" | "prompt";
@@ -134,6 +134,7 @@ export function App() {
   const [busy, setBusy] = useState(false);
   const [reliefProgress, setReliefProgress] = useState({ phase: "Vorbereiten", detail: "Die lokale 3D-Engine wird gestartet …", progress: 0 });
   const activeReliefJob = useRef<string | null>(null);
+  const reliefProgressWindow = useRef({ start: 1, end: 96 });
   const recoveryLoaded = useRef(false);
   const [result, setResult] = useState<ReliefResult>(null);
   const [uploadStatus, setUploadStatus] = useState<string | null>(null);
@@ -219,7 +220,16 @@ export function App() {
   }, []);
 
   useEffect(() => window.desktop?.onReliefProgress((jobId, progress) => {
-    if (activeReliefJob.current === jobId) setReliefProgress(progress);
+    if (activeReliefJob.current !== jobId) return;
+    const mapped = mapReliefPassProgress(progress.progress, reliefProgressWindow.current.start, reliefProgressWindow.current.end);
+    setReliefProgress((current) => ({
+      ...progress,
+      // Interne Varianten und Größenkorrekturen besitzen jeweils einen
+      // eigenen 0–100-Fortschritt. In der UI werden sie in ein einziges,
+      // monotones Gesamtfenster abgebildet. 100 bleibt dem echten Abschluss
+      // inklusive Vorschau, STL und 3MF vorbehalten.
+      progress: current.progress >= 100 ? 100 : Math.min(99, Math.max(current.progress, mapped))
+    }));
   }), []);
 
   useEffect(() => {
@@ -295,6 +305,7 @@ export function App() {
     if (!file) return;
     const jobId = crypto.randomUUID();
     activeReliefJob.current = jobId;
+    reliefProgressWindow.current = { start: 1, end: repair ? 4 : 90 };
     setReliefProgress({ phase: "Vorbereiten", detail: "Die lokale 3D-Engine wird gestartet …", progress: 1 });
     setBusy(true); setFileError(null); setResult(null);
     try {
@@ -349,10 +360,13 @@ export function App() {
         let bestRank = Number.NEGATIVE_INFINITY;
         for (let index = 0; index < candidates.length; index += 1) {
           const candidateSmoothing = candidates[index];
+          const passStart = 4 + index / candidates.length * 46;
+          const passEnd = 4 + (index + 1) / candidates.length * 46;
+          reliefProgressWindow.current = { start: passStart, end: passEnd };
           setReliefProgress({
             phase: "Varianten vergleichen",
             detail: `Lokale Qualitätsvariante ${index + 1} von ${candidates.length} wird geprüft …`,
-            progress: 8 + Math.round(index / candidates.length * 38)
+            progress: Math.round(passStart)
           });
           const candidate = await window.desktop.createRelief(jobId, file.path, {
             ...request,
@@ -382,16 +396,19 @@ export function App() {
       }
       request.smoothing = selectedSmoothing;
       request.detail = selectedDetail;
+      reliefProgressWindow.current = { start: repair ? 52 : 2, end: 90 };
       let next = await window.desktop.createRelief(jobId, file.path, request);
       for (let attempt = 0; next && reduceTo250kTriangles && (next.triangleCount > 250_000 || next.fileBytes.stl > 25_000_000 || next.fileBytes.threeMf > 25_000_000) && attempt < 4; attempt += 1) {
         const triangleFactor = Math.sqrt(225_000 / Math.max(1, next.triangleCount));
         const fileFactor = Math.sqrt(23_000_000 / Math.max(1, next.fileBytes.stl, next.fileBytes.threeMf));
         const reducedResolution = Math.max(64, Math.floor(currentResolution * Math.min(0.9, triangleFactor, fileFactor)));
         if (reducedResolution >= currentResolution) break;
+        const reductionStart = 90 + attempt * 1.75;
+        reliefProgressWindow.current = { start: reductionStart, end: Math.min(97, reductionStart + 1.75) };
         setReliefProgress({
           phase: "Meshgröße reduzieren",
           detail: `Die Auflösung wird automatisch angepasst (${next.triangleCount.toLocaleString("de-DE")} → maximal 250.000 Dreiecke) …`,
-          progress: 8
+          progress: Math.round(reductionStart)
         });
         currentResolution = reducedResolution;
         next = await window.desktop.createRelief(jobId, file.path, {
@@ -403,6 +420,7 @@ export function App() {
         if (next.triangleCount > 250_000 || next.fileBytes.stl > 25_000_000 || next.fileBytes.threeMf > 25_000_000) {
           throw new Error("Das Modell überschreitet trotz automatischer Reduzierung 250.000 Dreiecke oder 25 MB. Bitte wähle ein weniger komplexes Motiv.");
         }
+        setReliefProgress({ phase: "Fertig", detail: "Vorschau, STL und 3MF sind vollständig erstellt.", progress: 100 });
         setResult(next);
         const entry: HistoryEntry = {
           id: crypto.randomUUID(), name: file.name, createdAt: new Date().toISOString(),

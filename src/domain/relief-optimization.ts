@@ -36,3 +36,8 @@ export function rankReliefCandidate(input: {
     - input.triangleCount / 100_000
     - Math.abs(input.smoothing - input.recommendedSmoothing) * 10;
 }
+
+export function mapReliefPassProgress(progress: number, start: number, end: number): number {
+  const normalized = Math.max(0, Math.min(100, progress)) / 100;
+  return Math.round(start + normalized * Math.max(0, end - start));
+}

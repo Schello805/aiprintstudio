@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { minimumFeatureForMode, rankReliefCandidate, resolveReliefMode, smoothingCandidates } from "./relief-optimization";
+import { mapReliefPassProgress, minimumFeatureForMode, rankReliefCandidate, resolveReliefMode, smoothingCandidates } from "./relief-optimization";
 
 describe("local relief optimization", () => {
   it("never replaces an explicitly selected emblem with wordmark processing", () => {
@@ -28,5 +28,11 @@ describe("local relief optimization", () => {
     const smooth = rankReliefCandidate({ score: 100, contourScore: 98, issueCount: 0, triangleCount: 200_000, smoothing: 4, recommendedSmoothing: 3 });
     const rough = rankReliefCandidate({ score: 100, contourScore: 70, issueCount: 0, triangleCount: 200_000, smoothing: 3, recommendedSmoothing: 3 });
     expect(smooth).toBeGreaterThan(rough);
+  });
+
+  it("keeps completed internal passes below the overall 100 percent", () => {
+    expect(mapReliefPassProgress(100, 5, 25)).toBe(25);
+    expect(mapReliefPassProgress(50, 25, 45)).toBe(35);
+    expect(mapReliefPassProgress(100, 90, 97)).toBe(97);
   });
 });
