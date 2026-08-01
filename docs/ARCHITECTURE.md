@@ -109,7 +109,9 @@ schließt exakt auf Sollhöhe ab.
 
 Außenränder und Farbübergänge werden vor dem Meshaufbau der gewählten Farbe
 **Seiten & Tragkörper** zugewiesen. Dadurch bleiben senkrechte Wände einfarbig.
-Vorschau und 3MF verwenden dieselbe stabilisierte Farbkarte. Im 3MF sind alle
+Jede einzelne Farbmaske erhält dabei ihre eigene geglättete Kontur. Vorschau,
+STL und 3MF verwenden bei aktiviertem AMS dieselben geschlossenen Farbkörper;
+so fällt der einfarbige STL-Fallback nicht auf die alte Rasterkontur zurück. Im 3MF sind alle
 Farbkörper Komponenten eines einzigen Assembly-Objekts; der Build-Bereich
 enthält deshalb genau ein gemeinsames Modell in Millimetern. STL bleibt ein
 einfarbiges Fallback.

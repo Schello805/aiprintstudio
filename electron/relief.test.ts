@@ -283,6 +283,28 @@ describe("relief mesh", () => {
     expect(Math.max(...(redSkin?.mesh.vertices.map((vertex) => vertex[2]) ?? []))).toBeCloseTo(5);
   });
 
+  it("smooths every AMS color contour instead of keeping pixel stair steps", () => {
+    const columns = 25, rows = 25, cellColumns = columns - 1;
+    const mask = Array(cellColumns * (rows - 1)).fill(true) as boolean[];
+    const assignments = mask.map((_, index) => {
+      const x = index % cellColumns, y = Math.floor(index / cellColumns);
+      return Math.hypot(x + 0.5 - 12, y + 0.5 - 12) < 7 ? 1 : 0;
+    });
+    const colored = reliefInternals.buildColoredMeshes(
+      columns, rows, 24, 24, Array(columns * rows).fill(5), mask,
+      assignments, ["#000000", "#FF0000"], 0
+    );
+    const detail = colored.find((part) => part.color === "#FF0000");
+    expect(detail).toBeDefined();
+    expect(detail?.mesh.vertices.some(([x, y]) => Math.abs(x - Math.round(x)) > 0.02 || Math.abs(y - Math.round(y)) > 0.02)).toBe(true);
+    const edges = new Map<string, number>();
+    for (const triangle of detail?.mesh.triangles ?? []) for (const [a, b] of [[triangle[0], triangle[1]], [triangle[1], triangle[2]], [triangle[2], triangle[0]]]) {
+      const key = a < b ? `${a}:${b}` : `${b}:${a}`;
+      edges.set(key, (edges.get(key) ?? 0) + 1);
+    }
+    expect([...edges.values()].every((uses) => uses === 2)).toBe(true);
+  });
+
   it("removes isolated raised cells from the outer rim of stepped logos", () => {
     const columns = 8, rows = 8;
     const cellColumns = columns - 1, cellRows = rows - 1;

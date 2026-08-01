@@ -342,11 +342,17 @@ export async function createRelief(
       colorAssignments, options.colors, options.sideColorIndex, steppedLogo
     )
     : undefined;
-  const exportMesh = orientMeshLikePreview(mesh, heightMm);
   const exportColoredMeshes = coloredMeshes?.map((part) => ({
     ...part,
     mesh: orientMeshLikePreview(transformProductMesh(part.mesh, options.widthMm, options.curveAngle, options.mirrorX), heightMm)
   }));
+  // Ist AMS aktiv, muss auch das einfarbige STL dieselbe geglättete
+  // Geometrie wie Vorschau und 3MF verwenden. Zuvor wurde das STL aus dem
+  // alten Raster-Höhenfeld geschrieben; dadurch sah gerade die im Screenshot
+  // geprüfte STL trotz glatter 3MF-Farbkörper weiterhin kantig aus.
+  const exportMesh = exportColoredMeshes?.length
+    ? mergeMeshes(exportColoredMeshes.map((part) => part.mesh))
+    : orientMeshLikePreview(mesh, heightMm);
   onProgress({ phase: "Exportieren", detail: "STL und 3MF werden für die Vorschau vorbereitet …", progress: 93 });
   await Promise.all([
     writeFile(stlPath, encodeBinaryStl(exportMesh, "AI Print Studio Relief")),
@@ -952,9 +958,16 @@ function buildColoredMeshes(
     : buildWatertightHeightMesh(columns, rows, widthMm, heightMm, structureHeights, cellMask, 0, outerBoundary);
   return colors.map((color, colorIndex) => {
     const mask = assignments.map((assignment) => assignment === colorIndex);
+    // Jede Farbfläche besitzt eine eigene Kontur. Bisher erhielten alle
+    // Farbkörper nur die geglättete Außenkontur des Gesamtmodells; innere
+    // Schwarz-, Weiß- oder Rotflächen blieben deshalb exakt auf dem
+    // Pixelraster und erschienen im Slicer als Treppen. Die Farbmaske wird
+    // nun selbst geglättet und für Oberseite, Boden und Seiten gemeinsam
+    // verwendet, damit der Körper geschlossen bleibt.
+    const colorBoundary = buildSmoothedBoundaryPositions(columns, rows, widthMm, heightMm, mask);
     const top = topCellHeights && structureCellHeights
       ? buildSteppedCellMesh(columns, rows, widthMm, heightMm, topCellHeights, mask, structureCellHeights)
-      : buildWatertightHeightMesh(columns, rows, widthMm, heightMm, heights.slice(), mask, structureHeights, outerBoundary);
+      : buildWatertightHeightMesh(columns, rows, widthMm, heightMm, heights.slice(), mask, structureHeights, colorBoundary);
     return {
       mesh: colorIndex === sideColorIndex ? mergeMeshes([structure, top]) : top,
       color,
