@@ -65,10 +65,11 @@ h1,h2,h3 { font-family:Manrope, sans-serif; margin:0; }
 .comparison-grid.single { grid-template-columns:1fr; }
 .preview-stage { position:relative; }
 .preview-stage.sticky { position:sticky; z-index:20; top:44px; margin:0 -9px; padding:7px 9px 8px; border-radius:17px; background:#090b10f2; box-shadow:0 18px 30px #05070aaa; backdrop-filter:blur(14px); }
-.preview-card { height:240px; position:relative; overflow:hidden; border:1px solid #303742; border-radius:16px; background:#0b0e13; }
+.preview-card { height:260px; position:relative; display:flex; flex-direction:column; overflow:hidden; border:1px solid #303742; border-radius:16px; background:#0b0e13; }
+.preview-canvas { position:relative; flex:1; min-height:0; overflow:hidden; }
 .preview-card canvas { cursor:grab; }
 .preview-card canvas:active { cursor:grabbing; }
-.preview-tools { position:absolute; z-index:4; top:42px; right:10px; display:flex; align-items:center; gap:4px; padding:4px; border:1px solid #303944; border-radius:9px; background:#090d12df; backdrop-filter:blur(9px); }
+.preview-tools { position:static; z-index:4; min-height:39px; flex:0 0 auto; display:flex; justify-content:flex-end; align-items:center; gap:4px; padding:5px 8px; border-top:1px solid #303944; background:#090d12; }
 .preview-tools select,.preview-tools button { min-height:27px; border:1px solid #303a46; border-radius:6px; background:#111720; color:#9eabb8; padding:5px 7px; font-size:7px; cursor:pointer; }
 .preview-tools select { max-width:112px; }
 .preview-tools button.active { border-color:#65934c; background:#192517; color:#caffaa; }

@@ -983,20 +983,8 @@ function ReliefPreview({ result }: { result: NonNullable<ReliefResult> }) {
   return (
     <div className="preview-card">
       <div className="panel-label">3D-VORSCHAU · ZIEHEN ZUM DREHEN</div>
-      <div className="preview-tools" aria-label="3D-Prüfansichten">
-        <select value={materialView} onChange={(event) => setMaterialView(event.target.value as typeof materialView)} aria-label="Materialansicht">
-          <option value="original">Originalfarben</option><option value="white">Weißes PLA</option><option value="black">Schwarzes PLA</option><option value="gold">Gold Silk</option><option value="light">Lithophan-Licht</option><option value="normals">Normalen prüfen</option><option value="wireframe">Drahtgitter</option>
-        </select>
-        <button className={autoRotate ? "active" : ""} onClick={() => setAutoRotate((current) => !current)}>Drehen</button>
-        <button className={showGrid ? "active" : ""} onClick={() => setShowGrid((current) => !current)}>Druckbett</button>
-        <button
-          className={previewBackground === "light" ? "active" : ""}
-          onClick={() => setPreviewBackground((current) => current === "dark" ? "light" : "dark")}
-          title="Wechselt nur den Hintergrund der Vorschau. Der Export bleibt unverändert."
-        >Hintergrund: {previewBackground === "dark" ? "Schwarz" : "Weiß"}</button>
-        <button onClick={() => setCameraRevision((current) => current + 1)}>Kamera zurücksetzen</button>
-      </div>
-      <Canvas key={cameraRevision} camera={{ position: [modelSize * 0.9, modelSize * 0.85, modelSize * 1.35], fov: 42 }} dpr={[1, 2]}>
+      <div className="preview-canvas">
+        <Canvas key={cameraRevision} camera={{ position: [modelSize * 0.9, modelSize * 0.85, modelSize * 1.35], fov: 42 }} dpr={[1, 2]}>
         <color attach="background" args={[previewBackground === "dark" ? "#0b0e13" : "#F4F5F2"]} />
         <ambientLight intensity={materialView === "light" ? 0.45 : 1.5} />
         <directionalLight position={[60, 100, 80]} intensity={3.2} />
@@ -1012,7 +1000,21 @@ function ReliefPreview({ result }: { result: NonNullable<ReliefResult> }) {
         ))}
         {showGrid && <gridHelper args={[modelSize * 1.6, 18, previewBackground === "dark" ? "#2e3944" : "#89939D", previewBackground === "dark" ? "#1b222b" : "#CDD2D6"]} />}
         <OrbitControls makeDefault autoRotate={autoRotate} autoRotateSpeed={1.6} target={[0, result.options.baseMm + result.options.reliefMm / 2, 0]} minDistance={modelSize * 0.65} maxDistance={modelSize * 3} enableDamping />
-      </Canvas>
+        </Canvas>
+      </div>
+      <div className="preview-tools" aria-label="3D-Prüfansichten">
+        <select value={materialView} onChange={(event) => setMaterialView(event.target.value as typeof materialView)} aria-label="Materialansicht">
+          <option value="original">Originalfarben</option><option value="white">Weißes PLA</option><option value="black">Schwarzes PLA</option><option value="gold">Gold Silk</option><option value="light">Lithophan-Licht</option><option value="normals">Normalen prüfen</option><option value="wireframe">Drahtgitter</option>
+        </select>
+        <button className={autoRotate ? "active" : ""} onClick={() => setAutoRotate((current) => !current)}>Drehen</button>
+        <button className={showGrid ? "active" : ""} onClick={() => setShowGrid((current) => !current)}>Druckbett</button>
+        <button
+          className={previewBackground === "light" ? "active" : ""}
+          onClick={() => setPreviewBackground((current) => current === "dark" ? "light" : "dark")}
+          title="Wechselt nur den Hintergrund der Vorschau. Der Export bleibt unverändert."
+        >Hintergrund: {previewBackground === "dark" ? "Schwarz" : "Weiß"}</button>
+        <button onClick={() => setCameraRevision((current) => current + 1)}>Kamera zurücksetzen</button>
+      </div>
     </div>
   );
 }
