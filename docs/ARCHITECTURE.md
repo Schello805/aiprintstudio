@@ -69,15 +69,16 @@ vollständige Reliefhöhe gesetzt werden.
 Die Automatik nutzt zusätzlich den Farbabstand der vier Ecken als
 Verlaufsindikator. Bei einem Logo-Profil mit deutlichem Verlauf wechselt sie in
 die Wordmark-Pipeline, aktiviert Hintergrund und Mindestbreite und nutzt 384
-Rasterpunkte. Explizit ausgewählte Wappen verbleiben für maximale
-Konturauflösung bei 512 Rasterpunkten.
+Rasterpunkte. Explizit ausgewählte Wappen werden mit 512 Rasterpunkten
+analysiert und danach in echte Polygone überführt.
 
 Bei explizit ausgewähltem **Wappen & Emblem** wird die Außenkontur des
-Tragkörpers unabhängig von den inneren Farb- und Höhenflächen aufgebaut. Die
-äußersten belegten Punkte jeder Bildzeile bilden eine geschlossene Silhouette;
-deren linke und rechte Kurve wird vor der Vermaschung separat geglättet. So
-bleiben Innenflächen hochauflösend, während Antialiasing und einzelne
-Farbpixel keine geriffelte Außenwand mehr erzeugen.
+Tragkörpers unabhängig von den inneren Farb- und Höhenflächen aufgebaut. Jede
+binäre Farbmaske wird mit Marching Squares (`d3-contour`) in geschlossene
+Polygonringe konvertiert, geglättet und mit Three.js/Earcut trianguliert. Boden,
+Deckfläche und Seiten entstehen als gemeinsame solide Extrusion. Vorschau, STL
+und 3MF verwenden dieselben Polygone; ein Rückfall auf die alte zellenweise
+Rasterwand ist damit ausgeschlossen.
 
 Schrift wird zunächst lokal als eng zugeschnittene transparente Vorlage
 gerendert und anschließend durch dieselbe Reliefpipeline verarbeitet. SVG wird
@@ -109,9 +110,10 @@ schließt exakt auf Sollhöhe ab.
 
 Außenränder und Farbübergänge werden vor dem Meshaufbau der gewählten Farbe
 **Seiten & Tragkörper** zugewiesen. Dadurch bleiben senkrechte Wände einfarbig.
-Jede einzelne Farbmaske erhält dabei ihre eigene geglättete Kontur. Vorschau,
-STL und 3MF verwenden bei aktiviertem AMS dieselben geschlossenen Farbkörper;
-so fällt der einfarbige STL-Fallback nicht auf die alte Rasterkontur zurück. Im 3MF sind alle
+Jede einzelne Farbmaske erhält dabei ihre eigene vektorisierte und geglättete
+Kontur. Vorschau, STL und 3MF verwenden bei aktiviertem AMS dieselben
+geschlossenen Farbkörper; so fällt der einfarbige STL-Fallback nicht auf die
+alte Rasterkontur zurück. Im 3MF sind alle
 Farbkörper Komponenten eines einzigen Assembly-Objekts; der Build-Bereich
 enthält deshalb genau ein gemeinsames Modell in Millimetern. STL bleibt ein
 einfarbiges Fallback.

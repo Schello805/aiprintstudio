@@ -11,3 +11,10 @@ AI Print Studio ist mit den genannten Rechteinhabern weder verbunden noch von
 ihnen autorisiert. KI-generierte oder öffentlich gefundene Referenzen sind keine
 offiziellen CAD-Daten. Vor dem Verwenden fremder Bilder, Designs oder Marken
 müssen Bild-, Design-, Urheber- und Markenrechte geprüft werden.
+
+## Vektorkonturen
+
+Für die lokale Polygonisierung von Bildmasken verwendet AI Print Studio
+`d3-contour` (ISC). Die Triangulation der geschlossenen Konturen erfolgt über
+`ShapeUtils.triangulateShape` beziehungsweise Earcut aus Three.js (MIT). Die
+Bibliotheken verarbeiten ausschließlich lokale Geometriedaten.

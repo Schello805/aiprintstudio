@@ -62,8 +62,10 @@ grundsätzlich kompatibel.
 
 PNG, JPG, WEBP und SVG werden zu einem wasserdichten 2,5D-Relief verarbeitet.
 Für Logos und Wappen erkennt die App Motivflächen und Höhenebenen, glättet die
-Außenkontur und hält den Tragkörper geschlossen. Für Fotos steht Depth Anything
-V2 Small lokal über Apple Core ML zur Verfügung.
+Konturen als echte Polygone und hält den Tragkörper geschlossen. Vorschau, STL
+und 3MF werden bei **Wappen & Emblem** aus denselben vektorisierten Farbflächen
+erzeugt; runde Ränder sind dadurch keine pixelweise Höhenwand mehr. Für Fotos
+steht Depth Anything V2 Small lokal über Apple Core ML zur Verfügung.
 
 Nach einer Berechnung zeigt die App eine lokale Schichtsimulation mit
 Schichtzahl, Materialmenge, grober Druckzeit und Farbwechseln. Diese Angaben
@@ -245,6 +247,7 @@ Repository stammt.
 | Oberfläche | React, TypeScript, Vite | Studio, Vorschau und Einstellungen |
 | 3D-Vorschau | Three.js, React Three Fiber | interaktive Mesh- und Farbvorschau |
 | Bildpipeline | Sharp, TypeScript | Masken, Höhenkarten, Farben und Meshaufbau |
+| Vektorkonturen | d3-contour, Three.js Earcut | Marching Squares, geglättete Polygone und solide Extrusionen |
 | Native Worker | Swift, Core ML, MLX | lokale Tiefe und optionale komplexe Formrekonstruktion |
 | CAD-Pipeline | OpenAI Structured Outputs, lokaler TypeScript-Generator | validierter Plan und Binär-STL |
 | Konfiguration | scrypt, AES-256-GCM, lokale JSON-Datei | verschlüsselter API-Schlüssel ohne macOS-Schlüsselbund |

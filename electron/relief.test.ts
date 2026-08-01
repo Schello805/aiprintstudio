@@ -305,6 +305,30 @@ describe("relief mesh", () => {
     expect([...edges.values()].every((uses) => uses === 2)).toBe(true);
   });
 
+  it("vectorizes round emblem contours into a compact watertight solid", () => {
+    const columns = 129, rows = 129, cellColumns = columns - 1;
+    const mask = Array(cellColumns * (rows - 1)).fill(false).map((_, index) => {
+      const x = index % cellColumns, y = Math.floor(index / cellColumns);
+      return Math.hypot(x + 0.5 - 64, y + 0.5 - 64) < 48;
+    });
+    const mesh = reliefInternals.buildVectorExtrudedMesh(mask, columns, rows, 100, 100, 0, 4);
+    const raster = reliefInternals.buildWatertightHeightMesh(
+      columns, rows, 100, 100, Array(columns * rows).fill(4), mask
+    );
+    const edges = new Map<string, number>();
+    for (const triangle of mesh.triangles) {
+      for (const [a, b] of [[triangle[0], triangle[1]], [triangle[1], triangle[2]], [triangle[2], triangle[0]]]) {
+        const key = a < b ? `${a}:${b}` : `${b}:${a}`;
+        edges.set(key, (edges.get(key) ?? 0) + 1);
+      }
+    }
+    expect(mesh.triangles.length).toBeLessThan(raster.triangles.length / 8);
+    expect([...edges.values()].every((uses) => uses === 2)).toBe(true);
+    expect(mesh.vertices.some(([x, y]) =>
+      Math.abs(x - Math.round(x)) > 0.02 || Math.abs(y - Math.round(y)) > 0.02
+    )).toBe(true);
+  });
+
   it("removes isolated raised cells from the outer rim of stepped logos", () => {
     const columns = 8, rows = 8;
     const cellColumns = columns - 1, cellRows = rows - 1;

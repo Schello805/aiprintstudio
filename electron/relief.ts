@@ -2,6 +2,8 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { basename, extname, join } from "node:path";
 import JSZip from "jszip";
 import sharp from "sharp";
+import { contours } from "d3-contour";
+import { ShapeUtils, Vector2 } from "three";
 
 export type ReliefOptions = {
   widthMm: number;
@@ -313,10 +315,10 @@ export async function createRelief(
     gridWidth, gridHeight, options.widthMm, heightMm, heights, cellMask,
     colorAssignments, options.colors, options.sideColorIndex,
     flatVectorSurface || (useWordmarkMask && options.includeBackground),
-    steppedLogo
+    steppedLogo, options.processingMode === "vector"
   );
   const preview = transformProductPreview(planarPreview, options.widthMm, options.curveAngle, options.mirrorX);
-  const printability = analysePrintability(mesh, heights, options, cellMask, gridWidth);
+  let printability = analysePrintability(mesh, heights, options, cellMask, gridWidth);
   const layerHeightMm = 0.2;
   const maximumHeight = heights.reduce((maximum, height) => Math.max(maximum, height), 0);
   const materialVolumeMm3 = printability.estimatedVolumeCm3 * 1_000;
@@ -339,7 +341,8 @@ export async function createRelief(
   const coloredMeshes = colorAssignments
     ? buildColoredMeshes(
       gridWidth, gridHeight, options.widthMm, heightMm, heights, cellMask,
-      colorAssignments, options.colors, options.sideColorIndex, steppedLogo
+      colorAssignments, options.colors, options.sideColorIndex, steppedLogo,
+      options.processingMode === "vector"
     )
     : undefined;
   const exportColoredMeshes = coloredMeshes?.map((part) => ({
@@ -353,6 +356,11 @@ export async function createRelief(
   const exportMesh = exportColoredMeshes?.length
     ? mergeMeshes(exportColoredMeshes.map((part) => part.mesh))
     : orientMeshLikePreview(mesh, heightMm);
+  // Qualitätsangaben müssen die tatsächlich gespeicherte Geometrie bewerten.
+  // Der Vektorpfad ist erheblich kleiner und glatter als sein internes
+  // Raster-Arbeitsmesh; eine Analyse des Rasters würde deshalb weiterhin
+  // irreführend mehr als eine Million Dreiecke melden.
+  printability = analysePrintability(exportMesh, heights, options, cellMask, gridWidth);
   onProgress({ phase: "Exportieren", detail: "STL und 3MF werden für die Vorschau vorbereitet …", progress: 93 });
   await Promise.all([
     writeFile(stlPath, encodeBinaryStl(exportMesh, "AI Print Studio Relief")),
@@ -363,8 +371,8 @@ export async function createRelief(
   return {
     stlPath,
     threeMfPath,
-    vertexCount: mesh.vertices.length,
-    triangleCount: mesh.triangles.length,
+    vertexCount: exportMesh.vertices.length,
+    triangleCount: exportMesh.triangles.length,
     widthMm: options.widthMm,
     heightMm,
     options,
@@ -938,8 +946,15 @@ function buildColoredMeshes(
   assignments: number[],
   colors: string[],
   sideColorIndex: number,
-  stepped = false
+  stepped = false,
+  vectorized = false
 ): ColoredMesh[] {
+  if (vectorized && colors.length) {
+    return buildVectorColorMeshes(
+      columns, rows, widthMm, heightMm, heights, cellMask,
+      assignments, colors, sideColorIndex
+    );
+  }
   const outerBoundary = buildSmoothedBoundaryPositions(columns, rows, widthMm, heightMm, cellMask);
   // Zwei typische 0,2-mm-Schichten sind in allen gängigen Slicern als
   // druckbarer Körper erkennbar. Die frühere 0,04-mm-Haut wurde von Anycubic
@@ -974,6 +989,122 @@ function buildColoredMeshes(
       name: `AMS ${colorIndex + 1}`
     };
   }).filter(({ mesh }) => mesh.triangles.length > 0);
+}
+
+function buildVectorColorMeshes(
+  columns: number,
+  rows: number,
+  widthMm: number,
+  heightMm: number,
+  heights: number[],
+  cellMask: boolean[],
+  assignments: number[],
+  colors: string[],
+  sideColorIndex: number
+): ColoredMesh[] {
+  const cellColumns = columns - 1;
+  const cellHeight = (cell: number) => {
+    const x = cell % cellColumns, y = Math.floor(cell / cellColumns);
+    const vertex = y * columns + x;
+    return (heights[vertex] + heights[vertex + 1] + heights[vertex + columns] + heights[vertex + columns + 1]) / 4;
+  };
+  const masks = colors.map((_, colorIndex) => assignments.map((assignment, cell) => cellMask[cell] && assignment === colorIndex));
+  const topHeights = masks.map((mask) => {
+    const samples = mask.flatMap((occupied, cell) => occupied ? [cellHeight(cell)] : []);
+    if (!samples.length) return 0;
+    samples.sort((a, b) => a - b);
+    return samples[Math.floor(samples.length / 2)];
+  });
+  const colorSkinMm = 0.4;
+  const bottoms = topHeights.map((height) => Math.max(0, height - colorSkinMm));
+  const positiveBottoms = bottoms.filter((height, index) => height > 0 && masks[index].some(Boolean));
+  const baseTop = positiveBottoms.length ? Math.min(...positiveBottoms) : 0;
+  const structureParts: Mesh[] = [buildVectorExtrudedMesh(cellMask, columns, rows, widthMm, heightMm, 0, baseTop)];
+  masks.forEach((mask, index) => {
+    if (bottoms[index] > baseTop + 1e-6) {
+      structureParts.push(buildVectorExtrudedMesh(mask, columns, rows, widthMm, heightMm, baseTop, bottoms[index]));
+    }
+  });
+  const structure = mergeMeshes(structureParts.filter((mesh) => mesh.triangles.length));
+  return colors.map((color, colorIndex) => {
+    const top = buildVectorExtrudedMesh(
+      masks[colorIndex], columns, rows, widthMm, heightMm,
+      bottoms[colorIndex], topHeights[colorIndex]
+    );
+    return {
+      mesh: colorIndex === sideColorIndex ? mergeMeshes([structure, top]) : top,
+      color,
+      name: `AMS ${colorIndex + 1}`
+    };
+  }).filter(({ mesh }) => mesh.triangles.length > 0);
+}
+
+function buildVectorExtrudedMesh(
+  cellMask: boolean[], columns: number, rows: number,
+  widthMm: number, heightMm: number, bottom: number, top: number
+): Mesh {
+  if (top <= bottom + 1e-6 || !cellMask.some(Boolean)) return { vertices: [], triangles: [] };
+  const cellColumns = columns - 1, cellRows = rows - 1;
+  const geometry = contours()
+    .size([cellColumns, cellRows])
+    .smooth(true)
+    .thresholds([0.5])(cellMask.map(Number))[0];
+  const vertices: Vec3[] = [];
+  const triangles: Triangle[] = [];
+  for (const polygon of geometry.coordinates) {
+    const rings = polygon.map((ring) => smoothVectorRing(ring as Array<[number, number]>).map(([x, y]) => new Vector2(
+      x * widthMm / cellColumns,
+      y * heightMm / cellRows
+    ))).filter((ring) => ring.length >= 3);
+    if (!rings.length) continue;
+    const [outer, ...holes] = rings;
+    const points = [...outer, ...holes.flat()];
+    const faces = ShapeUtils.triangulateShape(outer, holes);
+    const offset = vertices.length, count = points.length;
+    points.forEach(({ x, y }) => vertices.push([x, y, bottom]));
+    points.forEach(({ x, y }) => vertices.push([x, y, top]));
+    for (const [a, b, c] of faces) {
+      triangles.push([offset + count + a, offset + count + b, offset + count + c]);
+      triangles.push([offset + c, offset + b, offset + a]);
+    }
+    let ringOffset = 0;
+    for (const ring of rings) {
+      for (let index = 0; index < ring.length; index += 1) {
+        const next = (index + 1) % ring.length;
+        const a = offset + ringOffset + index, b = offset + ringOffset + next;
+        triangles.push([a + count, b, b + count], [a + count, a, b]);
+      }
+      ringOffset += ring.length;
+    }
+  }
+  return { vertices, triangles };
+}
+
+function smoothVectorRing(source: Array<[number, number]>): Array<[number, number]> {
+  let ring = source.slice(0, -1);
+  if (ring.length < 4) return ring;
+  const reduced: Array<[number, number]> = [];
+  for (const point of ring) {
+    const previous = reduced.at(-1);
+    // Lange Kanten werden vor der Kurvenglättung leicht ausgedünnt. Zwei
+    // Chaikin-Schritte unterteilen die resultierenden Sehnen anschließend bis
+    // deutlich unter Düsenauflösung; damit verschwinden auch die im Slicer
+    // sichtbaren senkrechten Facetten an runden Wappenrändern.
+    if (!previous || Math.hypot(point[0] - previous[0], point[1] - previous[1]) >= 1.15) reduced.push(point);
+  }
+  ring = reduced.length >= 4 ? reduced : ring;
+  for (let pass = 0; pass < 2; pass += 1) {
+    const next: Array<[number, number]> = [];
+    for (let index = 0; index < ring.length; index += 1) {
+      const current = ring[index], following = ring[(index + 1) % ring.length];
+      next.push(
+        [current[0] * 0.75 + following[0] * 0.25, current[1] * 0.75 + following[1] * 0.25],
+        [current[0] * 0.25 + following[0] * 0.75, current[1] * 0.25 + following[1] * 0.75]
+      );
+    }
+    ring = next;
+  }
+  return ring;
 }
 
 function buildBinaryCellHeights(heights: number[], columns: number, rows: number): number[] {
@@ -1450,7 +1581,8 @@ function buildPreviewSurface(
   colors: string[] = [],
   sideColorIndex = 0,
   preserveBoundaryHeights = false,
-  stepped = false
+  stepped = false,
+  vectorized = false
 ): { positions: number[]; indices: number[]; colorParts: Array<{ color: string; indices: number[] }> } {
   if (stepped && cellMask && (!colorAssignments || !colors.length)) {
     const mesh = buildSteppedCellMesh(
@@ -1461,7 +1593,11 @@ function buildPreviewSurface(
     const indices = mesh.triangles.flatMap(([a, b, c]) => [a, c, b]);
     return { positions, indices, colorParts: [] };
   }
-  if (preserveBoundaryHeights && cellMask && colorAssignments && colors.length) {
+  // Der Vektorpfad muss unabhängig von der Höhenklassifikation verwendet
+  // werden. Zuvor landete ein mehrfarbiges Wappen mit mehreren Helligkeiten
+  // in der Vorschau wieder im alten Rasterpfad, während nur der Export bereits
+  // vektorisiert war.
+  if ((preserveBoundaryHeights || vectorized) && cellMask && colorAssignments && colors.length) {
     const solids = buildColoredMeshes(
       columns,
       rows,
@@ -1472,7 +1608,8 @@ function buildPreviewSurface(
       colorAssignments,
       colors,
       sideColorIndex,
-      stepped
+      stepped,
+      vectorized
     );
     const positions: number[] = [];
     const indices: number[] = [];
@@ -1632,7 +1769,8 @@ function buildPreviewSurface(
 export const reliefInternals = {
   buildCellMask, buildSubjectPixelMask, buildWordmarkPixelMask, cleanSubjectPixelMask, applyBoundaryRim,
   expandPixelMask,
-  buildVectorLevels, buildSmoothedBoundaryPositions, buildColorCellAssignments, buildColoredMeshes, mergeMeshes,
+  buildVectorLevels, buildSmoothedBoundaryPositions, buildColorCellAssignments, buildColoredMeshes,
+  buildVectorColorMeshes, buildVectorExtrudedMesh, smoothVectorRing, mergeMeshes,
   enforceUniformEdgeColor,
   buildWatertightHeightMesh, buildBinaryCellHeights, flattenSteppedOuterRim, buildSteppedCellMesh, buildPreviewSurface, orientMeshLikePreview, encodeBinaryStl, encodeThreeMf,
   smoothHeightField, analysePrintability, profileSettings, buildProductPixelMask, applyRaisedBorder,

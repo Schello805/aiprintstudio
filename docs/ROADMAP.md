@@ -1,6 +1,6 @@
 # Roadmap
 
-## Aktueller Stand 0.23.4
+## Aktueller Stand 0.24.0
 
 - Bild zu 3D mit Kontur-, Höhenkarten- und lokaler KI-Tiefe
 - Schrift zu 3D mit gemeinsamem Relief- und AMS-Workflow
@@ -16,6 +16,8 @@
   lokalem Log
 - mehrfarbiger 3MF-Export als slicer-kompatibles Assembly mit einheitlichen
   Seiten- und Übergangskanten
+- polygonbasierte Wappen- und Farbkonturen für identisch glatte Vorschau-,
+  STL- und 3MF-Geometrie ohne pixelweise Außenwände
 - SVG-Import, Druckscore, Verlauf und Updateprüfung
 - `.aips`-Projektdateien mit eingebetteter Quelle und Bearbeitungsstand
 - automatische Druckreparatur für 0,4-mm-Düsen
