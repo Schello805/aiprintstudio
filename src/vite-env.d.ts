@@ -108,11 +108,13 @@ interface Window {
       smoothing: number;
       detail: number;
       processingMode: "auto" | "vector" | "wordmark" | "depth" | "height";
+      pipelineKind: "auto" | "emblem" | "wordmark" | "text" | "photo" | "lithophane";
       includeBackground: boolean;
       nozzleMm: number;
       minimumFeatureMm: number;
       sourceColors: string[];
       colors: string[];
+      colorMapping: number[];
       sideColorIndex: number;
       outputMode: "relief" | "lithophane" | "stamp";
       shape: "source" | "rectangle" | "rounded" | "circle" | "shield" | "hexagon" | "heart";
@@ -133,11 +135,13 @@ interface Window {
         widthMm: number; baseMm: number; reliefMm: number; resolution: number; invert: boolean;
         profile: "fast" | "balanced" | "fine" | "photo" | "logo"; smoothing: number; detail: number;
         processingMode: "auto" | "vector" | "wordmark" | "depth" | "height";
+        pipelineKind: "auto" | "emblem" | "wordmark" | "text" | "photo" | "lithophane";
         includeBackground: boolean;
         nozzleMm: number;
         minimumFeatureMm: number;
         sourceColors: string[];
         colors: string[];
+        colorMapping: number[];
         sideColorIndex: number;
         outputMode: "relief" | "lithophane" | "stamp";
         shape: "source" | "rectangle" | "rounded" | "circle" | "shield" | "hexagon" | "heart";
@@ -159,6 +163,7 @@ interface Window {
         indices: number[];
         colorParts: Array<{ color: string; indices: number[] }>;
       };
+      colorRegions: Array<{ sourceColor: string; targetIndex: number; coveragePercent: number }>;
     } | null>;
     cancelRelief: (jobId: string) => Promise<boolean>;
     onReliefProgress: (callback: (jobId: string, progress: {

@@ -58,6 +58,7 @@ function formatStorage(bytes: number): string {
 
 type QualityProfile = "fast" | "balanced" | "fine" | "photo" | "logo";
 type ProcessingMode = "auto" | "vector" | "wordmark" | "depth" | "height";
+type PipelineKind = "auto" | "emblem" | "wordmark" | "text" | "photo" | "lithophane";
 type HistoryEntry = {
   id: string; name: string; createdAt: string;
   triangleCount: number; widthMm: number; heightMm: number; profile: QualityProfile; score: number;
@@ -70,7 +71,7 @@ type StudioProject = {
   settings: {
     widthMm: number; baseMm: number; reliefMm: number; smoothing: number; detail: number;
     processingMode: ProcessingMode; profile: QualityProfile; raiseLightAreas: boolean;
-    multicolorEnabled: boolean; colorCount: number; sourceColors: string[]; colors: string[];
+    multicolorEnabled: boolean; colorCount: number; sourceColors: string[]; colors: string[]; colorMapping?: number[];
     sideColorIndex: number; includeLogoBackground: boolean; optimizeForStandardNozzle: boolean;
     reduceTo250kTriangles: boolean;
     productShape?: ProductShape; borderMm?: number; holeDiameterMm?: number;
@@ -155,6 +156,7 @@ export function App() {
   const [colorCount, setColorCount] = useState(4);
   const [sourceColors, setSourceColors] = useState(["#111827", "#F5F5F4", "#22C55E", "#F59E0B"]);
   const [colors, setColors] = useState(["#111827", "#F5F5F4", "#22C55E", "#F59E0B"]);
+  const [colorMapping, setColorMapping] = useState([0, 1, 2, 3]);
   const [sideColorIndex, setSideColorIndex] = useState(0);
   const [textDialogOpen, setTextDialogOpen] = useState(false);
   const [ai3dDialogOpen, setAi3dDialogOpen] = useState(false);
@@ -228,12 +230,14 @@ export function App() {
         if (!active) return;
         setSourceColors(palette);
         setColors(palette);
+        setColorMapping(palette.map((_, index) => index));
         setSideColorIndex(darkestColorIndex(palette));
       })
       .catch(() => {
         if (!active) return;
         setSourceColors((current) => resizePalette(current, colorCount));
         setColors((current) => resizePalette(current, colorCount));
+        setColorMapping(Array.from({ length: colorCount }, (_, index) => index));
       });
     return () => { active = false; };
   }, [preview, colorCount]);
@@ -283,7 +287,7 @@ export function App() {
     setTextDialogOpen(false);
   }
 
-  async function generateRelief(repair = false) {
+  async function generateRelief(repair = false, mappingOverride = colorMapping) {
     if (!file) return;
     const jobId = crypto.randomUUID();
     activeReliefJob.current = jobId;
@@ -300,16 +304,29 @@ export function App() {
         : repair ? Math.min(384, optimalResolution[profile]) : optimalResolution[profile];
       const automaticSmoothing = effectiveMode === "depth" ? 3 : effectiveMode === "height" ? 2 : 1;
       const automaticDetail = effectiveMode === "depth" ? 0.75 : 1;
+      const pipelineKind: PipelineKind = studioTool === "text"
+        ? "text"
+        : studioTool === "lithophane"
+          ? "lithophane"
+          : effectiveMode === "vector"
+            ? "emblem"
+            : effectiveMode === "wordmark"
+              ? "wordmark"
+              : effectiveMode === "depth" || effectiveMode === "height"
+                ? "photo"
+                : "auto";
       const request: Parameters<NonNullable<typeof window.desktop>["createRelief"]>[2] = {
         widthMm, baseMm: studioTool === "lithophane" ? baseMm : 1.6, reliefMm,
         resolution: effectiveResolution,
         invert: false, profile, smoothing: automaticSmoothing, detail: automaticDetail,
         processingMode: effectiveMode,
+        pipelineKind,
         includeBackground: effectiveMode === "wordmark" && (repair || includeLogoBackground),
         nozzleMm: 0.4,
         minimumFeatureMm: minimumFeatureForMode(effectiveMode, file.suggestedProfile, repair || optimizeForStandardNozzle),
         sourceColors: multicolorEnabled ? sourceColors : [],
         colors: multicolorEnabled ? colors : [],
+        colorMapping: multicolorEnabled ? mappingOverride : [],
         sideColorIndex: multicolorEnabled ? sideColorIndex : 0,
         outputMode: studioTool === "lithophane" ? "lithophane" : "relief",
         shape: productShape,
@@ -410,6 +427,12 @@ export function App() {
     await generateRelief(true);
   }
 
+  function cycleColorRegion(sourceIndex: number) {
+    const next = colorMapping.map((target, index) => index === sourceIndex ? (target + 1) % colors.length : target);
+    setColorMapping(next);
+    if (result && !busy) void generateRelief(false, next);
+  }
+
   function currentProject(): StudioProject | null {
     if (!file || studioTool === "prompt" || studioTool === "home") return null;
     return {
@@ -419,7 +442,7 @@ export function App() {
       tool: studioTool,
       settings: {
         widthMm, baseMm, reliefMm, smoothing, detail, processingMode, profile, raiseLightAreas,
-        multicolorEnabled, colorCount, sourceColors, colors, sideColorIndex,
+        multicolorEnabled, colorCount, sourceColors, colors, colorMapping, sideColorIndex,
         includeLogoBackground, optimizeForStandardNozzle,
         reduceTo250kTriangles, productShape, borderMm, holeDiameterMm, curveAngle
       }
@@ -436,7 +459,7 @@ export function App() {
         tool: studioTool,
         settings: {
           widthMm, baseMm, reliefMm, smoothing, detail, processingMode, profile, raiseLightAreas,
-          multicolorEnabled, colorCount, sourceColors, colors, sideColorIndex,
+          multicolorEnabled, colorCount, sourceColors, colors, colorMapping, sideColorIndex,
           includeLogoBackground, optimizeForStandardNozzle, reduceTo250kTriangles,
           productShape, borderMm, holeDiameterMm, curveAngle
         }
@@ -444,7 +467,7 @@ export function App() {
       if (project) void window.desktop?.saveRecovery(project).catch(() => undefined);
     }, 800);
     return () => window.clearTimeout(timer);
-  }, [file, studioTool, widthMm, baseMm, reliefMm, smoothing, detail, processingMode, profile, raiseLightAreas, multicolorEnabled, colorCount, sourceColors, colors, sideColorIndex, includeLogoBackground, optimizeForStandardNozzle, reduceTo250kTriangles, productShape, borderMm, holeDiameterMm, curveAngle]);
+  }, [file, studioTool, widthMm, baseMm, reliefMm, smoothing, detail, processingMode, profile, raiseLightAreas, multicolorEnabled, colorCount, sourceColors, colors, colorMapping, sideColorIndex, includeLogoBackground, optimizeForStandardNozzle, reduceTo250kTriangles, productShape, borderMm, holeDiameterMm, curveAngle]);
 
   function applyProject(loaded: StudioProject, message: string) {
     const settings = loaded.settings;
@@ -454,6 +477,7 @@ export function App() {
     setProfile(settings.profile); setRaiseLightAreas(settings.raiseLightAreas);
     setMulticolorEnabled(settings.multicolorEnabled); setColorCount(settings.colorCount);
     setSourceColors(settings.sourceColors); setColors(settings.colors); setSideColorIndex(settings.sideColorIndex);
+    setColorMapping(settings.colorMapping ?? settings.colors.map((_, index) => index));
     setIncludeLogoBackground(settings.includeLogoBackground);
     setProductShape(settings.productShape ?? "source"); setBorderMm(settings.borderMm ?? 0);
     setHoleDiameterMm(settings.holeDiameterMm ?? 0); setCurveAngle(settings.curveAngle ?? 0);
@@ -702,6 +726,7 @@ export function App() {
                             setSideColorIndex((current) => Math.min(current, count - 1));
                             setSourceColors((current) => resizePalette(current, count));
                             setColors((current) => resizePalette(current, count));
+                            setColorMapping(Array.from({ length: count }, (_, index) => index));
                           }}>
                             {Array.from({ length: 7 }, (_, index) => index + 2).map((count) => <option key={count} value={count}>{count} Farben</option>)}
                           </select>
@@ -721,6 +746,27 @@ export function App() {
                               <span><strong>AMS {index + 1}</strong><small>{sourceColors[index]} → {color}</small></span>
                             </label>
                           ))}
+                        </div>
+                        <div className="color-region-mapping" aria-label="Erkannte Motivflächen zuordnen">
+                          <div className="color-region-heading">
+                            <span>ERKANNTE MOTIVFLÄCHEN</span>
+                            <SettingTooltip text={"Zeigt, wie viel Modelloberfläche zu jeder erkannten Bildfarbe gehört. Ein Klick ordnet die Fläche dem nächsten AMS-Platz zu und berechnet ein vorhandenes Modell sofort neu.\nBeispiel: Eine fälschlich weiße Schrift lässt sich direkt dem blauen Filament zuweisen."} />
+                          </div>
+                          <div className="color-region-list">
+                            {sourceColors.map((sourceColor, sourceIndex) => {
+                              const targetIndex = colorMapping[sourceIndex] ?? sourceIndex;
+                              const measured = result?.colorRegions.find((region) => region.sourceColor.toUpperCase() === sourceColor.toUpperCase());
+                              return (
+                                <button type="button" className="color-region-card" key={`${sourceColor}-${sourceIndex}`} onClick={() => cycleColorRegion(sourceIndex)} disabled={busy} title="Klicken, um diese Motivfläche dem nächsten AMS-Platz zuzuordnen">
+                                  <span className="region-source" style={{ background: sourceColor }} />
+                                  <span><strong>{measured ? `${measured.coveragePercent.toFixed(1).replace(".", ",")} %` : "wird ermittelt"}</strong><small>{sourceColor}</small></span>
+                                  <ChevronRight />
+                                  <span className="region-target" style={{ background: colors[targetIndex] }} />
+                                  <span><strong>AMS {targetIndex + 1}</strong><small>{colors[targetIndex]}</small></span>
+                                </button>
+                              );
+                            })}
+                          </div>
                         </div>
                         <label className="side-color-select color-setting-label">
                           <span>SEITEN & TRAGKÖRPER</span>

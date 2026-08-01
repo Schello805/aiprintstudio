@@ -6,6 +6,7 @@ import { contours } from "d3-contour";
 import { ShapeUtils, Vector2 } from "three";
 import { validateGeneratedExportBuffer } from "./export-validation.js";
 import { analyseContourQuality, removeInvalidTriangles, validateMeshGeometry, type ContourQualityReport, type GeometryValidationReport } from "./mesh-quality.js";
+import { resolveReliefPipeline, type ReliefPipelineKind } from "./relief-pipelines.js";
 export type { ContourQualityReport, GeometryValidationReport } from "./mesh-quality.js";
 
 export type ReliefOptions = {
@@ -18,11 +19,13 @@ export type ReliefOptions = {
   smoothing: number;
   detail: number;
   processingMode: "auto" | "vector" | "wordmark" | "depth" | "height";
+  pipelineKind: ReliefPipelineKind;
   includeBackground: boolean;
   nozzleMm: number;
   minimumFeatureMm: number;
   sourceColors: string[];
   colors: string[];
+  colorMapping: number[];
   sideColorIndex: number;
   outputMode: "relief" | "lithophane" | "stamp";
   shape: "source" | "rectangle" | "rounded" | "circle" | "shield" | "hexagon" | "heart";
@@ -69,6 +72,7 @@ export type ReliefResult = {
     indices: number[];
     colorParts: Array<{ color: string; indices: number[] }>;
   };
+  colorRegions: Array<{ sourceColor: string; targetIndex: number; coveragePercent: number }>;
 };
 
 export type ReliefProgress = {
@@ -92,11 +96,13 @@ const safeDefaults: ReliefOptions = {
   smoothing: 2,
   detail: 1
   ,processingMode: "auto",
+  pipelineKind: "auto",
   includeBackground: false,
   nozzleMm: 0.4,
   minimumFeatureMm: 0.8,
   sourceColors: [],
   colors: [],
+  colorMapping: [],
   sideColorIndex: 0,
   outputMode: "relief",
   shape: "source",
@@ -117,6 +123,7 @@ export async function createRelief(
 ): Promise<ReliefResult> {
   onProgress({ phase: "Bild prüfen", detail: "Datei und Abmessungen werden validiert …", progress: 4 });
   const options = validateOptions({ ...safeDefaults, ...requested });
+  const pipeline = resolveReliefPipeline(options);
   const metadata = await sharp(imagePath).metadata();
   if (!metadata.width || !metadata.height) throw new Error("Das Bild besitzt keine gültigen Abmessungen.");
 
@@ -148,7 +155,7 @@ export async function createRelief(
   const hasLogoBackgroundGradient = !hasTransparency && cornerColorSpan >= 55;
   const rawSubjectCoverage = rawSubjectPixels.reduce((sum, occupied) => sum + Number(occupied), 0)
     / Math.max(1, rawSubjectPixels.length);
-  const useWordmarkMask = options.processingMode === "wordmark"
+  const useWordmarkMask = pipeline.mask === "wordmark"
     || (options.processingMode === "auto" && options.profile === "logo"
       && (rawSubjectCoverage < 0.42 || hasLogoBackgroundGradient));
   if (options.processingMode === "auto" && useWordmarkMask) {
@@ -167,8 +174,7 @@ export async function createRelief(
   // Bei Wortmarken und filigranen Logos würde die normale Maskenbereinigung
   // dünne Buchstaben und geschwungene Linien teilweise wegerodieren. Einzelne
   // Pixelartefakte entfernt anschließend bereits die strengere Zellmaske.
-  const preserveThinVectorStrokes = options.profile === "logo"
-    || options.processingMode === "vector";
+  const preserveThinVectorStrokes = pipeline.preserveThinStrokes;
   let subjectPixels = useWordmarkMask
     ? options.includeBackground
       ? Array(gridWidth * gridHeight).fill(true) as boolean[]
@@ -176,7 +182,7 @@ export async function createRelief(
     : hasTransparency || preserveThinVectorStrokes
       ? rawSubjectPixels
     : cleanSubjectPixelMask(rawSubjectPixels, gridWidth, gridHeight);
-  if (options.processingMode === "vector" && options.profile === "logo") {
+  if (pipeline.solidOuterSilhouette) {
     // Ein explizit ausgewähltes Wappen besitzt einen geschlossenen Tragkörper.
     // Dessen Außenwand darf nicht jede Antialias- oder Farbschwankung des
     // Quellbilds nachzeichnen. Pro Bildzeile wird deshalb nur die äußere
@@ -198,15 +204,7 @@ export async function createRelief(
   const cellMask = buildCellMask(subjectPixels, gridWidth, gridHeight, 2);
   const heightMm = options.widthMm * gridHeight / gridWidth;
   const profile = profileSettings(options.profile);
-  const activeMode = options.outputMode === "lithophane"
-    ? "height"
-    : options.outputMode === "stamp"
-    ? "vector"
-    : options.processingMode === "wordmark"
-    ? "vector"
-    : options.processingMode === "auto"
-    ? (options.profile === "logo" ? "vector" : "height")
-    : options.processingMode;
+  const activeMode = options.outputMode === "stamp" ? "vector" : pipeline.heightMode;
   let rawLevels: number[];
   if (activeMode === "vector") {
     rawLevels = useWordmarkMask && options.includeBackground && wordmarkPixels
@@ -307,9 +305,20 @@ export async function createRelief(
       useWordmarkMask ? detectedWordmarkPixels : undefined
     )
     : undefined;
-  const colorAssignments = detectedColorAssignments
-    ? enforceUniformEdgeColor(detectedColorAssignments, cellMask, gridWidth, gridHeight, options.sideColorIndex)
+  const mappedColorAssignments = detectedColorAssignments?.map((assignment) =>
+    assignment < 0 ? assignment : (options.colorMapping[assignment] ?? assignment)
+  );
+  const colorAssignments = mappedColorAssignments
+    ? enforceUniformEdgeColor(mappedColorAssignments, cellMask, gridWidth, gridHeight, options.sideColorIndex)
     : undefined;
+  const assignedCellCount = detectedColorAssignments?.filter((assignment) => assignment >= 0).length ?? 0;
+  const colorRegions = options.sourceColors.map((sourceColor, sourceIndex) => ({
+    sourceColor,
+    targetIndex: options.colorMapping[sourceIndex] ?? sourceIndex,
+    coveragePercent: assignedCellCount
+      ? (detectedColorAssignments?.filter((assignment) => assignment === sourceIndex).length ?? 0) / assignedCellCount * 100
+      : 0
+  }));
   onProgress({
     phase: colorAssignments ? "Farben aufteilen" : "Vorschau vorbereiten",
     detail: colorAssignments ? "AMS-Flächen und einfarbiger Tragkörper werden erzeugt …" : "Das vollständige 3D-Mesh wird vorbereitet …",
@@ -404,7 +413,8 @@ export async function createRelief(
     fileBytes: { stl: stlBuffer.length, threeMf: threeMfBuffer.length },
     slicer: { layerHeightMm, layerCount, estimatedMinutes, filamentMeters, materialGrams, colorChanges },
     heightmapDataUrl: `data:image/png;base64,${heightmapPng.toString("base64")}`,
-    preview
+    preview,
+    colorRegions
   };
 }
 
@@ -417,6 +427,7 @@ function validateOptions(options: ReliefOptions): ReliefOptions {
   if (options.smoothing < 0 || options.smoothing > 5) throw new Error("Die Glättung muss zwischen 0 und 5 liegen.");
   if (options.detail < 0 || options.detail > 2) throw new Error("Die Detailstärke muss zwischen 0 und 2 liegen.");
   if (!["auto", "vector", "wordmark", "depth", "height"].includes(options.processingMode)) throw new Error("Unbekannter Verarbeitungsmodus.");
+  if (!["auto", "emblem", "wordmark", "text", "photo", "lithophane"].includes(options.pipelineKind)) throw new Error("Unbekannte Verarbeitungspipeline.");
   if (typeof options.includeBackground !== "boolean") throw new Error("Die Hintergrundeinstellung ist ungültig.");
   if (options.nozzleMm < 0.2 || options.nozzleMm > 1.2) throw new Error("Die Düsengröße muss zwischen 0,2 und 1,2 mm liegen.");
   if (options.minimumFeatureMm < 0 || options.minimumFeatureMm > 4) throw new Error("Die Mindestbreite muss zwischen 0 und 4 mm liegen.");
@@ -425,6 +436,9 @@ function validateOptions(options: ReliefOptions): ReliefOptions {
   }
   if (!Array.isArray(options.sourceColors) || options.sourceColors.length > 16 || options.sourceColors.some((color) => !/^#[0-9a-fA-F]{6}$/.test(color))) {
     throw new Error("Die erkannte Bildpalette enthält ungültige Farben.");
+  }
+  if (!Array.isArray(options.colorMapping) || options.colorMapping.some((target) => !Number.isInteger(target) || target < 0 || target >= Math.max(1, options.colors.length))) {
+    throw new Error("Die Farbflächen-Zuordnung ist ungültig.");
   }
   if (!Number.isInteger(options.sideColorIndex) || options.sideColorIndex < 0 || (options.colors.length && options.sideColorIndex >= options.colors.length)) {
     throw new Error("Die gewählte Seitenfarbe ist ungültig.");

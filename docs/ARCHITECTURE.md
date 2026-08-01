@@ -44,7 +44,19 @@ Netzwerkzugriffe erfolgen ausschließlich im Electron-Hauptprozess.
 
 ## Bild-, Schrift-, Lithophan- und Reliefpipeline
 
-Die Reliefpipeline nimmt ein validiertes Bild und ein Qualitätsprofil entgegen:
+Die Reliefpipeline nimmt ein validiertes Bild und ein Qualitätsprofil entgegen.
+Vor der Rasterverarbeitung löst `electron/relief-pipelines.ts` jeden Auftrag in
+einen festen Vertrag für `emblem`, `wordmark`, `text`, `photo` oder
+`lithophane` auf. Der Vertrag bestimmt Höhenmodus, Maskentyp,
+Silhouettenbehandlung und die Erhaltung dünner Konturen. Wappenspezifische
+Außensilhouettenlogik kann dadurch nicht in Schrift- oder Fotopipelines
+gelangen.
+
+Die Farbzuordnung trennt erkannte Quellfarben, die Benutzerzuordnung zu
+AMS-Plätzen und die tatsächlichen Filamentfarben. Erst die aufgelöste Zuordnung
+geht an Vorschau und Export.
+
+Danach gilt:
 
 1. Eingabe und Abmessungen validieren
 2. Motivmaske und Verarbeitungsprofil bestimmen

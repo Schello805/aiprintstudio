@@ -1,6 +1,6 @@
 # Roadmap
 
-## Aktueller Stand 0.30.0
+## Aktueller Stand 0.31.0
 
 - Bild zu 3D mit Kontur-, Höhenkarten- und lokaler KI-Tiefe
 - Schrift zu 3D mit gemeinsamem Relief- und AMS-Workflow
@@ -48,11 +48,19 @@
   Antialias-Unterbrechungen der Kontur
 - dauerhaft zweispaltiger Upload-/Vorschaubereich mit integriertem
   Ladefortschritt und Abbruch in der rechten Vorschau
+- getrennte Pipeline-Verträge für Wappen, Wortmarken, Schrift, Foto und
+  Lithophan
+- feste Logo-Regressionen für Innenräume, Schreibschrift, dunkle Verläufe und
+  mehrfarbige Motive
+- klickbare Zuordnung erkannter Motivflächen zu AMS-Filamentplätzen samt
+  prozentualem Flächenanteil
+- automatisierte Slicer-Kompatibilitätsmatrix für Bambu Studio, OrcaSlicer,
+  Anycubic Slicer und PrusaSlicer
 
 ## Verbindliche Qualitäts-To-dos
 
-- [ ] Wappen-, Schrift-, Foto-/Tiefen- und Prompt-Pipeline technisch stärker
-  trennen und mit eigenen Ein-/Ausgabeverträgen absichern
+- [x] Wappen-, Schrift- und Foto-/Tiefenpipeline mit eigenen Verträgen
+  absichern; Prompt zu 3D bleibt als unabhängige Beta-Pipeline getrennt
 - [ ] Release-Gate zusätzlich um stichprobenartige externe Slicer-Imports der
   Golden-Master-Dateien erweitern; der gepackte App-Smoke-Test ist umgesetzt
 - [ ] optionale, ausdrücklich zustimmungspflichtige Übermittlung von

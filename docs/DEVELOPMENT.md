@@ -30,8 +30,13 @@ macOS-Version des jeweiligen Build-Macs zur Mindestversion des Releases.
 | `npm run dev` | Vite und Electron im Entwicklungsmodus |
 | `npm run lint` | statische Prüfung |
 | `npm run test` | Tests einmalig ausführen |
+| `npm run test:slicers` | Maßstab, Ausrichtung, Farben und Assembly für vier Slicer prüfen |
 | `npm run build` | typisierter Produktionsbuild |
 | `npm run verify` | alle Qualitätsprüfungen |
+
+Die festen schwierigen Logos liegen unter `test-fixtures/logos/`. Änderungen
+an Maskierung, Glättung oder Farbzuordnung müssen Innenräume, Schreibschrift,
+dunkle Verläufe und Mehrfarbigkeit dieser Sammlung unverändert bestehen.
 | `npm run build:depth-worker` | Core-ML- und Object-Capture-Worker bauen |
 | `npm run smoke:depth-worker` | gepackten Tiefen-Worker prüfen |
 | `npm run dist` | lokales ARM64-DMG erzeugen |

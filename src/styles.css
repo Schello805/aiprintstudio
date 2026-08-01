@@ -256,6 +256,17 @@ h1,h2,h3 { font-family:Manrope, sans-serif; margin:0; }
 .color-swatch span,.color-swatch strong,.color-swatch small { display:block; min-width:0; }
 .color-swatch strong { color:#d5ddd1; font-size:9px; }
 .color-swatch small { margin-top:2px; color:#778174; font-size:7px; }
+.color-region-mapping { grid-column:1/-1; display:grid; gap:7px; padding-top:8px; border-top:1px solid #2b362b; }
+.color-region-heading { display:flex; align-items:center; gap:6px; color:#899684; font-size:8px; font-weight:800; letter-spacing:.1em; }
+.color-region-list { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px; }
+.color-region-card { min-width:0; min-height:48px; display:grid; grid-template-columns:24px minmax(66px,1fr) 14px 24px minmax(66px,1fr); align-items:center; gap:7px; border:1px solid #354334; border-radius:9px; background:#0d130e; color:#dce7d8; padding:7px 9px; text-align:left; cursor:pointer; }
+.color-region-card:hover { border-color:#719b5a; background:#121b11; }
+.color-region-card:disabled { opacity:.55; cursor:wait; }
+.color-region-card>svg { width:14px; color:#75906b; }
+.region-source,.region-target { width:24px; height:24px; border:1px solid #ffffff38; border-radius:6px; box-shadow:inset 0 0 0 1px #0003; }
+.color-region-card strong,.color-region-card small { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.color-region-card strong { font-size:9px; }
+.color-region-card small { margin-top:2px; color:#788574; font-size:7px; }
 .color-setup>p { grid-column:2; margin:0; color:#82917d; font-size:8px; }
 .option-footer { display:flex; align-items:flex-end; justify-content:space-between; gap:20px; }
 .option-label { display:block; color:#68717e; font-size:8px; font-weight:700; letter-spacing:.14em; margin-bottom:8px; }
