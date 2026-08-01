@@ -149,7 +149,6 @@ export function App() {
   const [borderMm, setBorderMm] = useState(0);
   const [holeDiameterMm, setHoleDiameterMm] = useState(0);
   const [curveAngle, setCurveAngle] = useState(0);
-  const [advancedOpen, setAdvancedOpen] = useState(false);
   const [multicolorEnabled, setMulticolorEnabled] = useState(false);
   const [colorCount, setColorCount] = useState(4);
   const [sourceColors, setSourceColors] = useState(["#111827", "#F5F5F4", "#22C55E", "#F59E0B"]);
@@ -298,7 +297,7 @@ export function App() {
         shape: productShape,
         borderMm,
         borderHeightMm: borderMm > 0 ? reliefMm : 0,
-        holeDiameterMm,
+        holeDiameterMm: studioTool === "lithophane" ? holeDiameterMm : 0,
         holePosition: "top-center",
         curveAngle: studioTool === "lithophane" ? curveAngle : 0,
         mirrorX: false
@@ -570,7 +569,7 @@ export function App() {
                 <div className="option-heading"><span className="option-label">ERGEBNISART</span><span className="quality-pill">Optimale Qualität automatisch aktiv</span></div>
                 <div className="mode-grid primary-modes">
                   <button className={processingMode === "auto" ? "mode-option has-tooltip selected" : "mode-option has-tooltip"} onClick={() => { setProcessingMode("auto"); if (file) setProfile(file.suggestedProfile); }} aria-description={modeTooltips.auto}>
-                    <Sparkles /><div><strong>Automatisch</strong><span>Beste Methode wird gewählt</span></div><SettingTooltip text={modeTooltips.auto} />
+                    <Sparkles /><div><strong>Auf gut Glück</strong><span>Passende Methode wird geschätzt</span></div><SettingTooltip text={modeTooltips.auto} />
                   </button>
                   <button className={processingMode === "vector" ? "mode-option has-tooltip selected" : "mode-option has-tooltip"} onClick={() => { setProcessingMode("vector"); setProfile("logo"); }} aria-description={modeTooltips.vector}>
                     <Layers3 /><div><strong>Wappen & Emblem</strong><span>Innenflächen bleiben erhalten</span></div><SettingTooltip text={modeTooltips.vector} />
@@ -588,6 +587,23 @@ export function App() {
                     <NumberField label="BREITE" tooltip={parameterTooltips.width} value={widthMm} unit="mm" min={20} max={300} step={5} setValue={setWidthMm} />
                     <NumberField label="GRUNDPLATTE" tooltip={parameterTooltips.base} value={baseMm} unit="mm" min={0.8} max={10} step={0.2} setValue={setBaseMm} />
                     <NumberField label="RELIEF" tooltip={parameterTooltips.relief} value={reliefMm} unit="mm" min={0.5} max={20} step={0.5} setValue={setReliefMm} />
+                    <NumberField label="GLÄTTUNG" tooltip={parameterTooltips.smoothing} value={smoothing} min={0} max={5} step={1} setValue={setSmoothing} />
+                    <NumberField label="DETAIL" tooltip={parameterTooltips.detail} value={detail} min={0} max={2} step={0.25} setValue={setDetail} />
+                  </div>
+                  <div className="direct-fine-settings">
+                    <div>
+                      <span className="option-label">RELIEF-RICHTUNG</span>
+                      <div className="segmented-control">
+                        <button className={!raiseLightAreas ? "has-tooltip selected" : "has-tooltip"} onClick={() => setRaiseLightAreas(false)} aria-description={parameterTooltips.dark}>Dunkles anheben<SettingTooltip text={parameterTooltips.dark} /></button>
+                        <button className={raiseLightAreas ? "has-tooltip selected" : "has-tooltip"} onClick={() => setRaiseLightAreas(true)} aria-description={parameterTooltips.light}>Helles anheben<SettingTooltip text={parameterTooltips.light} /></button>
+                      </div>
+                    </div>
+                    {studioTool === "image" && <div className="secondary-modes">
+                      <button className={processingMode === "height" ? "mode-option has-tooltip selected" : "mode-option has-tooltip"} onClick={() => { setProcessingMode("height"); setProfile("balanced"); }} aria-description={modeTooltips.height}>
+                        <ImagePlus /><div><strong>Höhenkarte</strong><span>Helligkeit direkt übernehmen</span></div><SettingTooltip text={modeTooltips.height} />
+                      </button>
+                    </div>}
+                    <div className="compact-cost"><strong>0,00 €</strong><span>lokal · keine API-Kosten</span></div>
                   </div>
                   {studioTool === "lithophane" && <div className="product-options">
                     <div className="product-shape-row">
@@ -616,9 +632,6 @@ export function App() {
                       <span className="toggle-track"><span /></span>
                     </button>
                   )}
-                  {studioTool === "image" && <button className={holeDiameterMm > 0 ? "background-toggle selected" : "background-toggle"} onClick={() => setHoleDiameterMm((current) => current > 0 ? 0 : 5)} aria-pressed={holeDiameterMm > 0}>
-                    <Box /><div><strong>Als Anhänger ausführen</strong><span>{holeDiameterMm > 0 ? "Stabile Öse mit 5-mm-Aufhängeloch wird ergänzt" : "Normales Modell ohne Aufhängeloch"}</span></div><span className="toggle-track"><span /></span>
-                  </button>}
                   <button
                     className={reduceTo250kTriangles ? "background-toggle selected" : "background-toggle"}
                     onClick={() => setReduceTo250kTriangles((current) => !current)}
@@ -696,33 +709,6 @@ export function App() {
                     )}
                   </div>}
                   </div>
-                  <div className="conversion-footer">
-                  <button className="advanced-toggle has-tooltip" onClick={() => setAdvancedOpen((current) => !current)} aria-expanded={advancedOpen}>
-                    <Settings2 /> {advancedOpen ? "Erweiterte Einstellungen schließen" : "Erweiterte Einstellungen"}
-                    <SettingTooltip text={"Optionale Feineinstellungen für Sonderfälle. Die Automatik ist normalerweise die beste Wahl.\nBeispiel: Nur öffnen, wenn Helligkeitsrichtung oder Glättung bewusst geändert werden soll."} />
-                  </button>
-                  <div className="compact-cost"><strong>0,00 €</strong><span>lokal · keine API-Kosten</span></div>
-                  </div>
-                  {advancedOpen && (
-                    <div className="advanced-options">
-                      <div className="parameter-grid advanced-parameters">
-                        <NumberField label="GLÄTTUNG" tooltip={parameterTooltips.smoothing} value={smoothing} min={0} max={5} step={1} setValue={setSmoothing} />
-                        <NumberField label="DETAIL" tooltip={parameterTooltips.detail} value={detail} min={0} max={2} step={0.25} setValue={setDetail} />
-                      </div>
-                      <div>
-                        <span className="option-label">RELIEF-RICHTUNG</span>
-                        <div className="segmented-control">
-                          <button className={!raiseLightAreas ? "has-tooltip selected" : "has-tooltip"} onClick={() => setRaiseLightAreas(false)} aria-description={parameterTooltips.dark}>Dunkles anheben<SettingTooltip text={parameterTooltips.dark} /></button>
-                          <button className={raiseLightAreas ? "has-tooltip selected" : "has-tooltip"} onClick={() => setRaiseLightAreas(true)} aria-description={parameterTooltips.light}>Helles anheben<SettingTooltip text={parameterTooltips.light} /></button>
-                        </div>
-                      </div>
-                      <div className="secondary-modes">
-                        <button className={processingMode === "height" ? "mode-option has-tooltip selected" : "mode-option has-tooltip"} onClick={() => { setProcessingMode("height"); setProfile("balanced"); }} aria-description={modeTooltips.height}>
-                          <ImagePlus /><div><strong>Höhenkarte</strong><span>Helligkeit direkt übernehmen</span></div><SettingTooltip text={modeTooltips.height} />
-                        </button>
-                      </div>
-                    </div>
-                  )}
                 </>
             </div>
             <div className="action-bar">

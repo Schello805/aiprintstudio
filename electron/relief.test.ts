@@ -108,16 +108,6 @@ describe("relief mesh", () => {
     expect(withHole[50 * 101 + 50]).toBe(true);
   });
 
-  it("adds a connected hanger loop without replacing the original motif contour", () => {
-    const source = Array(101 * 101).fill(false) as boolean[];
-    for (let y = 28; y < 90; y += 1) for (let x = 20; x < 81; x += 1) source[y * 101 + x] = true;
-    const hanger = reliefInternals.addHangerLoop(source, 101, 101, 100, 6);
-    expect(hanger[70 * 101 + 30]).toBe(source[70 * 101 + 30]);
-    expect(hanger[28 * 101 + 50]).toBe(false);
-    expect(hanger[28 * 101 + 45]).toBe(true);
-    expect(hanger.some((occupied, index) => occupied && !source[index])).toBe(true);
-  });
-
   it("curves and mirrors a closed mesh without changing its topology", () => {
     const mesh = reliefInternals.buildWatertightHeightMesh(3, 3, 30, 20, Array(9).fill(3));
     const curved = reliefInternals.transformProductMesh(mesh, 30, 45, false);

@@ -184,10 +184,6 @@ export async function createRelief(
       gridWidth, gridHeight, options.widthMm, options.widthMm * gridHeight / gridWidth,
       shape, options.holeDiameterMm, options.holePosition
     );
-  } else if (options.holeDiameterMm > 0) {
-    subjectPixels = addHangerLoop(
-      subjectPixels, gridWidth, gridHeight, options.widthMm, options.holeDiameterMm
-    );
   }
   // Ein einzelner belegter Eckpunkt erzeugte rund um transparente Schrift
   // eine zusätzliche Zellreihe, die im Slicer wie ein Brim wirkte. Mindestens
@@ -453,35 +449,6 @@ function buildProductPixelMask(
     const py = y / Math.max(1, height - 1) * heightMm;
     return (px - holeX) ** 2 + (py - holeY) ** 2 > holeRadius ** 2;
   });
-}
-
-function addHangerLoop(
-  source: boolean[], width: number, height: number,
-  widthMm: number, holeDiameterMm: number
-): boolean[] {
-  const result = source.slice();
-  const pixelMm = widthMm / Math.max(1, width - 1);
-  const innerRadius = Math.max(1, holeDiameterMm / 2 / pixelMm);
-  const outerRadius = innerRadius + Math.max(2, 2 / pixelMm);
-  const centerX = (width - 1) / 2;
-  let firstSubjectRow = height - 1;
-  for (let y = 0; y < height; y += 1) {
-    let found = false;
-    for (let x = Math.max(0, Math.floor(centerX - outerRadius)); x <= Math.min(width - 1, Math.ceil(centerX + outerRadius)); x += 1) {
-      if (source[y * width + x]) { found = true; break; }
-    }
-    if (found) { firstSubjectRow = y; break; }
-  }
-  const centerY = Math.max(outerRadius + 1, Math.min(firstSubjectRow, height - outerRadius - 1));
-  const bridgeEnd = Math.max(centerY, firstSubjectRow + outerRadius * 0.55);
-  for (let y = 0; y < height; y += 1) for (let x = 0; x < width; x += 1) {
-    const distanceSquared = (x - centerX) ** 2 + (y - centerY) ** 2;
-    const inOuterLoop = distanceSquared <= outerRadius ** 2;
-    const inBridge = Math.abs(x - centerX) <= outerRadius * 0.72 && y >= centerY && y <= bridgeEnd;
-    if (inOuterLoop || inBridge) result[y * width + x] = true;
-    if (distanceSquared < innerRadius ** 2) result[y * width + x] = false;
-  }
-  return result;
 }
 
 function applyRaisedBorder(
@@ -1774,5 +1741,5 @@ export const reliefInternals = {
   enforceUniformEdgeColor,
   buildWatertightHeightMesh, buildBinaryCellHeights, flattenSteppedOuterRim, buildSteppedCellMesh, buildPreviewSurface, orientMeshLikePreview, encodeBinaryStl, encodeThreeMf,
   smoothHeightField, analysePrintability, profileSettings, buildProductPixelMask, applyRaisedBorder,
-  transformProductMesh, transformProductPreview, addHangerLoop, buildSolidOuterSilhouette
+  transformProductMesh, transformProductPreview, buildSolidOuterSilhouette
 };

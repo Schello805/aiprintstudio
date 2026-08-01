@@ -92,12 +92,6 @@ wappenförmige Außenkonturen. Optional erzeugt die App einen erhöhten Rahmen,
 ein mittiges Aufhängeloch und eine gleichmäßige Wölbung bis 90 Grad. Die
 Lichtansicht der 3D-Vorschau erleichtert die Kontrolle vor dem Export.
 
-### Optional als Anhänger
-
-Ein Bild- oder Logo-Relief kann direkt im normalen Workflow als Anhänger
-ausgeführt werden. Die App ergänzt dafür eine stabile, mit dem Motiv verbundene
-Öse und ein 5-mm-Aufhängeloch. Ein eigener Werkzeugwechsel ist nicht nötig.
-
 ### Vorschau und Diagnose
 
 Die 3D-Vorschau kann zwischen Originalfarben, weißem oder schwarzem PLA, Gold
@@ -146,7 +140,7 @@ Nutzung des eigenen OpenAI-Kontos.
 ## Bild zu 3D ausprobieren
 
 1. Im Studio **Bild zu 3D** auswählen und ein PNG-, JPG-, WEBP- oder SVG-Bild öffnen.
-2. Automatik verwenden oder gezielt **Logo & Wappen** beziehungsweise
+2. **Auf gut Glück** verwenden oder gezielt **Logo & Wappen** beziehungsweise
    **Foto & 3D-Tiefe** wählen.
 3. Für Mehrfarbdruck **AMS-Farbdruck** aktivieren und Filamentfarben festlegen.
 4. **Relief erstellen** anklicken.
@@ -170,7 +164,7 @@ massiven Körper: Boden und Hintergrund bilden die Grundplatte; erkannte Schrift
 und Signet stehen um die eingestellte Reliefhöhe darüber. Vorschau, STL und 3MF
 verwenden dieselbe Volumengeometrie.
 
-Im Modus **Automatisch** erkennt die App Logos mit deutlichem
+Im Modus **Auf gut Glück** erkennt die App Logos mit deutlichem
 Hintergrundverlauf selbstständig. Sie übernimmt dann die geschlossene
 Grundplatte, verstärkt feine Details für die 0,4-mm-Düse und begrenzt die
 Rasterauflösung so, dass der Slicer nicht durch ein unnötig großes Mesh belastet
@@ -209,11 +203,11 @@ dimensionslosen Teile. STL bleibt als einfarbiger Fallback erhalten.
 
 ## Verarbeitungsarten
 
-- **Automatisch** analysiert die Bildcharakteristik und wählt den geeigneten Pfad.
+- **Auf gut Glück** analysiert die Bildcharakteristik und schätzt den geeigneten Pfad.
 - **Logo & Wappen** erzeugt klare Flächen, Konturen und diskrete Höhenebenen.
 - **Foto & 3D-Tiefe** verwendet Depth Anything V2 Small lokal über Core ML.
-- Unter den erweiterten Einstellungen stehen direkte Höhenkarte und
-  Relief-Richtung für Spezialfälle zur Verfügung.
+- Glättung, Detail, direkte Höhenkarte und Relief-Richtung stehen unmittelbar
+  bei den übrigen Modelleinstellungen zur Verfügung.
 
 ## Updates und Installation
 

@@ -66,7 +66,7 @@ Für nicht transparente Logos interpoliert die Motiverkennung die erwartete
 Hintergrundfarbe positionsabhängig aus den vier Bildecken. Gleichmäßige
 Farbverläufe bleiben so auf Grundhöhe, während Schrift und Signet auf die
 vollständige Reliefhöhe gesetzt werden.
-Die Automatik nutzt zusätzlich den Farbabstand der vier Ecken als
+Der Modus **Auf gut Glück** nutzt zusätzlich den Farbabstand der vier Ecken als
 Verlaufsindikator. Bei einem Logo-Profil mit deutlichem Verlauf wechselt sie in
 die Wordmark-Pipeline, aktiviert Hintergrund und Mindestbreite und nutzt 384
 Rasterpunkte. Explizit ausgewählte Wappen werden mit 512 Rasterpunkten
@@ -84,13 +84,11 @@ Schrift wird zunächst lokal als eng zugeschnittene transparente Vorlage
 gerendert und anschließend durch dieselbe Reliefpipeline verarbeitet. SVG wird
 beim Import sicher gerastert, bevor die Verarbeitung beginnt.
 
-Lithophane und Anhänger verwenden dieselbe wasserdichte Meshpipeline,
-ergänzen sie aber vor der Vermaschung um eine definierte Außenmaske. Rechteck,
+Lithophane verwenden dieselbe wasserdichte Meshpipeline und ergänzen sie vor
+der Vermaschung um eine definierte Außenmaske. Rechteck,
 abgerundetes Rechteck, Kreis, Wappen, Sechseck und Herz werden aus normierten
 Koordinaten erzeugt; ein optionales Aufhängeloch wird direkt aus der Maske
-ausgespart. Im normalen Bildworkflow ergänzt die Anhängeroption stattdessen
-eine verbundene Öse um das vorhandene Motiv, ohne dessen Außenkontur zu
-ersetzen. Ein Rahmen hebt ausschließlich die äußere Maskenkante an. Die
+ausgespart. Ein Rahmen hebt ausschließlich die äußere Maskenkante an. Die
 Lithophan-Wölbung transformiert Vorschau, STL und 3MF mit derselben
 Zylinderabbildung.
 
