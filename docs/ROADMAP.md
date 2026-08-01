@@ -1,6 +1,6 @@
 # Roadmap
 
-## Aktueller Stand 0.24.0
+## Aktueller Stand 0.25.0
 
 - Bild zu 3D mit Kontur-, Höhenkarten- und lokaler KI-Tiefe
 - Schrift zu 3D mit gemeinsamem Relief- und AMS-Workflow
@@ -20,6 +20,7 @@
 - SVG-Import, Druckscore, Verlauf und Updateprüfung
 - `.aips`-Projektdateien mit eingebetteter Quelle und Bearbeitungsstand
 - automatische Druckreparatur für 0,4-mm-Düsen
+- lokale Variantenprüfung für Konturglättung ohne Wechsel des gewählten Modus
 - lokale Schicht-, Zeit- und Materialschätzung
 - bedarfsgesteuerte Reduzierung auf höchstens 250.000 Dreiecke
 

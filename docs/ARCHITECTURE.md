@@ -44,21 +44,19 @@ Netzwerkzugriffe erfolgen ausschließlich im Electron-Hauptprozess.
 
 ## Bild-, Schrift-, Lithophan- und Reliefpipeline
 
-Die Reliefpipeline nimmt ein validiertes Bild, ein Qualitätsprofil und optional
-manuelle Höhen- und Farbkarten entgegen:
+Die Reliefpipeline nimmt ein validiertes Bild und ein Qualitätsprofil entgegen:
 
 1. Eingabe und Abmessungen validieren
 2. Motivmaske und Verarbeitungsprofil bestimmen
 3. Konturen oder Tiefenwerte glätten und Höhen rekonstruieren
-4. manuelle Flächen-, Höhen- und Farbkorrekturen anwenden
-5. geschlossenes Reliefmesh mit Grund- und Seitenflächen erzeugen
-6. Druckbarkeit, Mindestdimensionen und Volumen bewerten
-7. STL und/oder materialisiertes 3MF exportieren
+4. geschlossenes Reliefmesh mit Grund- und Seitenflächen erzeugen
+5. Druckbarkeit, Mindestdimensionen und Volumen bewerten
+6. STL und/oder materialisiertes 3MF exportieren
 
 Bei **Logo mit Text** kann die Pixelmaske vor der Vermaschung druckgerecht
 erweitert werden. Der Standardwert von 0,8 mm entspricht zwei Extrusionslinien
 einer 0,4-mm-Düse. Diese Mindestbreite verändert Vorschau, STL und 3MF
-gemeinsam; die Option ist in der Oberfläche vor der Berechnung abschaltbar.
+gemeinsam und wird für eine typische 0,4-mm-Düse automatisch angewendet.
 Bei aktiviertem Hintergrund wird die Vorschau aus dem vollständigen
 wasserdichten Höhenkörper aufgebaut, nicht nur aus dessen Deckfläche. Dadurch
 sind Boden, Seiten und erhabenes Motiv in Vorschau und Export identisch.
@@ -71,6 +69,13 @@ Verlaufsindikator. Bei einem Logo-Profil mit deutlichem Verlauf wechselt sie in
 die Wordmark-Pipeline, aktiviert Hintergrund und Mindestbreite und nutzt 384
 Rasterpunkte. Explizit ausgewählte Wappen werden mit 512 Rasterpunkten
 analysiert und danach in echte Polygone überführt.
+
+Die lokale Reparatur verändert den gewählten Modus nicht. Sie erzeugt für
+Kontur- und Höhenverfahren mehrere Kandidaten mit unterschiedlicher Glättung in
+reduzierter Prüfauflösung, bewertet Druckscore, erkannte Probleme und
+Meshaufwand und rendert den besten Kandidaten anschließend in voller
+Zielauflösung. Die Konturglättung wirkt bei Wappen direkt auf die Polygonringe,
+nicht nur auf das Höhenfeld.
 
 Bei explizit ausgewähltem **Wappen & Emblem** wird die Außenkontur des
 Tragkörpers unabhängig von den inneren Farb- und Höhenflächen aufgebaut. Jede

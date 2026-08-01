@@ -53,8 +53,8 @@ grundsätzlich kompatibel.
 - speicherbare `.aips`-Projekte einschließlich Quelle, Parametern, Farben und
   manuellen Korrekturen
 - automatische Reparaturvorschläge und lokale Schicht-/Materialsimulation
-- optionaler Export mit höchstens 250.000 Dreiecken für Programme mit
-  begrenzter Meshgröße
+- automatische Meshbegrenzung für Programme mit begrenzter Meshgröße, sofern
+  die Konturqualität dadurch nicht verschlechtert wird
 
 ## Studio-Workflows
 
@@ -152,12 +152,10 @@ an. Erst der ausdrückliche Klick auf einen Speichern-Button erzeugt eine
 dauerhafte Datei am gewählten Ort. Alte Vorschaudateien werden beim nächsten
 App-Start automatisch entfernt.
 
-Für Logos mit Text ist die Optimierung für eine **0,4-mm-Düse** standardmäßig
-aktiv. Feine Stege werden dabei auf mindestens 0,8 mm verbreitert. Der Schalter
-steht vor der Erstellung sichtbar in den Logo-Einstellungen und kann für eine
-unveränderte Originalkontur deaktiviert werden. Die 3MF-Datei enthält 0,4 mm
-zusätzlich als Profilhinweis; die tatsächlich verwendete Düse muss weiterhin
-im Slicer zum ausgewählten Drucker passen.
+Für Logos mit Text ist die Optimierung für eine **0,4-mm-Düse** automatisch
+aktiv. Feine Stege werden dabei auf mindestens 0,8 mm verbreitert. Die 3MF-Datei
+enthält 0,4 mm zusätzlich als Profilhinweis; die tatsächlich verwendete Düse
+muss weiterhin im Slicer zum ausgewählten Drucker passen.
 
 Ist **Hintergrund mitdrucken** aktiv, erzeugt die App einen geschlossenen,
 massiven Körper: Boden und Hintergrund bilden die Grundplatte; erkannte Schrift
@@ -175,6 +173,10 @@ Die App wählt Qualitätsprofil und Auflösung passend zum Motiv. Die
 Höhenpipeline kombiniert Normalisierung, kantenerhaltende Glättung,
 Detailrückführung und profilabhängige Höhenstufen. Das Ergebnis enthält eine
 Höhenkarten-Vorschau, einen Druckscore und eine Materialschätzung.
+**Automatisch optimieren** behält den gewählten Modus bei und vergleicht lokal
+mehrere Glättungsvarianten in reduzierter Prüfauflösung. Die beste Variante wird
+anschließend in voller Qualität neu erzeugt; Bilder werden dafür nicht an einen
+externen Dienst übertragen.
 
 Nach der Erstellung bleiben Original und 3D-Vorschau beim Scrollen sichtbar.
 Der Druckscore steht direkt unter der Vorschau, sodass Einstellungen und
@@ -206,8 +208,9 @@ dimensionslosen Teile. STL bleibt als einfarbiger Fallback erhalten.
 - **Auf gut Glück** analysiert die Bildcharakteristik und schätzt den geeigneten Pfad.
 - **Logo & Wappen** erzeugt klare Flächen, Konturen und diskrete Höhenebenen.
 - **Foto & 3D-Tiefe** verwendet Depth Anything V2 Small lokal über Core ML.
-- Glättung, Detail, direkte Höhenkarte und Relief-Richtung stehen unmittelbar
-  bei den übrigen Modelleinstellungen zur Verfügung.
+- Nutzende wählen im Normalfall nur Verfahren, Breite, Reliefhöhe und optional
+  AMS-Farben. Grundplatte, Glättung, Detail, Relief-Richtung, Mindestbreite und
+  Meshbegrenzung setzt die App automatisch.
 
 ## Updates und Installation
 

@@ -311,7 +311,7 @@ export async function createRelief(
     gridWidth, gridHeight, options.widthMm, heightMm, heights, cellMask,
     colorAssignments, options.colors, options.sideColorIndex,
     flatVectorSurface || (useWordmarkMask && options.includeBackground),
-    steppedLogo, options.processingMode === "vector"
+    steppedLogo, options.processingMode === "vector", options.smoothing
   );
   const preview = transformProductPreview(planarPreview, options.widthMm, options.curveAngle, options.mirrorX);
   let printability = analysePrintability(mesh, heights, options, cellMask, gridWidth);
@@ -338,7 +338,7 @@ export async function createRelief(
     ? buildColoredMeshes(
       gridWidth, gridHeight, options.widthMm, heightMm, heights, cellMask,
       colorAssignments, options.colors, options.sideColorIndex, steppedLogo,
-      options.processingMode === "vector"
+      options.processingMode === "vector", options.smoothing
     )
     : undefined;
   const exportColoredMeshes = coloredMeshes?.map((part) => ({
@@ -914,12 +914,13 @@ function buildColoredMeshes(
   colors: string[],
   sideColorIndex: number,
   stepped = false,
-  vectorized = false
+  vectorized = false,
+  vectorSmoothing = 2
 ): ColoredMesh[] {
   if (vectorized && colors.length) {
     return buildVectorColorMeshes(
       columns, rows, widthMm, heightMm, heights, cellMask,
-      assignments, colors, sideColorIndex
+      assignments, colors, sideColorIndex, vectorSmoothing
     );
   }
   const outerBoundary = buildSmoothedBoundaryPositions(columns, rows, widthMm, heightMm, cellMask);
@@ -967,7 +968,8 @@ function buildVectorColorMeshes(
   cellMask: boolean[],
   assignments: number[],
   colors: string[],
-  sideColorIndex: number
+  sideColorIndex: number,
+  smoothing = 2
 ): ColoredMesh[] {
   const cellColumns = columns - 1;
   const cellHeight = (cell: number) => {
@@ -986,17 +988,17 @@ function buildVectorColorMeshes(
   const bottoms = topHeights.map((height) => Math.max(0, height - colorSkinMm));
   const positiveBottoms = bottoms.filter((height, index) => height > 0 && masks[index].some(Boolean));
   const baseTop = positiveBottoms.length ? Math.min(...positiveBottoms) : 0;
-  const structureParts: Mesh[] = [buildVectorExtrudedMesh(cellMask, columns, rows, widthMm, heightMm, 0, baseTop)];
+  const structureParts: Mesh[] = [buildVectorExtrudedMesh(cellMask, columns, rows, widthMm, heightMm, 0, baseTop, smoothing)];
   masks.forEach((mask, index) => {
     if (bottoms[index] > baseTop + 1e-6) {
-      structureParts.push(buildVectorExtrudedMesh(mask, columns, rows, widthMm, heightMm, baseTop, bottoms[index]));
+      structureParts.push(buildVectorExtrudedMesh(mask, columns, rows, widthMm, heightMm, baseTop, bottoms[index], smoothing));
     }
   });
   const structure = mergeMeshes(structureParts.filter((mesh) => mesh.triangles.length));
   return colors.map((color, colorIndex) => {
     const top = buildVectorExtrudedMesh(
       masks[colorIndex], columns, rows, widthMm, heightMm,
-      bottoms[colorIndex], topHeights[colorIndex]
+      bottoms[colorIndex], topHeights[colorIndex], smoothing
     );
     return {
       mesh: colorIndex === sideColorIndex ? mergeMeshes([structure, top]) : top,
@@ -1008,7 +1010,7 @@ function buildVectorColorMeshes(
 
 function buildVectorExtrudedMesh(
   cellMask: boolean[], columns: number, rows: number,
-  widthMm: number, heightMm: number, bottom: number, top: number
+  widthMm: number, heightMm: number, bottom: number, top: number, smoothing = 2
 ): Mesh {
   if (top <= bottom + 1e-6 || !cellMask.some(Boolean)) return { vertices: [], triangles: [] };
   const cellColumns = columns - 1, cellRows = rows - 1;
@@ -1019,7 +1021,7 @@ function buildVectorExtrudedMesh(
   const vertices: Vec3[] = [];
   const triangles: Triangle[] = [];
   for (const polygon of geometry.coordinates) {
-    const rings = polygon.map((ring) => smoothVectorRing(ring as Array<[number, number]>).map(([x, y]) => new Vector2(
+    const rings = polygon.map((ring) => smoothVectorRing(ring as Array<[number, number]>, smoothing).map(([x, y]) => new Vector2(
       x * widthMm / cellColumns,
       y * heightMm / cellRows
     ))).filter((ring) => ring.length >= 3);
@@ -1047,7 +1049,7 @@ function buildVectorExtrudedMesh(
   return { vertices, triangles };
 }
 
-function smoothVectorRing(source: Array<[number, number]>): Array<[number, number]> {
+function smoothVectorRing(source: Array<[number, number]>, smoothing = 2): Array<[number, number]> {
   let ring = source.slice(0, -1);
   if (ring.length < 4) return ring;
   const reduced: Array<[number, number]> = [];
@@ -1060,7 +1062,7 @@ function smoothVectorRing(source: Array<[number, number]>): Array<[number, numbe
     if (!previous || Math.hypot(point[0] - previous[0], point[1] - previous[1]) >= 1.15) reduced.push(point);
   }
   ring = reduced.length >= 4 ? reduced : ring;
-  for (let pass = 0; pass < 2; pass += 1) {
+  for (let pass = 0; pass < Math.min(2, Math.max(0, Math.round(smoothing))); pass += 1) {
     const next: Array<[number, number]> = [];
     for (let index = 0; index < ring.length; index += 1) {
       const current = ring[index], following = ring[(index + 1) % ring.length];
@@ -1070,6 +1072,18 @@ function smoothVectorRing(source: Array<[number, number]>): Array<[number, numbe
       );
     }
     ring = next;
+  }
+  // Stärken oberhalb von 2 beruhigen die bereits fein unterteilte Kontur,
+  // ohne nochmals die Punkt- und Dreiecksmenge zu verdoppeln.
+  for (let pass = 2; pass < Math.round(smoothing); pass += 1) {
+    ring = ring.map((current, index) => {
+      const previous = ring[(index - 1 + ring.length) % ring.length];
+      const following = ring[(index + 1) % ring.length];
+      return [
+        previous[0] * 0.125 + current[0] * 0.75 + following[0] * 0.125,
+        previous[1] * 0.125 + current[1] * 0.75 + following[1] * 0.125
+      ];
+    });
   }
   return ring;
 }
@@ -1549,7 +1563,8 @@ function buildPreviewSurface(
   sideColorIndex = 0,
   preserveBoundaryHeights = false,
   stepped = false,
-  vectorized = false
+  vectorized = false,
+  vectorSmoothing = 2
 ): { positions: number[]; indices: number[]; colorParts: Array<{ color: string; indices: number[] }> } {
   if (stepped && cellMask && (!colorAssignments || !colors.length)) {
     const mesh = buildSteppedCellMesh(
@@ -1576,7 +1591,8 @@ function buildPreviewSurface(
       colors,
       sideColorIndex,
       stepped,
-      vectorized
+      vectorized,
+      vectorSmoothing
     );
     const positions: number[] = [];
     const indices: number[] = [];

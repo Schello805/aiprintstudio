@@ -319,6 +319,18 @@ describe("relief mesh", () => {
     )).toBe(true);
   });
 
+  it("applies stronger smoothing directly to vector emblem contours", () => {
+    const columns = 65, rows = 65, cellColumns = columns - 1;
+    const mask = Array(cellColumns * (rows - 1)).fill(false).map((_, index) => {
+      const x = index % cellColumns, y = Math.floor(index / cellColumns);
+      return Math.hypot(x + 0.5 - 32, y + 0.5 - 32) < 23;
+    });
+    const moderate = reliefInternals.buildVectorExtrudedMesh(mask, columns, rows, 80, 80, 0, 4, 2);
+    const strong = reliefInternals.buildVectorExtrudedMesh(mask, columns, rows, 80, 80, 0, 4, 4);
+    expect(strong.triangles).toHaveLength(moderate.triangles.length);
+    expect(strong.vertices).not.toEqual(moderate.vertices);
+  });
+
   it("removes isolated raised cells from the outer rim of stepped logos", () => {
     const columns = 8, rows = 8;
     const cellColumns = columns - 1, cellRows = rows - 1;

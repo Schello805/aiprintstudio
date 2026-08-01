@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { SettingTooltip } from "./SettingTooltip";
 import { extractColorPalette } from "./domain/color-palette";
+import { rankReliefCandidate, resolveReliefMode, smoothingCandidates } from "./domain/relief-optimization";
 import appLogoMark from "../build/icon-mark.png";
 type View = "studio" | "history" | "settings" | "info";
 type StudioTool = "home" | "image" | "text" | "lithophane" | "prompt";
@@ -143,8 +144,8 @@ export function App() {
   const [detail, setDetail] = useState(1);
   const [processingMode, setProcessingMode] = useState<ProcessingMode>("auto");
   const [includeLogoBackground, setIncludeLogoBackground] = useState(true);
-  const [optimizeForStandardNozzle, setOptimizeForStandardNozzle] = useState(true);
-  const [reduceTo250kTriangles, setReduceTo250kTriangles] = useState(false);
+  const optimizeForStandardNozzle = true;
+  const reduceTo250kTriangles = true;
   const [productShape, setProductShape] = useState<ProductShape>("source");
   const [borderMm, setBorderMm] = useState(0);
   const [holeDiameterMm, setHoleDiameterMm] = useState(0);
@@ -276,16 +277,19 @@ export function App() {
     setBusy(true); setFileError(null); setResult(null);
     try {
       if (!window.desktop) throw new Error("Die lokale 3D-Engine ist nicht erreichbar. Bitte starte die App neu.");
-      const effectiveMode = repair && file.suggestedProfile === "logo"
-        ? "wordmark"
-        : processingMode === "auto" ? (file.suggestedProfile === "logo" ? "auto" : "depth") : processingMode;
+      // Eine Reparatur darf niemals das vom Nutzer gewählte Verfahren ändern.
+      // Insbesondere bleibt ein Wappen im Vektormodus und wird nicht mehr
+      // stillschweigend als Wortlogo neu interpretiert.
+      const effectiveMode = resolveReliefMode(processingMode, file.suggestedProfile);
       const effectiveResolution = effectiveMode === "auto" && file.suggestedProfile === "logo"
         ? 384
         : repair ? Math.min(384, optimalResolution[profile]) : optimalResolution[profile];
+      const automaticSmoothing = effectiveMode === "depth" ? 3 : effectiveMode === "height" ? 2 : 1;
+      const automaticDetail = effectiveMode === "depth" ? 0.75 : 1;
       const request: Parameters<NonNullable<typeof window.desktop>["createRelief"]>[2] = {
-        widthMm, baseMm: repair ? Math.max(1.6, baseMm) : baseMm, reliefMm,
+        widthMm, baseMm: studioTool === "lithophane" ? baseMm : 1.6, reliefMm,
         resolution: effectiveResolution,
-        invert: raiseLightAreas, profile, smoothing, detail,
+        invert: false, profile, smoothing: automaticSmoothing, detail: automaticDetail,
         processingMode: effectiveMode,
         includeBackground: effectiveMode === "wordmark" && (repair || includeLogoBackground),
         nozzleMm: 0.4,
@@ -303,6 +307,45 @@ export function App() {
         mirrorX: false
       };
       let currentResolution = effectiveResolution;
+      let selectedSmoothing = automaticSmoothing;
+      let selectedDetail = automaticDetail;
+      if (repair) {
+        const candidates = smoothingCandidates(effectiveMode);
+        let bestRank = Number.NEGATIVE_INFINITY;
+        for (let index = 0; index < candidates.length; index += 1) {
+          const candidateSmoothing = candidates[index];
+          setReliefProgress({
+            phase: "Varianten vergleichen",
+            detail: `Lokale Qualitätsvariante ${index + 1} von ${candidates.length} wird geprüft …`,
+            progress: 8 + Math.round(index / candidates.length * 38)
+          });
+          const candidate = await window.desktop.createRelief(jobId, file.path, {
+            ...request,
+            resolution: Math.min(256, effectiveResolution),
+            smoothing: candidateSmoothing,
+            detail: automaticDetail
+          });
+          if (!candidate) throw new Error("Vorgang abgebrochen");
+          const recommended = effectiveMode === "vector" ? 3 : automaticSmoothing;
+          const rank = rankReliefCandidate({
+            score: candidate.printability.score,
+            issueCount: candidate.printability.issues.length,
+            triangleCount: candidate.triangleCount,
+            smoothing: candidateSmoothing,
+            recommendedSmoothing: recommended
+          });
+          if (rank > bestRank) {
+            bestRank = rank;
+            selectedSmoothing = candidateSmoothing;
+            selectedDetail = automaticDetail;
+          }
+        }
+        setSmoothing(selectedSmoothing);
+        setDetail(selectedDetail);
+        setReliefProgress({ phase: "Beste Variante erstellen", detail: `Glättung ${selectedSmoothing} liefert lokal das beste Ergebnis.`, progress: 52 });
+      }
+      request.smoothing = selectedSmoothing;
+      request.detail = selectedDetail;
       let next = await window.desktop.createRelief(jobId, file.path, request);
       const preserveEmblemContour = effectiveMode === "vector"
         || (effectiveMode === "auto" && file.suggestedProfile === "logo");
@@ -348,13 +391,8 @@ export function App() {
   }
 
   async function repairAndRegenerate() {
-    if (!window.confirm("Druckprobleme automatisch korrigieren?\n\nDie App verstärkt Details auf 0,8 mm, verbindet Logo und Hintergrund, reduziert die Meshgröße und stellt mindestens 1,6 mm Grundplatte sicher.")) return;
-    setOptimizeForStandardNozzle(true);
+    if (!window.confirm("Modell lokal optimieren?\n\nDie App vergleicht mehrere Glättungsvarianten, verstärkt zu feine Details für eine 0,4-mm-Düse und behält das aktuell gewählte Verfahren bei.")) return;
     setBaseMm((current) => Math.max(1.6, current));
-    if (file?.suggestedProfile === "logo") {
-      setProcessingMode("wordmark");
-      setIncludeLogoBackground(true);
-    }
     await generateRelief(true);
   }
 
@@ -397,8 +435,7 @@ export function App() {
       setProfile(settings.profile); setRaiseLightAreas(settings.raiseLightAreas);
       setMulticolorEnabled(settings.multicolorEnabled); setColorCount(settings.colorCount);
       setSourceColors(settings.sourceColors); setColors(settings.colors); setSideColorIndex(settings.sideColorIndex);
-      setIncludeLogoBackground(settings.includeLogoBackground); setOptimizeForStandardNozzle(settings.optimizeForStandardNozzle);
-      setReduceTo250kTriangles(settings.reduceTo250kTriangles ?? false);
+      setIncludeLogoBackground(settings.includeLogoBackground);
       setProductShape(settings.productShape ?? "source"); setBorderMm(settings.borderMm ?? 0);
       setHoleDiameterMm(settings.holeDiameterMm ?? 0); setCurveAngle(settings.curveAngle ?? 0);
       setResult(null); setFileError(null); setUploadStatus("Projekt vollständig wiederhergestellt.");
@@ -585,24 +622,11 @@ export function App() {
               <>
                   <div className="parameter-grid essential-parameters">
                     <NumberField label="BREITE" tooltip={parameterTooltips.width} value={widthMm} unit="mm" min={20} max={300} step={5} setValue={setWidthMm} />
-                    <NumberField label="GRUNDPLATTE" tooltip={parameterTooltips.base} value={baseMm} unit="mm" min={0.8} max={10} step={0.2} setValue={setBaseMm} />
+                    {studioTool === "lithophane" && <NumberField label="MATERIALBASIS" tooltip={parameterTooltips.base} value={baseMm} unit="mm" min={0.8} max={10} step={0.2} setValue={setBaseMm} />}
                     <NumberField label="RELIEF" tooltip={parameterTooltips.relief} value={reliefMm} unit="mm" min={0.5} max={20} step={0.5} setValue={setReliefMm} />
-                    <NumberField label="GLÄTTUNG" tooltip={parameterTooltips.smoothing} value={smoothing} min={0} max={5} step={1} setValue={setSmoothing} />
-                    <NumberField label="DETAIL" tooltip={parameterTooltips.detail} value={detail} min={0} max={2} step={0.25} setValue={setDetail} />
                   </div>
-                  <div className="direct-fine-settings">
-                    <div>
-                      <span className="option-label">RELIEF-RICHTUNG</span>
-                      <div className="segmented-control">
-                        <button className={!raiseLightAreas ? "has-tooltip selected" : "has-tooltip"} onClick={() => setRaiseLightAreas(false)} aria-description={parameterTooltips.dark}>Dunkles anheben<SettingTooltip text={parameterTooltips.dark} /></button>
-                        <button className={raiseLightAreas ? "has-tooltip selected" : "has-tooltip"} onClick={() => setRaiseLightAreas(true)} aria-description={parameterTooltips.light}>Helles anheben<SettingTooltip text={parameterTooltips.light} /></button>
-                      </div>
-                    </div>
-                    {studioTool === "image" && <div className="secondary-modes">
-                      <button className={processingMode === "height" ? "mode-option has-tooltip selected" : "mode-option has-tooltip"} onClick={() => { setProcessingMode("height"); setProfile("balanced"); }} aria-description={modeTooltips.height}>
-                        <ImagePlus /><div><strong>Höhenkarte</strong><span>Helligkeit direkt übernehmen</span></div><SettingTooltip text={modeTooltips.height} />
-                      </button>
-                    </div>}
+                  <div className="automatic-settings-note">
+                    <Sparkles /><div><strong>Druckparameter werden automatisch optimiert</strong><span>Grundplatte, Glättung, Detailerhalt, Relief-Richtung und Meshgröße werden passend zum gewählten Verfahren gesetzt.</span></div>
                     <div className="compact-cost"><strong>0,00 €</strong><span>lokal · keine API-Kosten</span></div>
                   </div>
                   {studioTool === "lithophane" && <div className="product-options">
@@ -629,34 +653,6 @@ export function App() {
                         <span>{includeLogoBackground ? "Grundfläche bleibt in Vorschau, STL und 3MF erhalten" : "Nur Signet und Schrift werden freigestellt exportiert"}</span>
                       </div>
                       <SettingTooltip text={"Legt fest, ob die Bildfläche als zusammenhängende Grundplatte Teil des Modells bleibt.\nBeispiel: Aktiv für ein quadratisches App-Logo; deaktiviert für einen freistehenden Schriftzug."} />
-                      <span className="toggle-track"><span /></span>
-                    </button>
-                  )}
-                  <button
-                    className={reduceTo250kTriangles ? "background-toggle selected" : "background-toggle"}
-                    onClick={() => setReduceTo250kTriangles((current) => !current)}
-                    aria-pressed={reduceTo250kTriangles}
-                  >
-                    <Layers3 />
-                    <div>
-                      <strong>Auf 250.000 Dreiecke reduzieren</strong>
-                      <span>{reduceTo250kTriangles ? "Meshgröße wird beim Erstellen automatisch begrenzt" : "Volle Detailauflösung beibehalten"}</span>
-                    </div>
-                    <SettingTooltip text={"Reduziert die Rasterauflösung nur dann automatisch, wenn das fertige Mesh mehr als 250.000 Dreiecke enthält.\nBeispiel: Erleichtert den Import in CAD- und Online-Programme mit begrenzter Meshgröße."} />
-                    <span className="toggle-track"><span /></span>
-                  </button>
-                  {processingMode === "wordmark" && (
-                    <button
-                      className={optimizeForStandardNozzle ? "background-toggle selected" : "background-toggle"}
-                      onClick={() => setOptimizeForStandardNozzle((current) => !current)}
-                      aria-pressed={optimizeForStandardNozzle}
-                    >
-                      <Settings2 />
-                      <div>
-                        <strong>Für 0,4-mm-Düse optimieren</strong>
-                        <span>{optimizeForStandardNozzle ? "Feine Logo-Stege werden automatisch auf mindestens 0,8 mm verstärkt" : "Originalbreiten bleiben unverändert"}</span>
-                      </div>
-                      <SettingTooltip text={"Verstärkt zu dünne Logo- und Schriftbereiche für zwei druckbare Linien mit der üblichen 0,4-mm-Düse.\nBeispiel: Ein 0,4-mm-Schriftstrich wird auf mindestens 0,8 mm verbreitert."} />
                       <span className="toggle-track"><span /></span>
                     </button>
                   )}
@@ -995,12 +991,12 @@ function SlicerAnalysisCard({ result }: { result: NonNullable<ReliefResult> }) {
   return (
     <section className="slicer-card">
       <div className="slicer-summary">
-        <div><strong>Lokale Schichtsimulation</strong><span>0,4-mm-Düse · {result.slicer.layerHeightMm.toFixed(1).replace(".", ",")} mm Schichthöhe</span></div>
+        <div className="slicer-title"><div><strong>Lokale Schichtsimulation</strong><span>0,4-mm-Düse · {result.slicer.layerHeightMm.toFixed(1).replace(".", ",")} mm Schichthöhe</span></div><SettingTooltip text={"Schätzt den späteren Druck lokal aus der Modellgeometrie und zeigt einen einfachen Schichtdurchlauf.\nBeispiel: Prüfe vor dem Export grob Druckdauer, Materialbedarf und Farbwechsel."} /></div>
         <dl>
-          <div><dt>Druckzeit</dt><dd>ca. {Math.floor(result.slicer.estimatedMinutes / 60)} h {result.slicer.estimatedMinutes % 60} min</dd></div>
-          <div><dt>Material</dt><dd>{result.slicer.materialGrams.toFixed(1)} g · {result.slicer.filamentMeters.toFixed(1)} m</dd></div>
-          <div><dt>Schichten</dt><dd>{result.slicer.layerCount}</dd></div>
-          <div><dt>Farbwechsel</dt><dd>{result.slicer.colorChanges}</dd></div>
+          <div><dt>Druckzeit <SettingTooltip text={"Geometriebasierte Näherung für die reine Druckdauer.\nBeispiel: Bewegungs- und Beschleunigungswerte deines Druckerprofils können die echte Zeit verändern."} /></dt><dd>ca. {Math.floor(result.slicer.estimatedMinutes / 60)} h {result.slicer.estimatedMinutes % 60} min</dd></div>
+          <div><dt>Material <SettingTooltip text={"Schätzt Gewicht und Filamentlänge mit PLA-Dichte und 1,75-mm-Filament.\nBeispiel: Andere Materialien und die Fülldichte im Slicer verändern den realen Verbrauch."} /></dt><dd>{result.slicer.materialGrams.toFixed(1)} g · {result.slicer.filamentMeters.toFixed(1)} m</dd></div>
+          <div><dt>Schichten <SettingTooltip text={"Berechnet die Zahl der horizontalen Lagen aus Modellhöhe und 0,2-mm-Schichthöhe.\nBeispiel: 5,4 mm Modellhöhe ergeben ungefähr 27 Schichten."} /></dt><dd>{result.slicer.layerCount}</dd></div>
+          <div><dt>Farbwechsel <SettingTooltip text={"Schätzt notwendige Wechsel zwischen den aktivierten AMS-Farben über alle Schichten.\nBeispiel: Mehr gleichzeitig sichtbare Farben erhöhen Wechsel und Druckdauer."} /></dt><dd>{result.slicer.colorChanges}</dd></div>
         </dl>
       </div>
       <div className="layer-inspector">
