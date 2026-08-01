@@ -260,11 +260,8 @@ describe("relief mesh", () => {
 
   it("writes one shared mesh with per-triangle materials into a 3MF", async () => {
     const first = reliefInternals.buildWatertightHeightMesh(2, 2, 10, 10, [2, 2, 2, 2]);
-    const second = reliefInternals.buildWatertightHeightMesh(2, 2, 10, 10, [3, 3, 3, 3]);
-    const archive = await reliefInternals.encodeThreeMf(first, [
-      { mesh: first, color: "#FF0000", name: "AMS 1" },
-      { mesh: second, color: "#0000FF", name: "AMS 2" }
-    ]);
+    const materials = first.triangles.map((_, index) => index % 2);
+    const archive = await reliefInternals.encodeThreeMf(first, undefined, materials, ["#FF0000", "#0000FF"]);
     const zip = await JSZip.loadAsync(archive);
     const model = await zip.file("3D/3dmodel.model")?.async("string");
     const modelSettings = await zip.file("Metadata/model_settings.config")?.async("string");
@@ -276,6 +273,8 @@ describe("relief mesh", () => {
     expect(model?.match(/<object /g)).toHaveLength(1);
     expect(model?.match(/<component /g)).toBeNull();
     expect(model?.match(/<item /g)).toHaveLength(1);
+    expect(model?.match(/<vertex /g)).toHaveLength(first.vertices.length);
+    expect(model?.match(/<triangle /g)).toHaveLength(first.triangles.length);
     expect(model).toContain('name="AI Print Studio"');
     expect(model).toContain('<metadata name="Title">AI Print Studio</metadata>');
     expect(modelSettings).toContain('<metadata key="name" value="AI Print Studio"/>');
@@ -286,6 +285,22 @@ describe("relief mesh", () => {
     expect(JSON.parse(projectSettings ?? "{}").print_settings_id).toBe("AI Print Studio");
     expect(JSON.parse(projectSettings ?? "{}").nozzle_diameter).toEqual(["0.4"]);
     expect(JSON.parse(projectSettings ?? "{}").printer_settings_id).toBe("AI Print Studio · 0.4 mm");
+  });
+
+  it("colors an emblem without adding or overlapping geometry", () => {
+    const columns = 3, rows = 3;
+    const mesh = reliefInternals.buildWatertightHeightMesh(
+      columns, rows, 20, 20,
+      [1.6, 1.6, 1.6, 1.6, 5.6, 1.6, 1.6, 1.6, 1.6]
+    );
+    const materials = reliefInternals.assignCanonicalTriangleMaterials(
+      mesh, [0, 1, 1, 0], columns, rows, 20, 20, 0
+    );
+    const preview = reliefInternals.buildCanonicalMeshPreview(mesh, 20, 20, materials, ["#111111", "#FF2020"]);
+    expect(materials).toHaveLength(mesh.triangles.length);
+    expect(preview.positions).toHaveLength(mesh.vertices.length * 3);
+    expect(preview.indices).toHaveLength(mesh.triangles.length * 3);
+    expect(preview.colorParts.reduce((sum, part) => sum + part.indices.length, 0)).toBe(preview.indices.length);
   });
 
   it("widens thin wordmark pixels for a standard 0.4 mm nozzle", () => {

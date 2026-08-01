@@ -327,6 +327,12 @@ export async function createRelief(
   const colorAssignments = mappedColorAssignments
     ? enforceUniformEdgeColor(mappedColorAssignments, cellMask, gridWidth, gridHeight, options.sideColorIndex)
     : undefined;
+  const canonicalTriangleMaterials = colorAssignments && options.processingMode === "vector"
+    ? assignCanonicalTriangleMaterials(
+      planarMesh, colorAssignments, gridWidth, gridHeight,
+      options.widthMm, heightMm, options.sideColorIndex
+    )
+    : undefined;
   const assignedCellCount = detectedColorAssignments?.filter((assignment) => assignment >= 0).length ?? 0;
   const colorRegions = options.sourceColors.map((sourceColor, sourceIndex) => ({
     sourceColor,
@@ -340,12 +346,14 @@ export async function createRelief(
     detail: colorAssignments ? "AMS-Flächen und einfarbiger Tragkörper werden erzeugt …" : "Das vollständige 3D-Mesh wird vorbereitet …",
     progress: 70
   });
-  const planarPreview = buildPreviewSurface(
-    gridWidth, gridHeight, options.widthMm, heightMm, heights, cellMask,
-    colorAssignments, options.colors, options.sideColorIndex,
-    flatVectorSurface || (useWordmarkMask && options.includeBackground),
-    steppedLogo, options.processingMode === "vector", options.smoothing
-  );
+  const planarPreview = canonicalTriangleMaterials
+    ? buildCanonicalMeshPreview(planarMesh, options.widthMm, heightMm, canonicalTriangleMaterials, options.colors)
+    : buildPreviewSurface(
+      gridWidth, gridHeight, options.widthMm, heightMm, heights, cellMask,
+      colorAssignments, options.colors, options.sideColorIndex,
+      flatVectorSurface || (useWordmarkMask && options.includeBackground),
+      steppedLogo, options.processingMode === "vector", options.smoothing
+    );
   const preview = transformProductPreview(planarPreview, options.widthMm, options.curveAngle, options.mirrorX);
   let printability = analysePrintability(mesh, heights, options, cellMask, gridWidth);
   const layerHeightMm = 0.2;
@@ -368,7 +376,7 @@ export async function createRelief(
   const suffix = options.outputMode === "lithophane" ? "lithophan" : options.outputMode === "stamp" ? "stempel" : "relief";
   const stlPath = join(outputDirectory, `${stem}-${suffix}.stl`);
   const threeMfPath = join(outputDirectory, `${stem}-${suffix}.3mf`);
-  const coloredMeshes = colorAssignments
+  const coloredMeshes = colorAssignments && !canonicalTriangleMaterials
     ? buildColoredMeshes(
       gridWidth, gridHeight, options.widthMm, heightMm, heights, cellMask,
       colorAssignments, options.colors, options.sideColorIndex, steppedLogo,
@@ -383,9 +391,9 @@ export async function createRelief(
   // Geometrie wie Vorschau und 3MF verwenden. Zuvor wurde das STL aus dem
   // alten Raster-Höhenfeld geschrieben; dadurch sah gerade die im Screenshot
   // geprüfte STL trotz glatter 3MF-Farbkörper weiterhin kantig aus.
-  const unsanitizedExportMesh = exportColoredMeshes?.length
-    ? mergeMeshes(exportColoredMeshes.map((part) => part.mesh))
-    : orientMeshLikePreview(mesh, heightMm);
+  // STL, Vorschau und 3MF verwenden immer dasselbe kanonische Mesh. Farben
+  // dürfen keine zusätzlichen oder überlappenden Körper mehr erzeugen.
+  const unsanitizedExportMesh = orientMeshLikePreview(mesh, heightMm);
   const exportMesh = removeInvalidTriangles(unsanitizedExportMesh);
   // Qualitätsangaben müssen die tatsächlich gespeicherte Geometrie bewerten.
   // Der Vektorpfad ist erheblich kleiner und glatter als sein internes
@@ -399,7 +407,12 @@ export async function createRelief(
   }
   onProgress({ phase: "Exportieren", detail: "STL und 3MF werden für die Vorschau vorbereitet …", progress: 93 });
   const stlBuffer = encodeBinaryStl(exportMesh, "AI Print Studio Relief");
-  const threeMfBuffer = await encodeThreeMf(exportMesh, exportColoredMeshes);
+  const threeMfBuffer = await encodeThreeMf(
+    exportMesh,
+    exportColoredMeshes,
+    canonicalTriangleMaterials,
+    canonicalTriangleMaterials ? options.colors : undefined
+  );
   const [stlValidation, threeMfValidation] = await Promise.all([
     validateGeneratedExportBuffer(".stl", stlBuffer),
     validateGeneratedExportBuffer(".3mf", threeMfBuffer)
@@ -986,6 +999,51 @@ function orientMeshLikePreview(mesh: Mesh, heightMm: number): Mesh {
     vertices: mesh.vertices.map(([x, y, z]) => [x, heightMm - y, z] as const),
     triangles: mesh.triangles.map(([a, b, c]) => [a, c, b] as const)
   };
+}
+
+function assignCanonicalTriangleMaterials(
+  mesh: Mesh,
+  assignments: number[],
+  columns: number,
+  rows: number,
+  widthMm: number,
+  heightMm: number,
+  sideColorIndex: number
+): number[] {
+  const cellColumns = columns - 1;
+  const cellRows = rows - 1;
+  return mesh.triangles.map((triangle) => {
+    const a = mesh.vertices[triangle[0]], b = mesh.vertices[triangle[1]], c = mesh.vertices[triangle[2]];
+    // Nur nach oben gerichtete Deckflächen erhalten die erkannte Motivfarbe.
+    // Boden, Außenwand und senkrechte Höhenübergänge bleiben einheitlich in
+    // der gewählten Seitenfarbe.
+    if (normalOf(a, b, c)[2] <= 0.25) return sideColorIndex;
+    const centerX = (a[0] + b[0] + c[0]) / 3;
+    const centerY = (a[1] + b[1] + c[1]) / 3;
+    const x = Math.max(0, Math.min(cellColumns - 1, Math.floor(centerX / widthMm * cellColumns)));
+    const y = Math.max(0, Math.min(cellRows - 1, Math.floor(centerY / heightMm * cellRows)));
+    const material = assignments[y * cellColumns + x];
+    return material >= 0 ? material : sideColorIndex;
+  });
+}
+
+function buildCanonicalMeshPreview(
+  mesh: Mesh,
+  widthMm: number,
+  heightMm: number,
+  materials: number[],
+  colors: string[]
+): ReliefResult["preview"] {
+  const positions = mesh.vertices.flatMap(([x, y, z]) => [x - widthMm / 2, z, y - heightMm / 2]);
+  const colorParts = colors.map((color) => ({ color, indices: [] as number[] }));
+  const indices: number[] = [];
+  mesh.triangles.forEach(([a, b, c], triangleIndex) => {
+    const oriented = [a, c, b];
+    indices.push(...oriented);
+    const material = Math.max(0, Math.min(colorParts.length - 1, materials[triangleIndex] ?? 0));
+    colorParts[material]?.indices.push(...oriented);
+  });
+  return { positions, indices, colorParts: colorParts.filter((part) => part.indices.length) };
 }
 
 function buildColoredMeshes(
@@ -1600,7 +1658,12 @@ function encodeBinaryStl(mesh: Mesh, title: string): Buffer {
   return buffer;
 }
 
-async function encodeThreeMf(mesh: Mesh, coloredMeshes?: ColoredMesh[]): Promise<Buffer> {
+async function encodeThreeMf(
+  mesh: Mesh,
+  coloredMeshes?: ColoredMesh[],
+  canonicalMaterials?: number[],
+  canonicalColors?: string[]
+): Promise<Buffer> {
   const zip = new JSZip();
   zip.file("[Content_Types].xml", `<?xml version="1.0" encoding="UTF-8"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
@@ -1611,7 +1674,9 @@ async function encodeThreeMf(mesh: Mesh, coloredMeshes?: ColoredMesh[]): Promise
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
 <Relationship Target="/3D/3dmodel.model" Id="rel0" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/>
 </Relationships>`);
-  const parts = (coloredMeshes?.length ? coloredMeshes : [{ mesh, color: "#B7F58A", name: "Relief" }])
+  const parts = (canonicalMaterials?.length && canonicalColors?.length
+    ? canonicalColors.map((color, index) => ({ mesh: { vertices: [], triangles: [] }, color, name: `AMS ${index + 1}` }))
+    : coloredMeshes?.length ? coloredMeshes : [{ mesh, color: "#B7F58A", name: "Relief" }])
     .map((part) => ({ ...part, mesh: removeInvalidTriangles(part.mesh) }));
   const materialXml = parts.map(({ color, name }) =>
     `<base name="${escapeXml(name)}" displaycolor="${color.toUpperCase()}FF"/>`
@@ -1621,13 +1686,21 @@ async function encodeThreeMf(mesh: Mesh, coloredMeshes?: ColoredMesh[]): Promise
   // STL. Die Farbe bleibt über pid/p1 pro Dreieck eindeutig erhalten.
   const vertices: Vec3[] = [];
   const coloredTriangles: Array<{ triangle: Triangle; material: number }> = [];
-  for (let material = 0; material < parts.length; material += 1) {
-    const offset = vertices.length;
-    // Kein Spread bei großen Meshes: Schon etwa 100.000 Eckpunkte können
-    // sonst die maximale JavaScript-Argumentzahl überschreiten.
-    for (const vertex of parts[material].mesh.vertices) vertices.push(vertex);
-    for (const [a, b, c] of parts[material].mesh.triangles) {
-      coloredTriangles.push({ triangle: [a + offset, b + offset, c + offset], material });
+  if (canonicalMaterials?.length === mesh.triangles.length && canonicalColors?.length) {
+    for (const vertex of mesh.vertices) vertices.push(vertex);
+    mesh.triangles.forEach((triangle, index) => coloredTriangles.push({
+      triangle,
+      material: Math.max(0, Math.min(canonicalColors.length - 1, canonicalMaterials[index] ?? 0))
+    }));
+  } else {
+    for (let material = 0; material < parts.length; material += 1) {
+      const offset = vertices.length;
+      // Kein Spread bei großen Meshes: Schon etwa 100.000 Eckpunkte können
+      // sonst die maximale JavaScript-Argumentzahl überschreiten.
+      for (const vertex of parts[material].mesh.vertices) vertices.push(vertex);
+      for (const [a, b, c] of parts[material].mesh.triangles) {
+        coloredTriangles.push({ triangle: [a + offset, b + offset, c + offset], material });
+      }
     }
   }
   const vertexXml = vertices.map(([x, y, z]) => `<vertex x="${x.toFixed(5)}" y="${y.toFixed(5)}" z="${z.toFixed(5)}"/>`).join("");
@@ -1643,7 +1716,7 @@ async function encodeThreeMf(mesh: Mesh, coloredMeshes?: ColoredMesh[]): Promise
 <metadata name="Description">Druckoptimiert für eine 0,4-mm-Düse</metadata>
 <resources><basematerials id="2">${materialXml}</basematerials>${objectXml}</resources>
 <build>${buildXml}</build></model>`);
-  if (coloredMeshes?.length) {
+  if (coloredMeshes?.length || canonicalMaterials?.length) {
     zip.folder("Metadata")?.file("model_settings.config", `<?xml version="1.0" encoding="UTF-8"?>
 <config>
   <object id="${objectId}">
@@ -1885,6 +1958,7 @@ export const reliefInternals = {
   expandPixelMask, expandPixelMaskPreservingHoles,
   buildVectorLevels, buildSmoothedBoundaryPositions, buildColorCellAssignments, buildColoredMeshes,
   buildVectorColorMeshes, buildVectorExtrudedMesh, smoothVectorRing, mergeMeshes,
+  assignCanonicalTriangleMaterials, buildCanonicalMeshPreview,
   enforceUniformEdgeColor,
   buildWatertightHeightMesh, buildBinaryCellHeights, flattenSteppedOuterRim, buildSteppedCellMesh, buildPreviewSurface, orientMeshLikePreview, encodeBinaryStl, encodeThreeMf,
   smoothHeightField, analysePrintability, profileSettings, buildProductPixelMask, applyRaisedBorder,
