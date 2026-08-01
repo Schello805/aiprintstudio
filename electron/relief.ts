@@ -162,7 +162,7 @@ export async function createRelief(
     ? Math.max(0, Math.ceil((options.minimumFeatureMm / (options.widthMm / gridWidth) - 1) / 2))
     : 0;
   const wordmarkPixels = detectedWordmarkPixels && minimumFeatureRadius > 0
-    ? expandPixelMask(detectedWordmarkPixels, gridWidth, gridHeight, minimumFeatureRadius)
+    ? expandPixelMaskPreservingHoles(detectedWordmarkPixels, gridWidth, gridHeight, minimumFeatureRadius)
     : detectedWordmarkPixels;
   // Bei Wortmarken und filigranen Logos würde die normale Maskenbereinigung
   // dünne Buchstaben und geschwungene Linien teilweise wegerodieren. Einzelne
@@ -303,7 +303,8 @@ export async function createRelief(
   const detectedColorAssignments = options.colors.length
     ? buildColorCellAssignments(
       rgba, cellMask, gridWidth, gridHeight,
-      options.sourceColors.length === options.colors.length ? options.sourceColors : options.colors
+      options.sourceColors.length === options.colors.length ? options.sourceColors : options.colors,
+      useWordmarkMask ? detectedWordmarkPixels : undefined
     )
     : undefined;
   const colorAssignments = detectedColorAssignments
@@ -854,7 +855,8 @@ function buildColorCellAssignments(
   cellMask: boolean[],
   width: number,
   height: number,
-  colors: string[]
+  colors: string[],
+  subjectPixels?: boolean[]
 ): number[] {
   const palette = colors.map(parseHexColor);
   return Array.from({ length: (width - 1) * (height - 1) }, (_, cell) => {
@@ -862,7 +864,13 @@ function buildColorCellAssignments(
     const x = cell % (width - 1), y = Math.floor(cell / (width - 1));
     const pixel = y * width + x;
     let red = 0, green = 0, blue = 0, weight = 0;
-    for (const sample of [pixel, pixel + 1, pixel + width, pixel + width + 1]) {
+    const corners = [pixel, pixel + 1, pixel + width, pixel + width + 1];
+    const motifSamples = subjectPixels ? corners.filter((sample) => subjectPixels[sample]) : corners;
+    // Bei freigestellten Wortmarken dürfen weiße Hintergrundpixel nicht in
+    // die Buchstabenfarbe einfließen. Gerade bei dünnen Schriften bestand
+    // eine Zelle sonst überwiegend aus Hintergrund und wurde als Weiß exportiert.
+    const samples = motifSamples.length ? motifSamples : corners;
+    for (const sample of samples) {
       const alpha = rgba[sample * 4 + 3] / 255;
       red += rgba[sample * 4] * alpha;
       green += rgba[sample * 4 + 1] * alpha;
@@ -1453,6 +1461,41 @@ function expandPixelMask(pixels: boolean[], width: number, height: number, radiu
   return expanded;
 }
 
+function expandPixelMaskPreservingHoles(pixels: boolean[], width: number, height: number, radius: number): boolean[] {
+  const expanded = expandPixelMask(pixels, width, height, radius);
+  if (radius <= 0) return expanded;
+
+  // Hintergrund, der vom Bildrand erreichbar ist, darf durch die
+  // Mindestbreitenkorrektur enger werden. Eingeschlossene Innenräume wie in
+  // a, e, o, ö oder R werden dagegen aus der Originalmaske zurückgeschnitten.
+  const outside = new Uint8Array(width * height);
+  const queue: number[] = [];
+  const enqueue = (index: number) => {
+    if (index < 0 || index >= pixels.length || pixels[index] || outside[index]) return;
+    outside[index] = 1;
+    queue.push(index);
+  };
+  for (let x = 0; x < width; x += 1) {
+    enqueue(x);
+    enqueue((height - 1) * width + x);
+  }
+  for (let y = 0; y < height; y += 1) {
+    enqueue(y * width);
+    enqueue(y * width + width - 1);
+  }
+  for (let cursor = 0; cursor < queue.length; cursor += 1) {
+    const index = queue[cursor], x = index % width, y = Math.floor(index / width);
+    if (x > 0) enqueue(index - 1);
+    if (x + 1 < width) enqueue(index + 1);
+    if (y > 0) enqueue(index - width);
+    if (y + 1 < height) enqueue(index + width);
+  }
+  for (let index = 0; index < pixels.length; index += 1) {
+    if (!pixels[index] && !outside[index]) expanded[index] = false;
+  }
+  return expanded;
+}
+
 function applyBoundaryRim(levels: number[], mask: boolean[], width: number, height: number, radius: number): number[] {
   const next = levels.slice();
   for (let y = 0; y < height; y += 1) {
@@ -1779,7 +1822,7 @@ function buildPreviewSurface(
 
 export const reliefInternals = {
   buildCellMask, buildSubjectPixelMask, buildWordmarkPixelMask, cleanSubjectPixelMask, applyBoundaryRim,
-  expandPixelMask,
+  expandPixelMask, expandPixelMaskPreservingHoles,
   buildVectorLevels, buildSmoothedBoundaryPositions, buildColorCellAssignments, buildColoredMeshes,
   buildVectorColorMeshes, buildVectorExtrudedMesh, smoothVectorRing, mergeMeshes,
   enforceUniformEdgeColor,

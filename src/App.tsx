@@ -925,6 +925,7 @@ function ReliefPreview({ result }: { result: NonNullable<ReliefResult> }) {
   const modelSize = Math.max(result.widthMm, result.heightMm);
   const [materialView, setMaterialView] = useState<"original" | "white" | "black" | "gold" | "light" | "normals" | "wireframe">(result.options.outputMode === "lithophane" ? "light" : "original");
   const [showGrid, setShowGrid] = useState(true);
+  const [previewBackground, setPreviewBackground] = useState<"dark" | "light">("dark");
   const [autoRotate, setAutoRotate] = useState(false);
   const [cameraRevision, setCameraRevision] = useState(0);
   const geometries = useMemo(() => {
@@ -952,10 +953,15 @@ function ReliefPreview({ result }: { result: NonNullable<ReliefResult> }) {
         </select>
         <button className={autoRotate ? "active" : ""} onClick={() => setAutoRotate((current) => !current)}>Drehen</button>
         <button className={showGrid ? "active" : ""} onClick={() => setShowGrid((current) => !current)}>Druckbett</button>
+        <button
+          className={previewBackground === "light" ? "active" : ""}
+          onClick={() => setPreviewBackground((current) => current === "dark" ? "light" : "dark")}
+          title="Wechselt nur den Hintergrund der Vorschau. Der Export bleibt unverändert."
+        >Hintergrund: {previewBackground === "dark" ? "Schwarz" : "Weiß"}</button>
         <button onClick={() => setCameraRevision((current) => current + 1)}>Kamera zurücksetzen</button>
       </div>
       <Canvas key={cameraRevision} camera={{ position: [modelSize * 0.9, modelSize * 0.85, modelSize * 1.35], fov: 42 }} dpr={[1, 2]}>
-        <color attach="background" args={["#0b0e13"]} />
+        <color attach="background" args={[previewBackground === "dark" ? "#0b0e13" : "#F4F5F2"]} />
         <ambientLight intensity={materialView === "light" ? 0.45 : 1.5} />
         <directionalLight position={[60, 100, 80]} intensity={3.2} />
         <directionalLight position={[-50, 35, -60]} intensity={1.1} color="#b6d7ff" />
@@ -968,7 +974,7 @@ function ReliefPreview({ result }: { result: NonNullable<ReliefResult> }) {
               : <meshStandardMaterial color={materialView === "white" ? "#F5F3EA" : materialView === "black" ? "#17191D" : materialView === "gold" ? "#D7A827" : color} roughness={materialView === "gold" ? 0.24 : materialView === "black" ? 0.82 : 0.62} metalness={materialView === "gold" ? 0.68 : 0.05} side={THREE.DoubleSide} />}
           </mesh>
         ))}
-        {showGrid && <gridHelper args={[modelSize * 1.6, 18, "#2e3944", "#1b222b"]} />}
+        {showGrid && <gridHelper args={[modelSize * 1.6, 18, previewBackground === "dark" ? "#2e3944" : "#89939D", previewBackground === "dark" ? "#1b222b" : "#CDD2D6"]} />}
         <OrbitControls makeDefault autoRotate={autoRotate} autoRotateSpeed={1.6} target={[0, result.options.baseMm + result.options.reliefMm / 2, 0]} minDistance={modelSize * 0.65} maxDistance={modelSize * 3} enableDamping />
       </Canvas>
     </div>

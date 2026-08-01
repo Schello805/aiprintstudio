@@ -97,6 +97,11 @@ Lichtansicht der 3D-Vorschau erleichtert die Kontrolle vor dem Export.
 Die 3D-Vorschau kann zwischen Originalfarben, weißem oder schwarzem PLA, Gold
 Silk, Lithophan-Licht, Normalen und Drahtgitter wechseln. Druckbett,
 automatische Drehung und Kamera lassen sich direkt in der Vorschau steuern.
+Der Hintergrund lässt sich unabhängig vom Export zwischen Schwarz und Weiß
+umschalten, damit sowohl helle als auch dunkle Motive klar erkennbar bleiben.
+Bei freigestellten Wortmarken bleiben Buchstabeninnenräume offen; die
+Farbzuordnung wertet nur Motivpixel aus und übernimmt nicht versehentlich den
+weißen Bildhintergrund als Schriftfarbe.
 Nach der Berechnung kann das Quellbild außerdem mit der tatsächlich verwendeten
 Höhenkarte verglichen werden.
 

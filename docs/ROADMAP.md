@@ -1,6 +1,6 @@
 # Roadmap
 
-## Aktueller Stand 0.28.0
+## Aktueller Stand 0.29.0
 
 - Bild zu 3D mit Kontur-, Höhenkarten- und lokaler KI-Tiefe
 - Schrift zu 3D mit gemeinsamem Relief- und AMS-Workflow
@@ -41,6 +41,9 @@
   250.000 Dreiecken oder 25 MB pro STL-/3MF-Datei
 - getrennte Mindestbreitenbehandlung: Schrift wird druckgerecht verstärkt,
   Wappenkonturen werden nicht mehr zu einem Brim erweitert
+- loch-erhaltende Mindestbreitenkorrektur für Wortmarken sowie motivbasierte
+  Farbmessung ohne weißen Bildhintergrund
+- frei umschaltbarer schwarzer oder weißer Hintergrund in der 3D-Vorschau
 
 ## Verbindliche Qualitäts-To-dos
 

@@ -209,6 +209,17 @@ describe("relief mesh", () => {
     expect(assignments).toEqual([0]);
   });
 
+  it("ignores white background pixels when assigning a thin wordmark color", () => {
+    const rgba = Buffer.from([
+      255, 255, 255, 255, 68, 96, 125, 255,
+      255, 255, 255, 255, 255, 255, 255, 255
+    ]);
+    const assignments = reliefInternals.buildColorCellAssignments(
+      rgba, [true], 2, 2, ["#FFFFFF", "#445F7D"], [false, true, false, false]
+    );
+    expect(assignments).toEqual([1]);
+  });
+
   it("writes separate colored objects and materials into a 3MF", async () => {
     const first = reliefInternals.buildWatertightHeightMesh(2, 2, 10, 10, [2, 2, 2, 2]);
     const second = reliefInternals.buildWatertightHeightMesh(2, 2, 10, 10, [3, 3, 3, 3]);
@@ -753,6 +764,18 @@ describe("relief mesh", () => {
     expect(mask[20 * width + 2]).toBe(false);
     expect(mask[37 * width + 20]).toBe(false);
     expect(mask[20 * width + 20]).toBe(true);
+  });
+
+  it("keeps enclosed letter counters open while widening thin wordmarks", () => {
+    const width = 9, height = 9;
+    const mask = Array(width * height).fill(false) as boolean[];
+    for (let y = 2; y <= 6; y += 1) for (let x = 2; x <= 6; x += 1) {
+      if (x === 2 || x === 6 || y === 2 || y === 6) mask[y * width + x] = true;
+    }
+    const expanded = reliefInternals.expandPixelMaskPreservingHoles(mask, width, height, 2);
+    expect(expanded[4 * width + 4]).toBe(false);
+    expect(expanded[4 * width + 3]).toBe(false);
+    expect(expanded[4 * width + 1]).toBe(true);
   });
 
   it("does not raise a radial vignette behind a logo", () => {
