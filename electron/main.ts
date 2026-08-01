@@ -81,6 +81,18 @@ async function appendAi3dLog(entry: Record<string, unknown>): Promise<string> {
   return path;
 }
 
+async function appendReliefLog(entry: Record<string, unknown>): Promise<string> {
+  const logDirectory = app.getPath("logs");
+  await mkdir(logDirectory, { recursive: true });
+  const path = join(logDirectory, "relief.log");
+  await appendFile(path, `${JSON.stringify(entry)}\n`, "utf8");
+  return path;
+}
+
+function recoveryPath(): string {
+  return join(app.getPath("userData"), "studio-recovery.json");
+}
+
 function isNewerVersion(candidate: string, current: string): boolean {
   const candidateParts = candidate.split(".").map(Number);
   const currentParts = current.split(".").map(Number);
@@ -691,6 +703,46 @@ app.whenReady().then(async () => {
     project.source.path = restoredPath;
     return project;
   });
+  ipcMain.handle("recovery:save", async (_event, project: unknown) => {
+    const serialized = JSON.stringify(project);
+    if (serialized.length > 35 * 1024 * 1024) throw new Error("Der Wiederherstellungsstand ist größer als 35 MB.");
+    const parsed = JSON.parse(serialized) as { schemaVersion?: number; source?: { name?: string }; settings?: unknown; tool?: string };
+    if (parsed.schemaVersion !== 1 || !parsed.source?.name || !parsed.settings || !["image", "text", "lithophane"].includes(parsed.tool ?? "")) {
+      throw new Error("Der Wiederherstellungsstand ist unvollständig.");
+    }
+    await mkdir(dirname(recoveryPath()), { recursive: true });
+    const temporary = `${recoveryPath()}.tmp`;
+    await writeFile(temporary, serialized, "utf8");
+    await rename(temporary, recoveryPath());
+  });
+  ipcMain.handle("recovery:get", async () => {
+    if (!existsSync(recoveryPath())) return null;
+    try {
+      const bytes = await readFile(recoveryPath());
+      if (!bytes.length || bytes.length > 35 * 1024 * 1024) return null;
+      const project = JSON.parse(bytes.toString("utf8")) as {
+        schemaVersion?: number; savedAt?: string; source?: { name?: string; dataUrl?: string; path?: string }; settings?: unknown; tool?: string;
+      };
+      if (project.schemaVersion !== 1 || !project.source?.name || !project.settings || !["image", "text", "lithophane"].includes(project.tool ?? "")) return null;
+      const match = /^data:image\/[a-z+.-]+;base64,([A-Za-z0-9+/=]+)$/.exec(project.source.dataUrl ?? "");
+      if (!match) return null;
+      const directory = join(app.getPath("temp"), "AI Print Studio Recovery");
+      await mkdir(directory, { recursive: true });
+      const extension = project.source.dataUrl?.startsWith("data:image/png") ? "png" : "jpg";
+      const restoredPath = join(directory, `recovery-${Date.now()}.${extension}`);
+      await writeFile(restoredPath, Buffer.from(match[1], "base64"));
+      project.source.path = restoredPath;
+      return project;
+    } catch {
+      return null;
+    }
+  });
+  ipcMain.handle("recovery:clear", async () => rm(recoveryPath(), { force: true }));
+  ipcMain.handle("diagnostics:showLogs", async () => {
+    const directory = app.getPath("logs");
+    await mkdir(directory, { recursive: true });
+    return shell.openPath(directory);
+  });
   ipcMain.handle("text:createImage", async (_event, options: TextImageOptions) => {
     const { png, text, width, height } = await renderTextImage(options);
     const directory = join(app.getPath("temp"), "AI Print Studio Text");
@@ -856,7 +908,13 @@ app.whenReady().then(async () => {
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unbekannter Exportfehler";
-      throw new Error(`Die Relief-Vorschau konnte nicht erstellt werden: ${message}`);
+      const diagnosticId = `RELIEF-${Date.now().toString(36).toUpperCase()}`;
+      await appendReliefLog({
+        timestamp: new Date().toISOString(), id: diagnosticId, event: "failed",
+        mode: options.processingMode ?? "auto", profile: options.profile ?? "balanced",
+        imageExtension: extname(imagePath).toLowerCase(), technicalCause: technicalError(error)
+      }).catch(() => undefined);
+      throw new Error(`Die Relief-Vorschau konnte nicht erstellt werden: ${message} Diagnose-ID: ${diagnosticId}`);
     } finally {
       if (reliefJobs.get(jobId) === job) reliefJobs.delete(jobId);
       await job.worker?.terminate();

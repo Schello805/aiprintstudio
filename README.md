@@ -185,6 +185,12 @@ Vorschaudateien werden nicht zum Download angeboten. Versionierte
 Golden-Master-Motive für Wappen und Schriftlogos schützen bereits erreichte
 Exportqualität vor unbeabsichtigten Regressionen.
 
+Der aktuelle Studio-Stand wird automatisch und ausschließlich lokal
+wiederhergestellt. Bei einem Neustart bleiben Quelle, Werkzeug, Maße, Modus und
+Farben erhalten. Relief-Fehler erhalten eine Diagnose-ID; der zugehörige lokale
+Logordner lässt sich direkt aus der Fehlermeldung öffnen. Bilder und vollständige
+Dateipfade werden nicht in das Diagnose-Log geschrieben.
+
 Nach der Erstellung bleiben Original und 3D-Vorschau beim Scrollen sichtbar.
 Der Druckscore steht direkt unter der Vorschau, sodass Einstellungen und
 Ergebnis ohne Springen miteinander verglichen werden können.

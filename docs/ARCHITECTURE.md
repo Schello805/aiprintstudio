@@ -85,6 +85,20 @@ Tests vergleichen neben Geometrie- und Konturwerten auch die SHA-256-Prüfsumme
 des binären STL. Unbeabsichtigte Änderungen an der Exportgeometrie werden damit
 vor einem Release sichtbar.
 
+Meshbereinigung, Topologieprüfung und Konturmetrik liegen in einem separaten
+Qualitätsmodul. Die eigentliche Reliefpipeline erhält dadurch nur validierte
+Qualitätsergebnisse und bleibt unabhängig von UI und Dateidialogen.
+
+Der Renderer speichert den aktuellen Studio-Eingabestand verzögert über eine
+enge IPC-Methode. Der Hauptprozess schreibt atomar zunächst eine temporäre
+Datei und ersetzt anschließend den letzten Wiederherstellungsstand. Nach einem
+Neustart wird das eingebettete Quellbild wieder in einen lokalen temporären
+Pfad materialisiert. Fertige Exportdateien werden bewusst nicht dupliziert.
+
+Relieffehler erhalten eine lokale Diagnose-ID. Das Log enthält Zeitpunkt,
+Verarbeitungsmodus, Profil, Dateiendung und technische Ursache, aber weder das
+Bild noch seinen Pfad. Eine Übertragung findet nicht statt.
+
 Bei explizit ausgewähltem **Wappen & Emblem** wird die Außenkontur des
 Tragkörpers unabhängig von den inneren Farb- und Höhenflächen aufgebaut. Jede
 binäre Farbmaske wird mit Marching Squares (`d3-contour`) in geschlossene

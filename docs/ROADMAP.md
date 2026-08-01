@@ -1,6 +1,6 @@
 # Roadmap
 
-## Aktueller Stand 0.26.0
+## Aktueller Stand 0.27.0
 
 - Bild zu 3D mit Kontur-, Höhenkarten- und lokaler KI-Tiefe
 - Schrift zu 3D mit gemeinsamem Relief- und AMS-Workflow
@@ -29,17 +29,25 @@
   Dateien werden nicht angeboten
 - messbare Konturqualität als zusätzliches Kriterium der lokalen
   Variantenoptimierung
+- eigenständiges Mesh-Qualitätsmodul statt vermischter Prüfungen in der
+  Relief-Erzeugung
+- automatischer lokaler Wiederherstellungsstand für Quelle, Werkzeug,
+  Abmessungen, Modus und Farben
+- datensparsame lokale Relief-Diagnose mit Diagnose-ID und direkt erreichbarem
+  Logordner
+- Release-Smoke-Test für Bundle-Version, arm64-Binary, Signatur,
+  Electron-Laufzeit und mitgelieferte Core-ML-Ressourcen
 
 ## Verbindliche Qualitäts-To-dos
 
 - [ ] Wappen-, Schrift-, Foto-/Tiefen- und Prompt-Pipeline technisch stärker
   trennen und mit eigenen Ein-/Ausgabeverträgen absichern
-- [ ] Release-Gate um einen installierten App-Smoke-Test sowie stichprobenartige
-  externe Slicer-Imports der Golden-Master-Dateien erweitern
-- [ ] datensparsame, ausdrücklich zustimmungspflichtige Absturzberichte mit
-  verständlicher lokaler Diagnose ergänzen
-- [ ] Wiederherstellung nach Abbruch oder App-Neustart für lange Berechnungen
-  vervollständigen
+- [ ] Release-Gate zusätzlich um stichprobenartige externe Slicer-Imports der
+  Golden-Master-Dateien erweitern; der gepackte App-Smoke-Test ist umgesetzt
+- [ ] optionale, ausdrücklich zustimmungspflichtige Übermittlung von
+  Absturzberichten ergänzen; die verständliche lokale Diagnose ist umgesetzt
+- [ ] Berechnungen nach einem Neustart an einem Zwischenschritt fortsetzen; der
+  vollständige Studio-Eingabestand wird bereits automatisch wiederhergestellt
 - [ ] Developer-ID-Signatur und Apple-Notarisierung vor einer öffentlichen
   Verkaufs- oder Testversion verbindlich machen
 - [ ] strenge Selbstüberschneidungsprüfung für sehr komplexe Meshes ergänzen

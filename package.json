@@ -1,6 +1,6 @@
 {
   "name": "ai-print-studio",
-  "version": "0.26.0",
+  "version": "0.27.0",
   "description": "Lokale Bild-zu-3D-Desktop-App für Apple Silicon",
   "author": "Michael Schellenberger",
   "license": "SEE LICENSE IN LICENSE.md",
@@ -16,6 +16,7 @@
     "build:depth-worker": "zsh scripts/build-depth-worker.sh",
     "build:dmg-background": "node scripts/build-dmg-background.mjs",
     "smoke:depth-worker": "node scripts/smoke-depth-worker.mjs",
+    "smoke:release": "node scripts/smoke-release.mjs",
     "dist": "npm run build && npm run build:depth-worker && npm run build:dmg-background && electron-builder --mac dmg --publish never",
     "revision": "node scripts/revision.mjs"
   },

@@ -133,6 +133,7 @@ export function App() {
   const [busy, setBusy] = useState(false);
   const [reliefProgress, setReliefProgress] = useState({ phase: "Vorbereiten", detail: "Die lokale 3D-Engine wird gestartet …", progress: 0 });
   const activeReliefJob = useRef<string | null>(null);
+  const recoveryLoaded = useRef(false);
   const [result, setResult] = useState<ReliefResult>(null);
   const [uploadStatus, setUploadStatus] = useState<string | null>(null);
   const [raiseLightAreas, setRaiseLightAreas] = useState(false);
@@ -164,6 +165,19 @@ export function App() {
 
   useEffect(() => {
     void window.desktop?.getVersion().then(setVersion);
+  }, []);
+
+  useEffect(() => {
+    if (!window.desktop) return;
+    void window.desktop.getRecovery()
+      .then((stored) => {
+        recoveryLoaded.current = true;
+        const project = stored as StudioProject | null;
+        if (project?.schemaVersion === 1 && project.source) {
+          applyProject(project, "Letzten Studio-Stand automatisch wiederhergestellt.");
+        }
+      })
+      .catch(() => { recoveryLoaded.current = true; });
   }, []);
 
   useEffect(() => {
@@ -413,6 +427,40 @@ export function App() {
     };
   }
 
+  useEffect(() => {
+    if (!recoveryLoaded.current || !file || !window.desktop) return;
+    const timer = window.setTimeout(() => {
+      const project: StudioProject | null = studioTool === "prompt" || studioTool === "home" ? null : {
+        schemaVersion: 1,
+        savedAt: new Date().toISOString(),
+        source: file,
+        tool: studioTool,
+        settings: {
+          widthMm, baseMm, reliefMm, smoothing, detail, processingMode, profile, raiseLightAreas,
+          multicolorEnabled, colorCount, sourceColors, colors, sideColorIndex,
+          includeLogoBackground, optimizeForStandardNozzle, reduceTo250kTriangles,
+          productShape, borderMm, holeDiameterMm, curveAngle
+        }
+      };
+      if (project) void window.desktop?.saveRecovery(project).catch(() => undefined);
+    }, 800);
+    return () => window.clearTimeout(timer);
+  }, [file, studioTool, widthMm, baseMm, reliefMm, smoothing, detail, processingMode, profile, raiseLightAreas, multicolorEnabled, colorCount, sourceColors, colors, sideColorIndex, includeLogoBackground, optimizeForStandardNozzle, reduceTo250kTriangles, productShape, borderMm, holeDiameterMm, curveAngle]);
+
+  function applyProject(loaded: StudioProject, message: string) {
+    const settings = loaded.settings;
+    setView("studio"); setStudioTool(loaded.tool); setFile(loaded.source); setPreview(loaded.source.dataUrl);
+    setWidthMm(settings.widthMm); setBaseMm(settings.baseMm); setReliefMm(settings.reliefMm);
+    setSmoothing(settings.smoothing); setDetail(settings.detail); setProcessingMode(settings.processingMode);
+    setProfile(settings.profile); setRaiseLightAreas(settings.raiseLightAreas);
+    setMulticolorEnabled(settings.multicolorEnabled); setColorCount(settings.colorCount);
+    setSourceColors(settings.sourceColors); setColors(settings.colors); setSideColorIndex(settings.sideColorIndex);
+    setIncludeLogoBackground(settings.includeLogoBackground);
+    setProductShape(settings.productShape ?? "source"); setBorderMm(settings.borderMm ?? 0);
+    setHoleDiameterMm(settings.holeDiameterMm ?? 0); setCurveAngle(settings.curveAngle ?? 0);
+    setResult(null); setFileError(null); setUploadStatus(message);
+  }
+
   async function saveProject() {
     const project = currentProject();
     if (!project || !window.desktop) return;
@@ -429,17 +477,7 @@ export function App() {
     try {
       const loaded = await window.desktop.openProject() as StudioProject | null;
       if (!loaded?.source || loaded.schemaVersion !== 1) return;
-      const settings = loaded.settings;
-      setView("studio"); setStudioTool(loaded.tool); setFile(loaded.source); setPreview(loaded.source.dataUrl);
-      setWidthMm(settings.widthMm); setBaseMm(settings.baseMm); setReliefMm(settings.reliefMm);
-      setSmoothing(settings.smoothing); setDetail(settings.detail); setProcessingMode(settings.processingMode);
-      setProfile(settings.profile); setRaiseLightAreas(settings.raiseLightAreas);
-      setMulticolorEnabled(settings.multicolorEnabled); setColorCount(settings.colorCount);
-      setSourceColors(settings.sourceColors); setColors(settings.colors); setSideColorIndex(settings.sideColorIndex);
-      setIncludeLogoBackground(settings.includeLogoBackground);
-      setProductShape(settings.productShape ?? "source"); setBorderMm(settings.borderMm ?? 0);
-      setHoleDiameterMm(settings.holeDiameterMm ?? 0); setCurveAngle(settings.curveAngle ?? 0);
-      setResult(null); setFileError(null); setUploadStatus("Projekt vollständig wiederhergestellt.");
+      applyProject(loaded, "Projekt vollständig wiederhergestellt.");
     } catch (error) {
       setFileError(error instanceof Error ? error.message : "Das Projekt konnte nicht geöffnet werden.");
     }
@@ -463,6 +501,7 @@ export function App() {
     setFile(null);
     setPreview(null);
     setResult(null);
+    void window.desktop?.clearRecovery().catch(() => undefined);
   }
 
   if (legalPage) {
@@ -571,7 +610,7 @@ export function App() {
               </div>
               {result && <ReliefPreview result={result} />}
             </div>
-            {fileError && <div className="error-banner" role="alert"><strong>Verarbeitung fehlgeschlagen</strong><span>{fileError}</span><button onClick={() => setFileError(null)} aria-label="Fehlermeldung schließen"><X /></button></div>}
+            {fileError && <div className="error-banner" role="alert"><strong>Verarbeitung fehlgeschlagen</strong><span>{fileError}</span><button className="diagnostic-log-button" onClick={() => void window.desktop?.showDiagnosticLogs()}>Lokale Diagnose</button><button onClick={() => setFileError(null)} aria-label="Fehlermeldung schließen"><X /></button></div>}
             {uploadStatus && !fileError && <div className="upload-status"><CheckCircle2 /> {uploadStatus}</div>}
             {busy && (
               <div className="progress-card relief-progress-card">
@@ -779,7 +818,8 @@ function InfoView({ version }: { version: string }) {
         <div>
           <div className="info-heading"><span>04</span><div><h3>Datenschutz</h3><p>Klare Trennung zwischen lokalen und externen Vorgängen.</p></div></div>
           <ul className="info-checklist">
-            <li><CheckCircle2 /> Kein Benutzerkonto und keine Werbe- oder Analyse-Tracker</li>
+          <li><CheckCircle2 /> Kein Benutzerkonto und keine Werbe- oder Analyse-Tracker</li>
+          <li><CheckCircle2 /> Automatische Wiederherstellung und Diagnose-Logs ausschließlich lokal</li>
             <li><CheckCircle2 /> Bilder, Meshes, Höhenkarten und Exporte bleiben lokal</li>
             <li><CheckCircle2 /> OpenAI nur nach bewusst gestarteter Prompt-zu-3D-Aktion</li>
           <li><CheckCircle2 /> Keine externen 3D-Modellgewichte oder nachgeladenen KI-Worker</li>

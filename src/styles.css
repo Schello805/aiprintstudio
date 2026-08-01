@@ -340,6 +340,7 @@ h1,h2,h3 { font-family:Manrope, sans-serif; margin:0; }
 .error-banner span { color:#cf9298; font-size:10px; line-height:1.5; }
 .error-banner button { position:absolute; right:10px; top:10px; border:0; background:transparent; color:#b67d83; cursor:pointer; }
 .error-banner button svg { width:15px; }
+.error-banner .diagnostic-log-button { position:static; align-self:flex-start; margin-top:5px; padding:7px 10px; border:1px solid #754047; border-radius:8px; color:#ffd7d7; background:#291619; font-size:9px; font-weight:800; }
 .upload-status { margin-top:12px; display:flex; align-items:center; justify-content:center; gap:7px; color:#96bd82; font-size:10px; }
 .upload-status svg { width:14px; }
 .print-checks { display:flex; flex-wrap:wrap; gap:5px; margin-top:7px; }

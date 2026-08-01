@@ -34,6 +34,10 @@ interface Window {
     } | null>;
     saveProject: (project: unknown) => Promise<string | null>;
     openProject: () => Promise<unknown | null>;
+    saveRecovery: (project: unknown) => Promise<void>;
+    getRecovery: () => Promise<unknown | null>;
+    clearRecovery: () => Promise<void>;
+    showDiagnosticLogs: () => Promise<string>;
     createTextImage: (options: {
       text: string;
       fontFamily: string;
