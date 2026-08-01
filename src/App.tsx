@@ -225,9 +225,10 @@ export function App() {
   useEffect(() => {
     if (!preview) return;
     let active = true;
-    void detectPalette(preview, colorCount)
+    void detectPalette(preview)
       .then((palette) => {
         if (!active) return;
+        setColorCount(palette.length);
         setSourceColors(palette);
         setColors(palette);
         setColorMapping(palette.map((_, index) => index));
@@ -235,12 +236,15 @@ export function App() {
       })
       .catch(() => {
         if (!active) return;
-        setSourceColors((current) => resizePalette(current, colorCount));
-        setColors((current) => resizePalette(current, colorCount));
-        setColorMapping(Array.from({ length: colorCount }, (_, index) => index));
+        const fallback = ["#111827", "#F5F5F4", "#22C55E", "#F59E0B"];
+        setColorCount(fallback.length);
+        setSourceColors(fallback);
+        setColors(fallback);
+        setColorMapping(fallback.map((_, index) => index));
+        setSideColorIndex(0);
       });
     return () => { active = false; };
-  }, [preview, colorCount]);
+  }, [preview]);
 
   async function selectFile(targetTool: Exclude<StudioTool, "home" | "text" | "prompt"> = "image") {
     setFileError(null);
@@ -287,7 +291,7 @@ export function App() {
     setTextDialogOpen(false);
   }
 
-  async function generateRelief(repair = false, mappingOverride = colorMapping) {
+  async function generateRelief(repair = false) {
     if (!file) return;
     const jobId = crypto.randomUUID();
     activeReliefJob.current = jobId;
@@ -326,7 +330,7 @@ export function App() {
         minimumFeatureMm: minimumFeatureForMode(effectiveMode, file.suggestedProfile, repair || optimizeForStandardNozzle),
         sourceColors: multicolorEnabled ? sourceColors : [],
         colors: multicolorEnabled ? colors : [],
-        colorMapping: multicolorEnabled ? mappingOverride : [],
+        colorMapping: multicolorEnabled ? colorMapping : [],
         sideColorIndex: multicolorEnabled ? sideColorIndex : 0,
         outputMode: studioTool === "lithophane" ? "lithophane" : "relief",
         shape: productShape,
@@ -425,12 +429,6 @@ export function App() {
     if (!window.confirm("Modell lokal optimieren?\n\nDie App vergleicht mehrere Glättungsvarianten, verstärkt zu feine Details für eine 0,4-mm-Düse und behält das aktuell gewählte Verfahren bei.")) return;
     setBaseMm((current) => Math.max(1.6, current));
     await generateRelief(true);
-  }
-
-  function cycleColorRegion(sourceIndex: number) {
-    const next = colorMapping.map((target, index) => index === sourceIndex ? (target + 1) % colors.length : target);
-    setColorMapping(next);
-    setUploadStatus("Farbzuordnung geändert – passe bei Bedarf weitere Flächen an und klicke danach auf „Modell aktualisieren“.");
   }
 
   function currentProject(): StudioProject | null {
@@ -717,65 +715,19 @@ export function App() {
                     </button>
                     {multicolorEnabled && (
                       <div className="color-setup">
-                        <label className="color-setting-label">
-                          <span>ANZAHL FARBEN</span>
-                          <SettingTooltip text={"Reduziert das Bild auf die gewählte Zahl druckbarer Filamentfarben.\nBeispiel: 4 Farben entsprechen einem vollständig belegten AMS."} />
-                          <select value={colorCount} onChange={(event) => {
-                            const count = Number(event.target.value);
-                            setColorCount(count);
-                            setSideColorIndex((current) => Math.min(current, count - 1));
-                            setSourceColors((current) => resizePalette(current, count));
-                            setColors((current) => resizePalette(current, count));
-                            setColorMapping(Array.from({ length: count }, (_, index) => index));
-                          }}>
-                            {Array.from({ length: 7 }, (_, index) => index + 2).map((count) => <option key={count} value={count}>{count} Farben</option>)}
-                          </select>
-                        </label>
-                        <div className="color-swatches">
+                        <div className="automatic-color-heading">
+                          <div><strong>Farben automatisch erkannt</strong><span>{colorCount} Druckfarben · dunklste Farbe automatisch für Seiten und Tragkörper</span></div>
+                          <SettingTooltip text={"Die App erkennt Farbanzahl, Motivfarben und die geeignete dunkle Farbe für Seiten und Tragkörper automatisch. Eine manuelle Korrektur ist nicht nötig.\nBeispiel: Rot, Weiß, Schwarz und Gelb werden direkt passenden 3MF-Materialien zugeordnet."} />
+                        </div>
+                        <div className="color-swatches read-only" aria-label="Automatisch erkannte Druckfarben">
                           {colors.map((color, index) => (
-                            // Der Key darf nicht den veränderlichen Farbwert
-                            // enthalten. Sonst ersetzt React das native
-                            // Farbfeld bei jeder Auswahl und macOS schließt
-                            // seine Farbpalette sofort wieder.
-                            <label className="color-swatch" key={index}>
-                              <input
-                                type="color"
-                                value={color}
-                                onChange={(event) => setColors((current) => current.map((entry, colorIndex) => colorIndex === index ? event.target.value.toUpperCase() : entry))}
-                              />
+                            <div className="color-swatch" key={index}>
+                              <span className="detected-color" style={{ background: color }} />
                               <span><strong>AMS {index + 1}</strong><small>{sourceColors[index]} → {color}</small></span>
-                            </label>
+                              {index === sideColorIndex && <small className="carrier-badge">Seiten</small>}
+                            </div>
                           ))}
                         </div>
-                        <div className="color-region-mapping" aria-label="Erkannte Motivflächen zuordnen">
-                          <div className="color-region-heading">
-                            <span>ERKANNTE MOTIVFLÄCHEN</span>
-                            <SettingTooltip text={"Zeigt, wie viel Modelloberfläche zu jeder erkannten Bildfarbe gehört. Ein Klick ordnet die Fläche dem nächsten AMS-Platz zu. Das Modell wird erst auf deinen ausdrücklichen Klick aktualisiert.\nBeispiel: Eine fälschlich weiße Schrift lässt sich dem blauen Filament zuweisen; anschließend klickst du einmal auf „Modell aktualisieren“."} />
-                          </div>
-                          <div className="color-region-list">
-                            {sourceColors.map((sourceColor, sourceIndex) => {
-                              const targetIndex = colorMapping[sourceIndex] ?? sourceIndex;
-                              const measured = result?.colorRegions.find((region) => region.sourceColor.toUpperCase() === sourceColor.toUpperCase());
-                              return (
-                                <button type="button" className="color-region-card" key={`${sourceColor}-${sourceIndex}`} onClick={() => cycleColorRegion(sourceIndex)} disabled={busy} title="Klicken, um diese Motivfläche dem nächsten AMS-Platz zuzuordnen">
-                                  <span className="region-source" style={{ background: sourceColor }} />
-                                  <span><strong>{measured ? `${measured.coveragePercent.toFixed(1).replace(".", ",")} %` : "wird ermittelt"}</strong><small>{sourceColor}</small></span>
-                                  <ChevronRight />
-                                  <span className="region-target" style={{ background: colors[targetIndex] }} />
-                                  <span><strong>AMS {targetIndex + 1}</strong><small>{colors[targetIndex]}</small></span>
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-                        <label className="side-color-select color-setting-label">
-                          <span>SEITEN & TRAGKÖRPER</span>
-                          <SettingTooltip text={"Bestimmt die einheitliche Farbe aller Seitenflächen und der inneren Tragstruktur.\nBeispiel: Schwarz erzeugt saubere dunkle Seiten unter den farbigen Oberflächen."} />
-                          <select value={sideColorIndex} onChange={(event) => setSideColorIndex(Number(event.target.value))}>
-                            {colors.map((color, index) => <option value={index} key={index}>AMS {index + 1} · {color}</option>)}
-                          </select>
-                        </label>
-                        <p>Die Oberseiten erhalten die erkannten Farben. Alle Seitenflächen und der Tragkörper werden einheitlich mit der hier gewählten Farbe gedruckt.</p>
                       </div>
                     )}
                   </div>}
@@ -1125,7 +1077,7 @@ function SlicerAnalysisCard({ result }: { result: NonNullable<ReliefResult> }) {
   );
 }
 
-async function detectPalette(dataUrl: string, colorCount: number): Promise<string[]> {
+async function detectPalette(dataUrl: string): Promise<string[]> {
   const image = new Image();
   await new Promise<void>((resolve, reject) => {
     image.onload = () => resolve();
@@ -1139,12 +1091,14 @@ async function detectPalette(dataUrl: string, colorCount: number): Promise<strin
   const context = canvas.getContext("2d", { willReadFrequently: true });
   if (!context) return [];
   context.drawImage(image, 0, 0, canvas.width, canvas.height);
-  return extractColorPalette(context.getImageData(0, 0, canvas.width, canvas.height).data, colorCount);
-}
-
-function resizePalette(colors: string[], count: number): string[] {
-  const defaults = ["#111827", "#F5F5F4", "#22C55E", "#F59E0B", "#3B82F6", "#EF4444", "#A855F7", "#FDE047"];
-  return Array.from({ length: count }, (_, index) => colors[index] ?? defaults[index % defaults.length]);
+  const detected = extractColorPalette(context.getImageData(0, 0, canvas.width, canvas.height).data, 4);
+  // Sehr ähnliche Cluster sind meist Kantenglättung oder ein Verlauf und
+  // keine eigene druckbare Filamentfarbe. Die App reduziert sie automatisch,
+  // ohne den Nutzer mit einer Farbanzahl-Auswahl zu belasten.
+  return detected.filter((color, index, palette) => index === 0 || palette.slice(0, index).every((existing) => {
+    const rgb = [color, existing].map((entry) => [1, 3, 5].map((offset) => Number.parseInt(entry.slice(offset, offset + 2), 16)));
+    return Math.hypot(rgb[0][0] - rgb[1][0], rgb[0][1] - rgb[1][1], rgb[0][2] - rgb[1][2]) >= 32;
+  })).slice(0, 4);
 }
 
 function darkestColorIndex(colors: string[]): number {

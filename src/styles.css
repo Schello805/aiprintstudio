@@ -244,7 +244,11 @@ h1,h2,h3 { font-family:Manrope, sans-serif; margin:0; }
 .toggle-track>span { width:11px; height:11px; display:block; border-radius:50%; background:#77818e; transition:.2s; }
 .multicolor-panel.active .toggle-track { border-color:#5a8148; background:#20301c; }
 .multicolor-panel.active .toggle-track>span { margin-left:14px; background:#a5f36d; }
-.color-setup { display:grid; grid-template-columns:145px 1fr; gap:9px 12px; padding:11px 12px 12px; border-top:1px solid #283426; }
+.color-setup { display:grid; grid-template-columns:1fr; gap:9px; padding:11px 12px 12px; border-top:1px solid #283426; }
+.automatic-color-heading { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.automatic-color-heading>div { display:flex; flex-direction:column; gap:2px; }
+.automatic-color-heading strong { color:#dce7d8; font-size:10px; }
+.automatic-color-heading span { color:#82917d; font-size:8px; }
 .color-setup>label>span { display:block; color:#758071; font-size:8px; font-weight:700; letter-spacing:.1em; margin-bottom:5px; }
 .color-setting-label { position:relative; padding-right:22px; }
 .color-setting-label>.tooltip-trigger { position:absolute; top:-4px; right:0; }
@@ -252,7 +256,9 @@ h1,h2,h3 { font-family:Manrope, sans-serif; margin:0; }
 .color-setting-label .setting-tooltip::after { left:8px; transform:none; }
 .color-setup select { width:100%; border:1px solid #34402f; border-radius:8px; background:#0a0e0b; color:#dce4d8; padding:8px; font-size:10px; }
 .color-swatches { display:grid; grid-template-columns:repeat(4,minmax(90px,1fr)); gap:6px; }
-.color-swatch { min-width:0; display:flex; align-items:center; gap:7px; padding:6px; border:1px solid #313b31; border-radius:8px; background:#111711; cursor:pointer; }
+.color-swatch { min-width:0; display:flex; align-items:center; gap:7px; padding:6px; border:1px solid #313b31; border-radius:8px; background:#111711; }
+.detected-color { width:27px; height:27px; flex:0 0 27px; border:1px solid #ffffff35; border-radius:5px; box-shadow:inset 0 0 0 1px #0005; }
+.carrier-badge { margin-left:auto; border:1px solid #4f6f43; border-radius:99px; color:#bdf49e!important; padding:3px 5px; background:#172116; }
 .color-swatch input { width:27px; height:27px; flex:0 0 27px; border:0; padding:0; background:transparent; cursor:pointer; }
 .color-swatch span,.color-swatch strong,.color-swatch small { display:block; min-width:0; }
 .color-swatch strong { color:#d5ddd1; font-size:9px; }
