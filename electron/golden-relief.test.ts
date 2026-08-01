@@ -29,6 +29,9 @@ describe("golden relief exports", () => {
         expect(result.geometryValidation.valid).toBe(true);
         expect(result.geometryValidation.stats.invalidTriangles).toBe(0);
         expect(result.contourQuality.score).toBeGreaterThanOrEqual(60);
+        if (fixture.name === "emblem") {
+          expect(result.printability.checks.find((check) => check.label === "Übergänge")?.status).toBe("ok");
+        }
         expect(result.triangleCount).toBeGreaterThan(100);
         expect(createHash("sha256").update(stl).digest("hex")).toMatchSnapshot();
         expect({ triangles: result.triangleCount, contour: result.contourQuality.score }).toMatchSnapshot();

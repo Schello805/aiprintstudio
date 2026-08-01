@@ -25,6 +25,7 @@ export async function inspectSlicerCompatibility(
   const itemCount = [...model.matchAll(/<item\b/g)].length;
   const componentCount = [...model.matchAll(/<component\b/g)].length;
   const materialCount = [...model.matchAll(/<base\b/g)].length;
+  const triangleMaterials = new Set([...model.matchAll(/<triangle\b[^>]*\bp1="([0-9]+)"/g)].map((match) => match[1])).size;
   const checks = {
     validStl: { label: "STL-Struktur", passed: stlValidation.valid, detail: stlValidation.errors.join(" ") || "Binäre STL ist vollständig." },
     valid3mf: { label: "3MF-Struktur", passed: threeMfValidation.valid, detail: threeMfValidation.errors.join(" ") || "3MF-Archiv und Modellbeziehungen sind vollständig." },
@@ -36,7 +37,7 @@ export async function inspectSlicerCompatibility(
         && bounds.minimumZ >= -0.001,
       detail: `${bounds.width.toFixed(2)} × ${bounds.height.toFixed(2)} mm; Unterseite Z=${bounds.minimumZ.toFixed(3)} mm.`
     },
-    assembly: { label: "Zusammengehöriges Modell", passed: itemCount === 1 && (expected.colorCount < 2 || componentCount >= expected.colorCount), detail: `${itemCount} Build-Objekt, ${componentCount} verbundene Farbteile.` },
+    assembly: { label: "Zusammengehöriges Modell", passed: itemCount === 1 && (expected.colorCount < 2 || componentCount >= expected.colorCount || triangleMaterials >= expected.colorCount), detail: `${itemCount} Build-Objekt, ${triangleMaterials} direkt zugewiesene Materialien.` },
     colors: { label: "Materialfarben", passed: expected.colorCount < 2 || materialCount >= expected.colorCount, detail: `${materialCount} eingebettete 3MF-Materialfarben.` },
     bambuMetadata: { label: "Bambu-/Orca-Metadaten", passed: /filament_colour/.test(projectSettings) && /AI Print Studio/.test(metadata + projectSettings), detail: "Filamentfarben und neutrales AI-Print-Studio-Profil sind vorhanden." }
   };

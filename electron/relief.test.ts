@@ -258,7 +258,7 @@ describe("relief mesh", () => {
     expect(assignments).toEqual([1]);
   });
 
-  it("writes separate colored objects and materials into a 3MF", async () => {
+  it("writes one shared mesh with per-triangle materials into a 3MF", async () => {
     const first = reliefInternals.buildWatertightHeightMesh(2, 2, 10, 10, [2, 2, 2, 2]);
     const second = reliefInternals.buildWatertightHeightMesh(2, 2, 10, 10, [3, 3, 3, 3]);
     const archive = await reliefInternals.encodeThreeMf(first, [
@@ -273,14 +273,14 @@ describe("relief mesh", () => {
     expect(model).toContain('displaycolor="#0000FFFF"');
     expect(model).toContain('pid="2" p1="0"');
     expect(model).toContain('pid="2" p1="1"');
-    expect(model?.match(/<object /g)).toHaveLength(3);
-    expect(model?.match(/<component /g)).toHaveLength(2);
+    expect(model?.match(/<object /g)).toHaveLength(1);
+    expect(model?.match(/<component /g)).toBeNull();
     expect(model?.match(/<item /g)).toHaveLength(1);
     expect(model).toContain('name="AI Print Studio"');
     expect(model).toContain('<metadata name="Title">AI Print Studio</metadata>');
     expect(modelSettings).toContain('<metadata key="name" value="AI Print Studio"/>');
     expect(modelSettings).toContain('<metadata key="extruder" value="1"/>');
-    expect(modelSettings).toContain('<metadata key="extruder" value="2"/>');
+    expect(modelSettings).not.toContain('<part ');
     expect(JSON.parse(projectSettings ?? "{}").filament_colour).toEqual(["#FF0000", "#0000FF"]);
     expect(JSON.parse(projectSettings ?? "{}").filament_settings_id).toEqual(["AI Print Studio", "AI Print Studio"]);
     expect(JSON.parse(projectSettings ?? "{}").print_settings_id).toBe("AI Print Studio");

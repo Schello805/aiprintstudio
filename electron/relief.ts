@@ -266,8 +266,16 @@ export async function createRelief(
     ? rawLevels
     : smoothHeightField(rawLevels, gridWidth, gridHeight, activeMode === "vector" ? Math.min(1, options.smoothing) : options.smoothing);
   onProgress({ phase: "Höhen berechnen", detail: "Reliefstufen und Oberflächen werden aufgebaut …", progress: 38 });
+  // Bei Wappen sind die semantisch erkannten Ebenen wichtiger als künstliche
+  // Kantenschärfe. Ein Faktor über 1 erzeugte beidseits schwarzer Konturen
+  // Überhöhungen; im mehrfarbigen 3MF wurden daraus getrennte, gezackte
+  // Farbkörper. STL, Vorschau und 3MF verwenden nun dieselbe begrenzte
+  // Detailmischung.
+  const detailBlend = pipeline.kind === "emblem"
+    ? Math.min(0.75, options.detail * profile.detail)
+    : options.detail * profile.detail;
   const detailed = smoothed.map((value, index) =>
-    Math.max(0, Math.min(1, value + (rawLevels[index] - value) * options.detail * profile.detail))
+    Math.max(0, Math.min(1, value + (rawLevels[index] - value) * detailBlend))
   );
   const profiledLevels = profile.steps ? detailed.map((value) => Math.round(value * profile.steps) / profile.steps) : detailed;
   // Eine flache Konturzone verhindert, dass antialiaste Randpixel als hohe,
@@ -434,7 +442,7 @@ function validateOptions(options: ReliefOptions): ReliefOptions {
   if (options.reliefMm < 0.5 || options.reliefMm > 20) throw new Error("Die Reliefhöhe muss zwischen 0,5 und 20 mm liegen.");
   if (options.resolution < 32 || options.resolution > 512) throw new Error("Die Auflösung muss zwischen 32 und 512 liegen.");
   if (!["fast", "balanced", "fine", "photo", "logo"].includes(options.profile)) throw new Error("Unbekanntes Qualitätsprofil.");
-  if (options.smoothing < 0 || options.smoothing > 5) throw new Error("Die Glättung muss zwischen 0 und 5 liegen.");
+  if (options.smoothing < 0 || options.smoothing > 8) throw new Error("Die Glättung muss zwischen 0 und 8 liegen.");
   if (options.detail < 0 || options.detail > 2) throw new Error("Die Detailstärke muss zwischen 0 und 2 liegen.");
   if (!["auto", "vector", "wordmark", "depth", "height"].includes(options.processingMode)) throw new Error("Unbekannter Verarbeitungsmodus.");
   if (!["auto", "emblem", "wordmark", "text", "photo", "lithophane"].includes(options.pipelineKind)) throw new Error("Unbekannte Verarbeitungspipeline.");
@@ -1603,50 +1611,45 @@ async function encodeThreeMf(mesh: Mesh, coloredMeshes?: ColoredMesh[]): Promise
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
 <Relationship Target="/3D/3dmodel.model" Id="rel0" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/>
 </Relationships>`);
-  const parts = coloredMeshes?.length ? coloredMeshes : [{ mesh, color: "#B7F58A", name: "Relief" }];
+  const parts = (coloredMeshes?.length ? coloredMeshes : [{ mesh, color: "#B7F58A", name: "Relief" }])
+    .map((part) => ({ ...part, mesh: removeInvalidTriangles(part.mesh) }));
   const materialXml = parts.map(({ color, name }) =>
     `<base name="${escapeXml(name)}" displaycolor="${color.toUpperCase()}FF"/>`
   ).join("");
-  const objectsXml = parts.map(({ mesh: part, name }, index) => {
-    const vertexXml = part.vertices.map(([x, y, z]) => `<vertex x="${x.toFixed(5)}" y="${y.toFixed(5)}" z="${z.toFixed(5)}"/>`).join("");
-    // Einige Slicer (insbesondere Anycubic Slicer Next) übernehmen das
-    // Standardmaterial eines Komponentenobjekts nicht in ein Assembly. Die
-    // redundante Dreieckszuweisung ist Teil des 3MF-Core-Standards und hält die
-    // Farben auch dann eindeutig, wenn der Objektstandard ignoriert wird.
-    const triangleXml = part.triangles.map(([v1, v2, v3]) =>
-      `<triangle v1="${v1}" v2="${v2}" v3="${v3}" pid="2" p1="${index}"/>`
-    ).join("");
-    return `<object id="${index + 3}" type="model" name="${escapeXml(name)}" pid="2" pindex="${index}"><mesh><vertices>${vertexXml}</vertices><triangles>${triangleXml}</triangles></mesh></object>`;
-  }).join("");
-  const assemblyId = parts.length + 3;
-  const componentsXml = parts.map((_, index) => `<component objectid="${index + 3}"/>`).join("");
-  const assemblyXml = `<object id="${assemblyId}" type="model" name="AI Print Studio"><components>${componentsXml}</components></object>`;
-  const buildXml = `<item objectid="${assemblyId}"/>`;
+  // Ein einziges Core-3MF-Mesh ist kompatibler als ein Komponenten-Assembly:
+  // Geometrie, Maßstab und Lage entsprechen damit exakt der zusammengeführten
+  // STL. Die Farbe bleibt über pid/p1 pro Dreieck eindeutig erhalten.
+  const vertices: Vec3[] = [];
+  const coloredTriangles: Array<{ triangle: Triangle; material: number }> = [];
+  for (let material = 0; material < parts.length; material += 1) {
+    const offset = vertices.length;
+    // Kein Spread bei großen Meshes: Schon etwa 100.000 Eckpunkte können
+    // sonst die maximale JavaScript-Argumentzahl überschreiten.
+    for (const vertex of parts[material].mesh.vertices) vertices.push(vertex);
+    for (const [a, b, c] of parts[material].mesh.triangles) {
+      coloredTriangles.push({ triangle: [a + offset, b + offset, c + offset], material });
+    }
+  }
+  const vertexXml = vertices.map(([x, y, z]) => `<vertex x="${x.toFixed(5)}" y="${y.toFixed(5)}" z="${z.toFixed(5)}"/>`).join("");
+  const triangleXml = coloredTriangles.map(({ triangle: [v1, v2, v3], material }) =>
+    `<triangle v1="${v1}" v2="${v2}" v3="${v3}" pid="2" p1="${material}"/>`
+  ).join("");
+  const objectId = 3;
+  const objectXml = `<object id="${objectId}" type="model" name="AI Print Studio"><mesh><vertices>${vertexXml}</vertices><triangles>${triangleXml}</triangles></mesh></object>`;
+  const buildXml = `<item objectid="${objectId}"/>`;
   zip.folder("3D")?.file("3dmodel.model", `<?xml version="1.0" encoding="UTF-8"?>
 <model unit="millimeter" xml:lang="de-DE" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
 <metadata name="Title">AI Print Studio</metadata>
 <metadata name="Description">Druckoptimiert für eine 0,4-mm-Düse</metadata>
-<resources><basematerials id="2">${materialXml}</basematerials>${objectsXml}${assemblyXml}</resources>
+<resources><basematerials id="2">${materialXml}</basematerials>${objectXml}</resources>
 <build>${buildXml}</build></model>`);
   if (coloredMeshes?.length) {
-    const partSettings = parts.map(({ name }, index) => `
-    <part id="${index + 3}" subtype="normal_part">
-      <metadata key="name" value="${escapeXml(name)}"/>
-      <metadata key="matrix" value="1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1"/>
-      <metadata key="source_file" value="AI Print Studio"/>
-      <metadata key="source_object_id" value="${assemblyId}"/>
-      <metadata key="source_volume_id" value="${index}"/>
-      <metadata key="source_offset_x" value="0"/>
-      <metadata key="source_offset_y" value="0"/>
-      <metadata key="source_offset_z" value="0"/>
-      <metadata key="extruder" value="${index + 1}"/>
-      <mesh_stat edges_fixed="0" degenerate_facets="0" facets_removed="0" facets_reversed="0" backwards_edges="0"/>
-    </part>`).join("");
     zip.folder("Metadata")?.file("model_settings.config", `<?xml version="1.0" encoding="UTF-8"?>
 <config>
-  <object id="${assemblyId}">
+  <object id="${objectId}">
     <metadata key="name" value="AI Print Studio"/>
-    <metadata key="extruder" value="1"/>${partSettings}
+    <metadata key="extruder" value="1"/>
+    <mesh_stat edges_fixed="0" degenerate_facets="0" facets_removed="0" facets_reversed="0" backwards_edges="0"/>
   </object>
 </config>`);
     zip.folder("Metadata")?.file("project_settings.config", JSON.stringify({

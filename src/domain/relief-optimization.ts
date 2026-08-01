@@ -13,14 +13,14 @@ export function smoothingCandidates(mode: ReliefProcessingMode): number[] {
   // Mehrwert; Kontur- und Höhenverfahren lassen sich dagegen günstig lokal
   // vergleichen.
   if (mode === "depth") return [3];
-  if (mode === "vector") return [3, 4, 5];
+  if (mode === "vector") return [5, 6];
   return [1, 2, 3, 4];
 }
 
 export function automaticSmoothingForMode(mode: ReliefProcessingMode): number {
   if (mode === "depth") return 3;
   if (mode === "height") return 2;
-  if (mode === "vector") return 5;
+  if (mode === "vector") return 6;
   if (mode === "wordmark") return 2;
   return 2;
 }

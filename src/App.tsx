@@ -376,7 +376,7 @@ export function App() {
             detail: automaticDetail
           });
           if (!candidate) throw new Error("Vorgang abgebrochen");
-          const recommended = effectiveMode === "vector" ? 5 : automaticSmoothing;
+          const recommended = effectiveMode === "vector" ? 6 : automaticSmoothing;
           const rank = rankReliefCandidate({
             score: candidate.printability.score,
             contourScore: candidate.contourQuality.score,
