@@ -617,7 +617,7 @@ function buildSmoothedBoundaryPositions(
   widthMm: number,
   heightMm: number,
   cells: boolean[],
-  passes = 20
+  passes = 36
 ): Map<number, readonly [number, number]> {
   const cellAt = (x: number, y: number) => x >= 0 && y >= 0 && x < columns - 1 && y < rows - 1 && cells[y * (columns - 1) + x];
   const gridIndex = (x: number, y: number) => y * columns + x;
@@ -649,10 +649,10 @@ function buildSmoothedBoundaryPositions(
       if (!points.length) continue;
       const averageX = points.reduce((sum, point) => sum + point[0], 0) / points.length;
       const averageY = points.reduce((sum, point) => sum + point[1], 0) / points.length;
-      // Viele sanfte Durchgänge entfernen die periodischen Rasterzähne einer
-      // Pixelkontur zuverlässiger als wenige aggressive Schritte. Dadurch
-      // bleiben große Formen erhalten, während gerade und runde Außenkanten
-      // im Export nicht mehr wellenförmig verlaufen.
+      // Viele sanfte Durchgänge entfernen auch die längerwelligen Reste einer
+      // Pixelkontur. 20 Durchgänge glätteten einzelne Rasterzähne, ließen an
+      // großen Wappenkurven aber noch ein periodisches Wellenmuster stehen.
+      // 36 Durchgänge bleiben formtreu und beruhigen diese Außenkante.
       next.set(index, [current[0] * 0.62 + averageX * 0.38, current[1] * 0.62 + averageY * 0.38]);
     }
     positions = next;

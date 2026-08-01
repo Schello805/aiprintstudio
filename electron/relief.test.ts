@@ -434,7 +434,27 @@ describe("relief mesh", () => {
     const average = radii.reduce((sum, radius) => sum + radius, 0) / radii.length;
     const deviation = Math.sqrt(radii.reduce((sum, radius) => sum + (radius - average) ** 2, 0) / radii.length);
     expect(radii.length).toBeGreaterThan(40);
-    expect(deviation).toBeLessThan(0.1);
+    expect(deviation).toBeLessThan(0.06);
+  });
+
+  it("removes periodic ripples from a broad shield curve", () => {
+    const columns = 81, rows = 81;
+    const cells = Array((columns - 1) * (rows - 1)).fill(false) as boolean[];
+    for (let y = 0; y < rows - 1; y += 1) for (let x = 0; x < columns - 1; x += 1) {
+      const nx = (x + 0.5) / (columns - 1) - 0.5;
+      const ny = (y + 0.5) / (rows - 1) - 0.5;
+      cells[y * (columns - 1) + x] = ny < -0.05
+        ? Math.abs(nx) <= 0.43
+        : Math.abs(nx) <= Math.max(0, 0.43 * (1 - ((ny + 0.05) / 0.55) ** 1.65));
+    }
+    const positions = reliefInternals.buildSmoothedBoundaryPositions(columns, rows, 100, 100, cells);
+    const lowerCurve = [...positions.entries()]
+      .filter(([index]) => Math.floor(index / columns) > rows * 0.58)
+      .map(([, point]) => point)
+      .sort((a, b) => a[1] - b[1]);
+    const localSteps = lowerCurve.slice(1).map((point, index) => Math.hypot(point[0] - lowerCurve[index][0], point[1] - lowerCurve[index][1]));
+    const averageStep = localSteps.reduce((sum, step) => sum + step, 0) / localSteps.length;
+    expect(Math.max(...localSteps)).toBeLessThan(averageStep * 2.1);
   });
 
   it("keeps preview boundary vertices on the base instead of creating spikes", () => {
