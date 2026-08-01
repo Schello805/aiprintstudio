@@ -19,6 +19,14 @@ export type ReliefOptions = {
   sourceColors: string[];
   colors: string[];
   sideColorIndex: number;
+  outputMode: "relief" | "lithophane" | "stamp";
+  shape: "source" | "rectangle" | "rounded" | "circle" | "shield" | "hexagon" | "heart";
+  borderMm: number;
+  borderHeightMm: number;
+  holeDiameterMm: number;
+  holePosition: "top-left" | "top-center" | "top-right";
+  curveAngle: number;
+  mirrorX: boolean;
 };
 
 export type PrintabilityReport = {
@@ -80,7 +88,15 @@ const safeDefaults: ReliefOptions = {
   minimumFeatureMm: 0.8,
   sourceColors: [],
   colors: [],
-  sideColorIndex: 0
+  sideColorIndex: 0,
+  outputMode: "relief",
+  shape: "source",
+  borderMm: 0,
+  borderHeightMm: 0,
+  holeDiameterMm: 0,
+  holePosition: "top-center",
+  curveAngle: 0,
+  mirrorX: false
 };
 
 export async function createRelief(
@@ -144,20 +160,31 @@ export async function createRelief(
   // Pixelartefakte entfernt anschließend bereits die strengere Zellmaske.
   const preserveThinVectorStrokes = options.profile === "logo"
     || options.processingMode === "vector";
-  const subjectPixels = useWordmarkMask
+  let subjectPixels = useWordmarkMask
     ? options.includeBackground
       ? Array(gridWidth * gridHeight).fill(true) as boolean[]
       : wordmarkPixels as boolean[]
     : hasTransparency || preserveThinVectorStrokes
       ? rawSubjectPixels
     : cleanSubjectPixelMask(rawSubjectPixels, gridWidth, gridHeight);
+  if (options.outputMode === "lithophane" || options.outputMode === "stamp" || options.shape !== "source") {
+    const shape = options.shape === "source" ? "rectangle" : options.shape;
+    subjectPixels = buildProductPixelMask(
+      gridWidth, gridHeight, options.widthMm, options.widthMm * gridHeight / gridWidth,
+      shape, options.holeDiameterMm, options.holePosition
+    );
+  }
   // Ein einzelner belegter Eckpunkt erzeugte rund um transparente Schrift
   // eine zusätzliche Zellreihe, die im Slicer wie ein Brim wirkte. Mindestens
   // zwei belegte Eckpunkte halten die Kontur eng am tatsächlichen Schriftzug.
   const cellMask = buildCellMask(subjectPixels, gridWidth, gridHeight, 2);
   const heightMm = options.widthMm * gridHeight / gridWidth;
   const profile = profileSettings(options.profile);
-  const activeMode = options.processingMode === "wordmark"
+  const activeMode = options.outputMode === "lithophane"
+    ? "height"
+    : options.outputMode === "stamp"
+    ? "vector"
+    : options.processingMode === "wordmark"
     ? "vector"
     : options.processingMode === "auto"
     ? (options.profile === "logo" ? "vector" : "height")
@@ -225,6 +252,9 @@ export async function createRelief(
     ? profiledLevels
     : applyBoundaryRim(profiledLevels, subjectPixels, gridWidth, gridHeight, options.profile === "logo" ? 2 : 1);
   const heights = levels.map((value) => options.baseMm + value * options.reliefMm);
+  if (options.borderMm > 0 && options.borderHeightMm > 0) {
+    applyRaisedBorder(heights, cellMask, gridWidth, gridHeight, options.widthMm, options.borderMm, options.baseMm + options.borderHeightMm);
+  }
   if (flatVectorSurface) {
     // Ein freigestelltes Textlogo besitzt keine durchgehende Grundplatte.
     // Deshalb entspricht seine gesamte Körperhöhe exakt der eingestellten
@@ -243,13 +273,14 @@ export async function createRelief(
       }
     }
   }
-  const steppedLogo = Boolean(useWordmarkMask && options.includeBackground && wordmarkPixels);
+  const steppedLogo = Boolean((useWordmarkMask || options.outputMode === "stamp") && options.includeBackground && wordmarkPixels);
   const steppedCellHeights = steppedLogo
     ? flattenSteppedOuterRim(buildBinaryCellHeights(heights, gridWidth, gridHeight), cellMask, gridWidth, gridHeight)
     : undefined;
-  const mesh = steppedCellHeights
+  const planarMesh = steppedCellHeights
     ? buildSteppedCellMesh(gridWidth, gridHeight, options.widthMm, heightMm, steppedCellHeights, cellMask)
     : buildWatertightHeightMesh(gridWidth, gridHeight, options.widthMm, heightMm, heights, cellMask);
+  const mesh = transformProductMesh(planarMesh, options.widthMm, options.curveAngle, options.mirrorX);
   onProgress({ phase: "Mesh schließen", detail: "Boden, Außenwände und Übergänge werden verbunden …", progress: 58 });
   const detectedColorAssignments = options.colors.length
     ? buildColorCellAssignments(
@@ -265,12 +296,13 @@ export async function createRelief(
     detail: colorAssignments ? "AMS-Flächen und einfarbiger Tragkörper werden erzeugt …" : "Das vollständige 3D-Mesh wird vorbereitet …",
     progress: 70
   });
-  const preview = buildPreviewSurface(
+  const planarPreview = buildPreviewSurface(
     gridWidth, gridHeight, options.widthMm, heightMm, heights, cellMask,
     colorAssignments, options.colors, options.sideColorIndex,
     flatVectorSurface || (useWordmarkMask && options.includeBackground),
     steppedLogo
   );
+  const preview = transformProductPreview(planarPreview, options.widthMm, options.curveAngle, options.mirrorX);
   const printability = analysePrintability(mesh, heights, options, cellMask, gridWidth);
   const layerHeightMm = 0.2;
   const maximumHeight = heights.reduce((maximum, height) => Math.max(maximum, height), 0);
@@ -288,8 +320,9 @@ export async function createRelief(
 
   await mkdir(outputDirectory, { recursive: true });
   const stem = sanitizeStem(basename(imagePath, extname(imagePath)));
-  const stlPath = join(outputDirectory, `${stem}-relief.stl`);
-  const threeMfPath = join(outputDirectory, `${stem}-relief.3mf`);
+  const suffix = options.outputMode === "lithophane" ? "lithophan" : options.outputMode === "stamp" ? "stempel" : "relief";
+  const stlPath = join(outputDirectory, `${stem}-${suffix}.stl`);
+  const threeMfPath = join(outputDirectory, `${stem}-${suffix}.3mf`);
   const coloredMeshes = colorAssignments
     ? buildColoredMeshes(
       gridWidth, gridHeight, options.widthMm, heightMm, heights, cellMask,
@@ -299,9 +332,9 @@ export async function createRelief(
   const exportMesh = orientMeshLikePreview(mesh, heightMm);
   const exportColoredMeshes = coloredMeshes?.map((part) => ({
     ...part,
-    mesh: orientMeshLikePreview(part.mesh, heightMm)
+    mesh: orientMeshLikePreview(transformProductMesh(part.mesh, options.widthMm, options.curveAngle, options.mirrorX), heightMm)
   }));
-  onProgress({ phase: "Exportieren", detail: "STL und 3MF werden sicher auf deinem Mac gespeichert …", progress: 93 });
+  onProgress({ phase: "Exportieren", detail: "STL und 3MF werden für die Vorschau vorbereitet …", progress: 93 });
   await Promise.all([
     writeFile(stlPath, encodeBinaryStl(exportMesh, "AI Print Studio Relief")),
     writeFile(threeMfPath, await encodeThreeMf(exportMesh, exportColoredMeshes))
@@ -344,7 +377,112 @@ function validateOptions(options: ReliefOptions): ReliefOptions {
   if (!Number.isInteger(options.sideColorIndex) || options.sideColorIndex < 0 || (options.colors.length && options.sideColorIndex >= options.colors.length)) {
     throw new Error("Die gewählte Seitenfarbe ist ungültig.");
   }
+  if (!["relief", "lithophane", "stamp"].includes(options.outputMode)) throw new Error("Unbekannte Ausgabeart.");
+  if (!["source", "rectangle", "rounded", "circle", "shield", "hexagon", "heart"].includes(options.shape)) throw new Error("Unbekannte Außenform.");
+  if (options.borderMm < 0 || options.borderMm > 12 || options.borderHeightMm < 0 || options.borderHeightMm > 20) throw new Error("Die Rahmeneinstellung ist ungültig.");
+  if (options.holeDiameterMm < 0 || options.holeDiameterMm > 20) throw new Error("Der Lochdurchmesser ist ungültig.");
+  if (!["top-left", "top-center", "top-right"].includes(options.holePosition)) throw new Error("Die Lochposition ist ungültig.");
+  if (options.curveAngle < 0 || options.curveAngle > 90) throw new Error("Die Wölbung muss zwischen 0 und 90 Grad liegen.");
+  if (typeof options.mirrorX !== "boolean") throw new Error("Die Spiegelung ist ungültig.");
   return options;
+}
+
+function buildProductPixelMask(
+  width: number,
+  height: number,
+  widthMm: number,
+  heightMm: number,
+  shape: ReliefOptions["shape"],
+  holeDiameterMm: number,
+  holePosition: ReliefOptions["holePosition"]
+): boolean[] {
+  const holeRadius = holeDiameterMm / 2;
+  const holeY = Math.max(holeRadius * 1.7, 3);
+  const holeX = holePosition === "top-left"
+    ? Math.max(holeRadius * 1.7, 3)
+    : holePosition === "top-right"
+      ? widthMm - Math.max(holeRadius * 1.7, 3)
+      : widthMm / 2;
+  return Array.from({ length: width * height }, (_, index) => {
+    const x = index % width, y = Math.floor(index / width);
+    const nx = x / Math.max(1, width - 1) - 0.5;
+    const ny = y / Math.max(1, height - 1) - 0.5;
+    let inside = true;
+    if (shape === "circle") inside = nx * nx + ny * ny <= 0.25;
+    else if (shape === "rounded") {
+      const dx = Math.max(0, Math.abs(nx) - 0.42), dy = Math.max(0, Math.abs(ny) - 0.42);
+      inside = Math.abs(nx) <= 0.5 && Math.abs(ny) <= 0.5 && dx * dx + dy * dy <= 0.08 ** 2;
+    } else if (shape === "hexagon") inside = Math.abs(nx) <= 0.47 && Math.abs(nx) * 0.58 + Math.abs(ny) <= 0.5;
+    else if (shape === "shield") inside = ny < -0.05
+      ? Math.abs(nx) <= 0.47
+      : Math.abs(nx) <= Math.max(0, 0.47 * (1 - ((ny + 0.05) / 0.55) ** 1.6));
+    else if (shape === "heart") {
+      const hx = nx * 2.25, hy = -(ny * 2.25) + 0.18;
+      const a = hx * hx + hy * hy - 1;
+      inside = a * a * a - hx * hx * hy * hy * hy <= 0;
+    }
+    if (!inside || holeRadius <= 0) return inside;
+    const px = x / Math.max(1, width - 1) * widthMm;
+    const py = y / Math.max(1, height - 1) * heightMm;
+    return (px - holeX) ** 2 + (py - holeY) ** 2 > holeRadius ** 2;
+  });
+}
+
+function applyRaisedBorder(
+  heights: number[], cellMask: boolean[], columns: number, rows: number,
+  widthMm: number, borderMm: number, borderHeight: number
+): void {
+  const cellColumns = columns - 1, cellRows = rows - 1;
+  const radius = Math.max(1, Math.ceil(borderMm / (widthMm / cellColumns)));
+  const occupied = (x: number, y: number) => x >= 0 && y >= 0 && x < cellColumns && y < cellRows && cellMask[y * cellColumns + x];
+  for (let y = 0; y < cellRows; y += 1) for (let x = 0; x < cellColumns; x += 1) {
+    if (!occupied(x, y)) continue;
+    let border = false;
+    for (let dy = -radius; dy <= radius && !border; dy += 1) for (let dx = -radius; dx <= radius; dx += 1) {
+      if (dx * dx + dy * dy <= radius * radius && !occupied(x + dx, y + dy)) { border = true; break; }
+    }
+    if (!border) continue;
+    for (const vertex of [y * columns + x, y * columns + x + 1, (y + 1) * columns + x, (y + 1) * columns + x + 1]) {
+      heights[vertex] = Math.max(heights[vertex], borderHeight);
+    }
+  }
+}
+
+function transformProductMesh(mesh: Mesh, widthMm: number, curveAngle: number, mirrorX: boolean): Mesh {
+  const radians = curveAngle * Math.PI / 180;
+  const radius = radians > 1e-6 ? widthMm / radians : 0;
+  return {
+    vertices: mesh.vertices.map(([x, y, z]) => {
+      const centered = (mirrorX ? widthMm - x : x) - widthMm / 2;
+      if (!radius) return [centered + widthMm / 2, y, z] as const;
+      const angle = centered / radius;
+      return [radius * Math.sin(angle) + widthMm / 2, y, z + radius * (1 - Math.cos(angle))] as const;
+    }),
+    triangles: mirrorX ? mesh.triangles.map(([a, b, c]) => [a, c, b] as const) : mesh.triangles.slice()
+  };
+}
+
+function transformProductPreview(
+  preview: ReliefResult["preview"], widthMm: number, curveAngle: number, mirrorX: boolean
+): ReliefResult["preview"] {
+  const radians = curveAngle * Math.PI / 180;
+  const radius = radians > 1e-6 ? widthMm / radians : 0;
+  const positions = preview.positions.slice();
+  for (let index = 0; index < positions.length; index += 3) {
+    const centered = mirrorX ? -positions[index] : positions[index];
+    if (!radius) { positions[index] = centered; continue; }
+    const angle = centered / radius;
+    positions[index] = radius * Math.sin(angle);
+    positions[index + 1] += radius * (1 - Math.cos(angle));
+  }
+  const flip = (indices: number[]) => mirrorX
+    ? indices.flatMap((_, index) => index % 3 === 0 ? [indices[index], indices[index + 2], indices[index + 1]] : [])
+    : indices.slice();
+  return {
+    positions,
+    indices: flip(preview.indices),
+    colorParts: preview.colorParts.map((part) => ({ ...part, indices: flip(part.indices) }))
+  };
 }
 
 function buildVectorLevels(rgba: Buffer, mask: boolean[], width: number, height: number, invert: boolean): number[] {
@@ -1409,5 +1547,6 @@ export const reliefInternals = {
   buildVectorLevels, buildSmoothedBoundaryPositions, buildColorCellAssignments, buildColoredMeshes, mergeMeshes,
   enforceUniformEdgeColor,
   buildWatertightHeightMesh, buildBinaryCellHeights, flattenSteppedOuterRim, buildSteppedCellMesh, buildPreviewSurface, orientMeshLikePreview, encodeBinaryStl, encodeThreeMf,
-  smoothHeightField, analysePrintability, profileSettings
+  smoothHeightField, analysePrintability, profileSettings, buildProductPixelMask, applyRaisedBorder,
+  transformProductMesh, transformProductPreview
 };

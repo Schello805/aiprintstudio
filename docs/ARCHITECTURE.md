@@ -42,7 +42,7 @@ Der Renderer erhält keinen direkten Node.js-, Dateisystem- oder Shell-Zugriff.
 Nur explizit freigegebene IPC-Kommandos werden im Preload-Skript veröffentlicht.
 Netzwerkzugriffe erfolgen ausschließlich im Electron-Hauptprozess.
 
-## Bild-, Schrift- und Reliefpipeline
+## Bild-, Schrift-, Lithophan- und Reliefpipeline
 
 Die Reliefpipeline nimmt ein validiertes Bild, ein Qualitätsprofil und optional
 manuelle Höhen- und Farbkarten entgegen:
@@ -75,6 +75,21 @@ Konturauflösung bei 512 Rasterpunkten.
 Schrift wird zunächst lokal als eng zugeschnittene transparente Vorlage
 gerendert und anschließend durch dieselbe Reliefpipeline verarbeitet. SVG wird
 beim Import sicher gerastert, bevor die Verarbeitung beginnt.
+
+Lithophane und Konturprodukte verwenden dieselbe wasserdichte Meshpipeline,
+ergänzen sie aber vor der Vermaschung um eine definierte Außenmaske. Rechteck,
+abgerundetes Rechteck, Kreis, Wappen, Sechseck und Herz werden aus normierten
+Koordinaten erzeugt; ein optionales Aufhängeloch wird direkt aus der Maske
+ausgespart. Ein Rahmen hebt ausschließlich die äußere Maskenkante an. Die
+Lithophan-Wölbung transformiert Vorschau, STL und 3MF mit derselben
+Zylinderabbildung. Für Stempel wird die X-Spiegelung einschließlich
+Dreiecksorientierung auf alle Exportkörper angewendet.
+
+Die Vorschau besitzt bewusst mehrere Diagnosematerialien. Normalen- und
+Drahtgitteransicht helfen bei Topologieproblemen, neutrale PLA-Materialien bei
+der Formprüfung und die beleuchtete, teiltransparente Ansicht bei Lithophanen.
+Originalbild und erzeugte Höhenkarte bleiben nebeneinander umschaltbar; damit
+ist sichtbar, welche Information tatsächlich in die Geometrie eingeflossen ist.
 
 ## AMS- und 3MF-Aufbau
 
@@ -147,7 +162,8 @@ Metadaten, keine dauerhaften Modelldateien oder veralteten Dateipfade.
 
 ## Erweiterbarkeit
 
-Die Studio-Werkzeuge **Bild zu 3D**, **Schrift zu 3D** und **Prompt zu 3D** sind
+Die Studio-Werkzeuge **Bild zu 3D**, **Schrift zu 3D**, **Foto zu Lithophan**,
+**Stempel & Anhänger** und **Prompt zu 3D** sind
 getrennte Einstiege mit gemeinsam genutzter Vorschau-, Parameter-, Prüf- und
 Exportlogik. Neue Workflows sollen diesen Aufbau beibehalten.
 Benutzerverwaltung, Telemetrie und Serverbetrieb gehören bewusst nicht zur
@@ -155,7 +171,7 @@ lokalen Desktop-Anwendung.
 
 ## Transparenz in der App
 
-Der Hauptmenüpunkt **Über & Technik** erklärt die drei Arbeitswege, die
+Der Hauptmenüpunkt **Über & Technik** erklärt die fünf Arbeitswege, die
 Verarbeitungspipeline, verwendete Frameworks und Modelle sowie Datenschutz und
 fachliche Grenzen. Die Inhalte werden bewusst aus Anwendersicht formuliert,
 damit lokale Verarbeitung und optionale OpenAI-Übertragung unterscheidbar

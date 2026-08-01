@@ -81,6 +81,31 @@ Bis zu sechs Textzeilen werden lokal und eng zugeschnitten gerendert. Schriftart
 Stil und Ausrichtung lassen sich festlegen; anschließend stehen dieselben
 Abmessungs-, Relief- und AMS-Werkzeuge wie bei Bild zu 3D zur Verfügung.
 
+### Foto zu Lithophan
+
+Das Lithophan-Werkzeug übersetzt die Bildhelligkeit direkt in Materialstärke:
+dunkle Bereiche werden dicker, helle Bereiche lassen mehr Licht passieren. Zur
+Auswahl stehen rechteckige, abgerundete, runde, sechseckige, herz- und
+wappenförmige Außenkonturen. Optional erzeugt die App einen erhöhten Rahmen,
+ein mittiges Aufhängeloch und eine gleichmäßige Wölbung bis 90 Grad. Die
+Lichtansicht der 3D-Vorschau erleichtert die Kontrolle vor dem Export.
+
+### Stempel & Anhänger
+
+Klare Logos und Motive werden binär getrennt und als robuste Konturplatte
+aufgebaut. Für Stempel lässt sich das Motiv spiegeln, damit der Abdruck später
+lesbar ist. Für Anhänger stehen dieselben sechs Außenformen sowie ein
+Aufhängeloch zur Verfügung. Die Mindestbreitenoptimierung für eine 0,4-mm-Düse
+bleibt Teil der gemeinsamen Reliefpipeline.
+
+### Vorschau und Diagnose
+
+Die 3D-Vorschau kann zwischen Originalfarben, weißem oder schwarzem PLA, Gold
+Silk, Lithophan-Licht, Normalen und Drahtgitter wechseln. Druckbett,
+automatische Drehung und Kamera lassen sich direkt in der Vorschau steuern.
+Nach der Berechnung kann das Quellbild außerdem mit der tatsächlich verwendeten
+Höhenkarte verglichen werden.
+
 ### Prompt zu 3D
 
 OpenAI wandelt eine Beschreibung in einen streng validierten, strukturierten

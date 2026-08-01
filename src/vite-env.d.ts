@@ -110,6 +110,14 @@ interface Window {
       sourceColors: string[];
       colors: string[];
       sideColorIndex: number;
+      outputMode: "relief" | "lithophane" | "stamp";
+      shape: "source" | "rectangle" | "rounded" | "circle" | "shield" | "hexagon" | "heart";
+      borderMm: number;
+      borderHeightMm: number;
+      holeDiameterMm: number;
+      holePosition: "top-left" | "top-center" | "top-right";
+      curveAngle: number;
+      mirrorX: boolean;
     }) => Promise<{
       stlPath: string;
       threeMfPath: string;
@@ -127,6 +135,14 @@ interface Window {
         sourceColors: string[];
         colors: string[];
         sideColorIndex: number;
+        outputMode: "relief" | "lithophane" | "stamp";
+        shape: "source" | "rectangle" | "rounded" | "circle" | "shield" | "hexagon" | "heart";
+        borderMm: number;
+        borderHeightMm: number;
+        holeDiameterMm: number;
+        holePosition: "top-left" | "top-center" | "top-right";
+        curveAngle: number;
+        mirrorX: boolean;
       };
       printability: { score: number; status: "ready" | "warning" | "critical"; issues: string[]; estimatedVolumeCm3: number; checks: Array<{ label: string; status: "ok" | "warning" | "error"; detail: string }> };
       slicer: { layerHeightMm: number; layerCount: number; estimatedMinutes: number; filamentMeters: number; materialGrams: number; colorChanges: number };

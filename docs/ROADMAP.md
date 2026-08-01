@@ -1,9 +1,15 @@
 # Roadmap
 
-## Aktueller Stand 0.20.1
+## Aktueller Stand 0.23.0
 
 - Bild zu 3D mit Kontur-, Höhenkarten- und lokaler KI-Tiefe
 - Schrift zu 3D mit gemeinsamem Relief- und AMS-Workflow
+- eigener Lithophan-Workflow mit Außenformen, Rahmen, Aufhängeloch, Wölbung
+  und beleuchteter Materialvorschau
+- Stempel- und Anhänger-Workflow mit druckbarer Konturplatte und optionaler
+  Motivspiegelung
+- Vorschau-Diagnose mit PLA-Materialien, Normalen, Drahtgitter, Druckbett,
+  Kamerasteuerung sowie Original-/Höhenkartenvergleich
 - Prompt zu 3D über OpenAI Structured Outputs, iterative Folgeanweisungen,
   lokale 3D-Vorschau, CAD-/STL-Erzeugung sowie gestreamte Phasen- und
   API-Kostenanzeige; Modellwahl zwischen Sol, Terra und Luna

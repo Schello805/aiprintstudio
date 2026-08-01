@@ -98,6 +98,26 @@ describe("relief mesh", () => {
     expect(mesh.triangles.length).toBeGreaterThan(0);
   });
 
+  it("creates product masks for round plates and real hanging holes", () => {
+    const circle = reliefInternals.buildProductPixelMask(21, 21, 100, 100, "circle", 0, "top-center");
+    expect(circle[10 * 21 + 10]).toBe(true);
+    expect(circle[0]).toBe(false);
+    expect(circle[20]).toBe(false);
+    const withHole = reliefInternals.buildProductPixelMask(101, 101, 100, 100, "rectangle", 8, "top-center");
+    expect(withHole[4 * 101 + 50]).toBe(false);
+    expect(withHole[50 * 101 + 50]).toBe(true);
+  });
+
+  it("curves and mirrors a closed mesh without changing its topology", () => {
+    const mesh = reliefInternals.buildWatertightHeightMesh(3, 3, 30, 20, Array(9).fill(3));
+    const curved = reliefInternals.transformProductMesh(mesh, 30, 45, false);
+    expect(curved.triangles).toEqual(mesh.triangles);
+    expect(Math.max(...curved.vertices.map((vertex) => vertex[2]))).toBeGreaterThan(3);
+    const mirrored = reliefInternals.transformProductMesh(mesh, 30, 0, true);
+    expect(mirrored.vertices[0][0]).toBeCloseTo(30 - mesh.vertices[0][0]);
+    expect(mirrored.triangles[0]).toEqual([mesh.triangles[0][0], mesh.triangles[0][2], mesh.triangles[0][1]]);
+  });
+
   it("smooths noise while preserving the field dimensions", () => {
     const values = [0, 0, 0, 0, 1, 0, 0, 0, 0];
     const smoothed = reliefInternals.smoothHeightField(values, 3, 3, 2);
