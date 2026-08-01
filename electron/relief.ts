@@ -318,10 +318,10 @@ export async function createRelief(
   const emblemBoundary = pipeline.kind === "emblem"
     ? buildSmoothedBoundaryPositions(gridWidth, gridHeight, options.widthMm, heightMm, cellMask, 64)
     : undefined;
-  const planarMesh = steppedCellHeights
+  let planarMesh = steppedCellHeights
     ? buildSteppedCellMesh(gridWidth, gridHeight, options.widthMm, heightMm, steppedCellHeights, cellMask)
     : buildWatertightHeightMesh(gridWidth, gridHeight, options.widthMm, heightMm, heights, cellMask, 0, emblemBoundary);
-  const mesh = transformProductMesh(planarMesh, options.widthMm, options.curveAngle, options.mirrorX);
+  let mesh = transformProductMesh(planarMesh, options.widthMm, options.curveAngle, options.mirrorX);
   onProgress({ phase: "Mesh schließen", detail: "Boden, Außenwände und Übergänge werden verbunden …", progress: 58 });
   const detectedColorAssignments = options.colors.length
     ? buildColorCellAssignments(
@@ -336,6 +336,17 @@ export async function createRelief(
   const colorAssignments = mappedColorAssignments
     ? enforceUniformEdgeColor(mappedColorAssignments, cellMask, gridWidth, gridHeight, options.sideColorIndex)
     : undefined;
+  if (pipeline.kind === "emblem" && colorAssignments && !steppedCellHeights) {
+    const compositeBoundary = buildCompositeBoundaryPositions(
+      gridWidth, gridHeight, options.widthMm, heightMm,
+      cellMask, colorAssignments, options.colors.length, emblemBoundary
+    );
+    planarMesh = buildWatertightHeightMesh(
+      gridWidth, gridHeight, options.widthMm, heightMm,
+      heights, cellMask, 0, compositeBoundary
+    );
+    mesh = transformProductMesh(planarMesh, options.widthMm, options.curveAngle, options.mirrorX);
+  }
   const canonicalTriangleMaterials = colorAssignments && options.processingMode === "vector"
     ? assignCanonicalTriangleMaterials(
       planarMesh, colorAssignments, gridWidth, gridHeight,
@@ -748,6 +759,39 @@ function buildSmoothedBoundaryPositions(
     positions = next;
   }
   return positions;
+}
+
+function buildCompositeBoundaryPositions(
+  columns: number,
+  rows: number,
+  widthMm: number,
+  heightMm: number,
+  cellMask: boolean[],
+  assignments: number[],
+  colorCount: number,
+  outerBoundary = buildSmoothedBoundaryPositions(columns, rows, widthMm, heightMm, cellMask, 64)
+): Map<number, readonly [number, number]> {
+  const samples = new Map<number, Array<readonly [number, number]>>();
+  for (let colorIndex = 0; colorIndex < colorCount; colorIndex += 1) {
+    const colorCells = assignments.map((assignment, cell) => cellMask[cell] && assignment === colorIndex);
+    if (!colorCells.some(Boolean)) continue;
+    const boundary = buildSmoothedBoundaryPositions(columns, rows, widthMm, heightMm, colorCells, 14);
+    for (const [index, point] of boundary) {
+      if (outerBoundary.has(index)) continue;
+      const points = samples.get(index) ?? [];
+      points.push(point);
+      samples.set(index, points);
+    }
+  }
+  const result = new Map(outerBoundary);
+  for (const [index, points] of samples) {
+    const x = points.reduce((sum, point) => sum + point[0], 0) / points.length;
+    const y = points.reduce((sum, point) => sum + point[1], 0) / points.length;
+    // Farbgrenzen teilen sich dieselben Meshpunkte. Ihr Mittelwert glättet
+    // beide Seiten identisch und verhindert dadurch Spalten oder Überlappung.
+    result.set(index, [x, y]);
+  }
+  return result;
 }
 
 function profileSettings(profile: ReliefOptions["profile"]) {
@@ -1966,6 +2010,7 @@ export const reliefInternals = {
   buildCellMask, buildSubjectPixelMask, buildWordmarkPixelMask, cleanSubjectPixelMask, applyBoundaryRim,
   expandPixelMask, expandPixelMaskPreservingHoles,
   buildVectorLevels, buildSmoothedBoundaryPositions, buildColorCellAssignments, buildColoredMeshes,
+  buildCompositeBoundaryPositions,
   buildVectorColorMeshes, buildVectorExtrudedMesh, smoothVectorRing, mergeMeshes,
   assignCanonicalTriangleMaterials, buildCanonicalMeshPreview,
   enforceUniformEdgeColor,

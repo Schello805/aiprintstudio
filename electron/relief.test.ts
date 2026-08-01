@@ -615,6 +615,26 @@ describe("relief mesh", () => {
     expect(Math.max(...localSteps)).toBeLessThan(averageStep * 2.1);
   });
 
+  it("smooths internal emblem color boundaries without moving the outer contour", () => {
+    const columns = 17, rows = 17, cellColumns = columns - 1;
+    const cells = Array(cellColumns * (rows - 1)).fill(true) as boolean[];
+    const assignments = cells.map((_, index) => {
+      const x = index % cellColumns, y = Math.floor(index / cellColumns);
+      return x < 7 + (y % 2) ? 0 : 1;
+    });
+    const outer = reliefInternals.buildSmoothedBoundaryPositions(columns, rows, 16, 16, cells, 64);
+    const composite = reliefInternals.buildCompositeBoundaryPositions(
+      columns, rows, 16, 16, cells, assignments, 2, outer
+    );
+    for (const [index, point] of outer) expect(composite.get(index)).toEqual(point);
+    const internal = [...composite.entries()].filter(([index]) => !outer.has(index));
+    expect(internal.length).toBeGreaterThan(0);
+    expect(internal.some(([index, [x, y]]) => {
+      const gridX = index % columns, gridY = Math.floor(index / columns);
+      return Math.abs(x - gridX) > 0.01 || Math.abs(y - gridY) > 0.01;
+    })).toBe(true);
+  });
+
   it("keeps preview boundary vertices on the base instead of creating spikes", () => {
     const cells = [
       false, true, false,
