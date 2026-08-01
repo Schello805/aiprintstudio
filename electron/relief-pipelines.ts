@@ -26,7 +26,9 @@ export function resolveReliefPipeline(input: {
   else kind = "emblem";
 
   const contracts: Record<Exclude<ReliefPipelineKind, "auto">, ReliefPipelineContract> = {
-    emblem: { kind: "emblem", heightMode: "vector", mask: "subject", solidOuterSilhouette: true, preserveThinStrokes: true, flattenMotifSurface: false, minimumSmoothing: 3 },
+    // Wappen brauchen fünf formstabile Konturpasses. Drei ließen in externen
+    // CAD-Importern noch sichtbare Rasterwellen an Schild und Walzen zurück.
+    emblem: { kind: "emblem", heightMode: "vector", mask: "subject", solidOuterSilhouette: true, preserveThinStrokes: true, flattenMotifSurface: false, minimumSmoothing: 5 },
     wordmark: { kind: "wordmark", heightMode: "vector", mask: "wordmark", solidOuterSilhouette: false, preserveThinStrokes: true, flattenMotifSurface: true, minimumSmoothing: 2 },
     text: { kind: "text", heightMode: "vector", mask: "subject", solidOuterSilhouette: false, preserveThinStrokes: true, flattenMotifSurface: true, minimumSmoothing: 2 },
     photo: { kind: "photo", heightMode: input.processingMode === "height" ? "height" : "depth", mask: "full-frame", solidOuterSilhouette: false, preserveThinStrokes: false, flattenMotifSurface: false, minimumSmoothing: 0 },

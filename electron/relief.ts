@@ -10,6 +10,8 @@ import { resolveReliefPipeline, type ReliefPipelineKind } from "./relief-pipelin
 export type { ContourQualityReport, GeometryValidationReport } from "./mesh-quality.js";
 
 export type ReliefOptions = {
+  /** Ursprünglicher Uploadname; temporäre Recovery-Pfade dürfen nie Exportnamen werden. */
+  sourceName: string;
   widthMm: number;
   baseMm: number;
   reliefMm: number;
@@ -87,6 +89,7 @@ type Mesh = { vertices: Vec3[]; triangles: Triangle[] };
 type ColoredMesh = { mesh: Mesh; color: string; name: string };
 
 const safeDefaults: ReliefOptions = {
+  sourceName: "",
   widthMm: 100,
   baseMm: 1.6,
   reliefMm: 4,
@@ -352,7 +355,8 @@ export async function createRelief(
   }).png().toBuffer();
 
   await mkdir(outputDirectory, { recursive: true });
-  const stem = sanitizeStem(basename(imagePath, extname(imagePath)));
+  const namingSource = options.sourceName.trim() || basename(imagePath);
+  const stem = sanitizeStem(basename(namingSource, extname(namingSource)));
   const suffix = options.outputMode === "lithophane" ? "lithophan" : options.outputMode === "stamp" ? "stempel" : "relief";
   const stlPath = join(outputDirectory, `${stem}-${suffix}.stl`);
   const threeMfPath = join(outputDirectory, `${stem}-${suffix}.3mf`);
@@ -424,6 +428,7 @@ export async function createRelief(
 }
 
 function validateOptions(options: ReliefOptions): ReliefOptions {
+  if (typeof options.sourceName !== "string" || options.sourceName.length > 255) throw new Error("Der ursprüngliche Dateiname ist ungültig.");
   if (options.widthMm < 20 || options.widthMm > 300) throw new Error("Die Breite muss zwischen 20 und 300 mm liegen.");
   if (options.baseMm < 0.8 || options.baseMm > 10) throw new Error("Die Grundplatte muss zwischen 0,8 und 10 mm liegen.");
   if (options.reliefMm < 0.5 || options.reliefMm > 20) throw new Error("Die Reliefhöhe muss zwischen 0,5 und 20 mm liegen.");
@@ -1158,8 +1163,11 @@ function smoothVectorRing(source: Array<[number, number]>, smoothing = 2): Array
     }
     ring = next;
   }
-  // Stärken oberhalb von 2 beruhigen die bereits fein unterteilte Kontur,
-  // ohne nochmals die Punkt- und Dreiecksmenge zu verdoppeln.
+  // Stärken oberhalb von 2 beruhigen die bereits fein unterteilte Kontur.
+  // Mehrere kleine Laplace-Schritte entfernen gezielt die kurzen
+  // Links-rechts-Oszillationen des Pixelrasters. Nur mehr Polygone würden
+  // diese Zacken lediglich feiner abbilden und zugleich die Exportgrenze von
+  // 250.000 Dreiecken gefährden.
   for (let pass = 2; pass < Math.round(smoothing); pass += 1) {
     ring = ring.map((current, index) => {
       const previous = ring[(index - 1 + ring.length) % ring.length];

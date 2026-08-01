@@ -18,6 +18,27 @@ function normalForTest(
 }
 
 describe("relief mesh", () => {
+  it("uses the original upload name instead of a temporary recovery path", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "ai-print-recovery-name-test-"));
+    try {
+      const imagePath = join(directory, "recovery-1785594381626.png");
+      await writeFile(imagePath, await sharp(Buffer.from(`
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24">
+          <circle cx="12" cy="12" r="9" fill="#111111"/>
+        </svg>
+      `)).png().toBuffer());
+      const result = await createRelief(imagePath, directory, {
+        sourceName: "Logo Bechhofen.png",
+        widthMm: 40, resolution: 32, processingMode: "vector", pipelineKind: "emblem"
+      });
+      expect(result.stlPath.endsWith("/Logo-Bechhofen-relief.stl")).toBe(true);
+      expect(result.threeMfPath.endsWith("/Logo-Bechhofen-relief.3mf")).toBe(true);
+      expect(result.options.sourceName).toBe("Logo Bechhofen.png");
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
   it("does not grow a one-pixel text edge into a brim cell", () => {
     const isolated = [
       false, false, false,

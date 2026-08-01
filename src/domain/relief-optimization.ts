@@ -12,13 +12,15 @@ export function smoothingCandidates(mode: ReliefProcessingMode): number[] {
   // Tiefenlauf wäre langsam und bringt für die nachgelagerte Glättung keinen
   // Mehrwert; Kontur- und Höhenverfahren lassen sich dagegen günstig lokal
   // vergleichen.
-  return mode === "depth" ? [3] : [1, 2, 3, 4];
+  if (mode === "depth") return [3];
+  if (mode === "vector") return [3, 4, 5];
+  return [1, 2, 3, 4];
 }
 
 export function automaticSmoothingForMode(mode: ReliefProcessingMode): number {
   if (mode === "depth") return 3;
   if (mode === "height") return 2;
-  if (mode === "vector") return 3;
+  if (mode === "vector") return 5;
   if (mode === "wordmark") return 2;
   return 2;
 }

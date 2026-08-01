@@ -10,7 +10,7 @@ describe("local relief optimization", () => {
 
   it("avoids repeating the expensive local depth model", () => {
     expect(smoothingCandidates("depth")).toEqual([3]);
-    expect(smoothingCandidates("vector")).toEqual([1, 2, 3, 4]);
+    expect(smoothingCandidates("vector")).toEqual([3, 4, 5]);
   });
 
   it("never grows an emblem into a brim during automatic optimization", () => {
@@ -19,7 +19,7 @@ describe("local relief optimization", () => {
   });
 
   it("locks normal emblem generation to the proven smooth contour setting", () => {
-    expect(automaticSmoothingForMode("vector")).toBe(3);
+    expect(automaticSmoothingForMode("vector")).toBe(5);
     expect(automaticSmoothingForMode("wordmark")).toBe(2);
   });
 

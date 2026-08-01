@@ -99,6 +99,7 @@ interface Window {
       outputTokens: number;
     }) => void) => () => void;
     createRelief: (jobId: string, imagePath: string, options: {
+      sourceName: string;
       widthMm: number;
       baseMm: number;
       reliefMm: number;
@@ -132,6 +133,7 @@ interface Window {
       widthMm: number;
       heightMm: number;
       options: {
+        sourceName: string;
         widthMm: number; baseMm: number; reliefMm: number; resolution: number; invert: boolean;
         profile: "fast" | "balanced" | "fine" | "photo" | "logo"; smoothing: number; detail: number;
         processingMode: "auto" | "vector" | "wordmark" | "depth" | "height";

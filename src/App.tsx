@@ -331,6 +331,7 @@ export function App() {
                 ? "photo"
                 : "auto";
       const request: Parameters<NonNullable<typeof window.desktop>["createRelief"]>[2] = {
+        sourceName: file.name,
         widthMm, baseMm: studioTool === "lithophane" ? baseMm : 1.6, reliefMm,
         resolution: effectiveResolution,
         invert: false, profile, smoothing: automaticSmoothing, detail: automaticDetail,
@@ -375,7 +376,7 @@ export function App() {
             detail: automaticDetail
           });
           if (!candidate) throw new Error("Vorgang abgebrochen");
-          const recommended = effectiveMode === "vector" ? 3 : automaticSmoothing;
+          const recommended = effectiveMode === "vector" ? 5 : automaticSmoothing;
           const rank = rankReliefCandidate({
             score: candidate.printability.score,
             contourScore: candidate.contourQuality.score,

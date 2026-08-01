@@ -7,7 +7,7 @@ describe("relief pipeline contracts", () => {
     const text = resolveReliefPipeline({ pipelineKind: "text", processingMode: "vector", outputMode: "relief", profile: "logo" });
     const wordmark = resolveReliefPipeline({ pipelineKind: "wordmark", processingMode: "wordmark", outputMode: "relief", profile: "logo" });
     expect(emblem.solidOuterSilhouette).toBe(true);
-    expect(emblem.minimumSmoothing).toBe(3);
+    expect(emblem.minimumSmoothing).toBe(5);
     expect(text.solidOuterSilhouette).toBe(false);
     expect(wordmark.mask).toBe("wordmark");
   });
