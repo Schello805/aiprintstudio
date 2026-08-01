@@ -430,7 +430,7 @@ export function App() {
   function cycleColorRegion(sourceIndex: number) {
     const next = colorMapping.map((target, index) => index === sourceIndex ? (target + 1) % colors.length : target);
     setColorMapping(next);
-    if (result && !busy) void generateRelief(false, next);
+    setUploadStatus("Farbzuordnung geändert – passe bei Bedarf weitere Flächen an und klicke danach auf „Modell aktualisieren“.");
   }
 
   function currentProject(): StudioProject | null {
@@ -750,7 +750,7 @@ export function App() {
                         <div className="color-region-mapping" aria-label="Erkannte Motivflächen zuordnen">
                           <div className="color-region-heading">
                             <span>ERKANNTE MOTIVFLÄCHEN</span>
-                            <SettingTooltip text={"Zeigt, wie viel Modelloberfläche zu jeder erkannten Bildfarbe gehört. Ein Klick ordnet die Fläche dem nächsten AMS-Platz zu und berechnet ein vorhandenes Modell sofort neu.\nBeispiel: Eine fälschlich weiße Schrift lässt sich direkt dem blauen Filament zuweisen."} />
+                            <SettingTooltip text={"Zeigt, wie viel Modelloberfläche zu jeder erkannten Bildfarbe gehört. Ein Klick ordnet die Fläche dem nächsten AMS-Platz zu. Das Modell wird erst auf deinen ausdrücklichen Klick aktualisiert.\nBeispiel: Eine fälschlich weiße Schrift lässt sich dem blauen Filament zuweisen; anschließend klickst du einmal auf „Modell aktualisieren“."} />
                           </div>
                           <div className="color-region-list">
                             {sourceColors.map((sourceColor, sourceIndex) => {
@@ -784,7 +784,7 @@ export function App() {
             </div>
             <div className="action-bar">
               <div><Box size={20} /><div><strong>{file ? file.name : "Noch kein Bild gewählt"}</strong><span>{file ? `${(file.size / 1_048_576).toFixed(1)} MB · ${file.width} × ${file.height} px · bereit` : "Wähle zuerst eine geeignete Aufnahme aus."}</span></div></div>
-              <button className="primary-button" disabled={!file || busy} onClick={() => void generateRelief()}>{busy ? "Modell wird erzeugt …" : "Relief erstellen"} <ChevronRight size={18} /></button>
+              <button className="primary-button" disabled={!file || busy} onClick={() => void generateRelief()}>{busy ? "Modell wird erzeugt …" : result ? "Modell aktualisieren" : "Relief erstellen"} <ChevronRight size={18} /></button>
             </div>
               </>
             )}
