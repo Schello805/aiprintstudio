@@ -282,7 +282,13 @@ export async function createRelief(
   // sägezahnartige Außenwand im Mesh erscheinen.
   const levels = flatVectorSurface
     ? profiledLevels
-    : applyBoundaryRim(profiledLevels, subjectPixels, gridWidth, gridHeight, options.profile === "logo" ? 2 : 1);
+    : applyBoundaryRim(
+      profiledLevels,
+      subjectPixels,
+      gridWidth,
+      gridHeight,
+      pipeline.kind === "emblem" ? 4 : options.profile === "logo" ? 2 : 1
+    );
   const heights = levels.map((value) => options.baseMm + value * options.reliefMm);
   if (options.borderMm > 0 && options.borderHeightMm > 0) {
     applyRaisedBorder(heights, cellMask, gridWidth, gridHeight, options.widthMm, options.borderMm, options.baseMm + options.borderHeightMm);
@@ -309,9 +315,12 @@ export async function createRelief(
   const steppedCellHeights = steppedLogo
     ? flattenSteppedOuterRim(buildBinaryCellHeights(heights, gridWidth, gridHeight), cellMask, gridWidth, gridHeight)
     : undefined;
+  const emblemBoundary = pipeline.kind === "emblem"
+    ? buildSmoothedBoundaryPositions(gridWidth, gridHeight, options.widthMm, heightMm, cellMask, 64)
+    : undefined;
   const planarMesh = steppedCellHeights
     ? buildSteppedCellMesh(gridWidth, gridHeight, options.widthMm, heightMm, steppedCellHeights, cellMask)
-    : buildWatertightHeightMesh(gridWidth, gridHeight, options.widthMm, heightMm, heights, cellMask);
+    : buildWatertightHeightMesh(gridWidth, gridHeight, options.widthMm, heightMm, heights, cellMask, 0, emblemBoundary);
   const mesh = transformProductMesh(planarMesh, options.widthMm, options.curveAngle, options.mirrorX);
   onProgress({ phase: "Mesh schließen", detail: "Boden, Außenwände und Übergänge werden verbunden …", progress: 58 });
   const detectedColorAssignments = options.colors.length
