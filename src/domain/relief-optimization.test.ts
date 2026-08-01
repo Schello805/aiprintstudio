@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mapReliefPassProgress, minimumFeatureForMode, rankReliefCandidate, resolveReliefMode, smoothingCandidates } from "./relief-optimization";
+import { automaticSmoothingForMode, mapReliefPassProgress, minimumFeatureForMode, rankReliefCandidate, resolveReliefMode, smoothingCandidates } from "./relief-optimization";
 
 describe("local relief optimization", () => {
   it("never replaces an explicitly selected emblem with wordmark processing", () => {
@@ -16,6 +16,11 @@ describe("local relief optimization", () => {
   it("never grows an emblem into a brim during automatic optimization", () => {
     expect(minimumFeatureForMode("vector", "logo", true)).toBe(0);
     expect(minimumFeatureForMode("wordmark", "logo", true)).toBe(0.8);
+  });
+
+  it("locks normal emblem generation to the proven smooth contour setting", () => {
+    expect(automaticSmoothingForMode("vector")).toBe(3);
+    expect(automaticSmoothingForMode("wordmark")).toBe(2);
   });
 
   it("prefers a printable candidate before a marginally smaller mesh", () => {

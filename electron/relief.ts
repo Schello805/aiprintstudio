@@ -124,6 +124,11 @@ export async function createRelief(
   onProgress({ phase: "Bild prüfen", detail: "Datei und Abmessungen werden validiert …", progress: 4 });
   const options = validateOptions({ ...safeDefaults, ...requested });
   const pipeline = resolveReliefPipeline(options);
+  // Stabile Qualitätsgrenze pro Pipeline: Ein Wappen darf durch einen alten
+  // Projektstand oder einen neuen Aufrufer nie wieder auf die sichtbar
+  // gezackte Glättung 1 zurückfallen. Dieser Vertrag liegt bewusst in der
+  // Engine und gilt damit identisch für Vorschau, STL und 3MF.
+  options.smoothing = Math.max(options.smoothing, pipeline.minimumSmoothing);
   const metadata = await sharp(imagePath).metadata();
   if (!metadata.width || !metadata.height) throw new Error("Das Bild besitzt keine gültigen Abmessungen.");
 

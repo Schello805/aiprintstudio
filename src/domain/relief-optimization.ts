@@ -15,6 +15,14 @@ export function smoothingCandidates(mode: ReliefProcessingMode): number[] {
   return mode === "depth" ? [3] : [1, 2, 3, 4];
 }
 
+export function automaticSmoothingForMode(mode: ReliefProcessingMode): number {
+  if (mode === "depth") return 3;
+  if (mode === "height") return 2;
+  if (mode === "vector") return 3;
+  if (mode === "wordmark") return 2;
+  return 2;
+}
+
 export function minimumFeatureForMode(mode: ReliefProcessingMode, suggestedProfile: "logo" | "photo", optimize: boolean): number {
   if (!optimize) return 0;
   // Eine Mindestbreite ist für Schriftzüge sinnvoll. Bei Wappen würde dieselbe

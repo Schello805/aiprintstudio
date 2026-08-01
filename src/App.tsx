@@ -28,7 +28,7 @@ import {
 } from "lucide-react";
 import { SettingTooltip } from "./SettingTooltip";
 import { extractColorPalette } from "./domain/color-palette";
-import { mapReliefPassProgress, minimumFeatureForMode, rankReliefCandidate, resolveReliefMode, smoothingCandidates } from "./domain/relief-optimization";
+import { automaticSmoothingForMode, mapReliefPassProgress, minimumFeatureForMode, rankReliefCandidate, resolveReliefMode, smoothingCandidates } from "./domain/relief-optimization";
 import appLogoMark from "../build/icon-mark.png";
 type View = "studio" | "history" | "settings" | "info";
 type StudioTool = "home" | "image" | "text" | "lithophane" | "prompt";
@@ -317,7 +317,7 @@ export function App() {
       const effectiveResolution = effectiveMode === "auto" && file.suggestedProfile === "logo"
         ? 384
         : repair ? Math.min(384, optimalResolution[profile]) : optimalResolution[profile];
-      const automaticSmoothing = effectiveMode === "depth" ? 3 : effectiveMode === "height" ? 2 : 1;
+      const automaticSmoothing = automaticSmoothingForMode(effectiveMode);
       const automaticDetail = effectiveMode === "depth" ? 0.75 : 1;
       const pipelineKind: PipelineKind = studioTool === "text"
         ? "text"
