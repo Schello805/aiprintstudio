@@ -17,4 +17,6 @@ müssen Bild-, Design-, Urheber- und Markenrechte geprüft werden.
 Für die lokale Polygonisierung von Bildmasken verwendet AI Print Studio
 `d3-contour` (ISC). Die Triangulation der geschlossenen Konturen erfolgt über
 `ShapeUtils.triangulateShape` beziehungsweise Earcut aus Three.js (MIT). Die
+robuste Vereinigung der gestapelten Wappen-Volumen verwendet Manifold
+(Apache-2.0). Die Geometrieengine läuft vollständig lokal als WebAssembly.
 Bibliotheken verarbeiten ausschließlich lokale Geometriedaten.

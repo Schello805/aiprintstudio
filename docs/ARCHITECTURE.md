@@ -120,7 +120,8 @@ beim Speichern erneut und verweigert Dateien über 250.000 Dreiecken oder
 Bei explizit ausgewähltem **Wappen & Emblem** wird die Außenkontur des
 Tragkörpers unabhängig von den inneren Farb- und Höhenflächen aufgebaut. Jede
 binäre Farbmaske wird mit Marching Squares (`d3-contour`) in geschlossene
-Polygonringe konvertiert, geglättet und mit Three.js/Earcut trianguliert. Boden,
+Polygonringe konvertiert und geglättet. Der Wappenpfad extrudiert die Konturen
+schichtweise und vereinigt sie mit Manifold zu einem robusten Volumen. Boden,
 Deckfläche und Seiten entstehen als gemeinsame solide Extrusion. Vorschau, STL
 und 3MF verwenden dieselben Polygone; ein Rückfall auf die alte zellenweise
 Rasterwand ist damit ausgeschlossen.

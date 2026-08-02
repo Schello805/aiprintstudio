@@ -29,7 +29,7 @@ import {
 import { SettingTooltip } from "./SettingTooltip";
 import { extractColorPalette } from "./domain/color-palette";
 import { automaticSmoothingForMode, isExcellentReliefCandidate, mapReliefPassProgress, meaningfulReliefIssueCount, minimumFeatureForMode, optimizationVariants, rankReliefCandidate, resolveReliefMode } from "./domain/relief-optimization";
-import appLogoMark from "../build/icon-mark.png";
+import appLogoMark from "../build/icon-mark-v2.png";
 type View = "studio" | "history" | "settings" | "info";
 type StudioTool = "home" | "image" | "text" | "lithophane" | "prompt";
 type ProductShape = "source" | "rectangle" | "rounded" | "circle" | "shield" | "hexagon" | "heart";
@@ -784,7 +784,7 @@ function InfoView({ version }: { version: string }) {
     ["Oberfläche", "React · TypeScript · Vite", "Studio, Vorschau und Zustandsverwaltung", "MIT"],
     ["3D-Vorschau", "Three.js · React Three Fiber · Drei", "Dreh- und zoombare Mesh-Vorschau", "MIT"],
     ["Bildverarbeitung", "Sharp", "Rasterung, Masken, Höhenkarten und Farbanalyse", "Apache-2.0"],
-    ["Vektorkonturen", "d3-contour · Three.js Earcut", "Geglättete Polygonkonturen und solide Wappen-Extrusionen", "ISC"],
+    ["Vektorkonturen", "d3-contour · Manifold · Three.js Earcut", "Geglättete Konturen und robust vereinigte Wappen-Volumen", "ISC · Apache-2.0 · MIT"],
     ["Lokale Foto-Tiefe", "Depth Anything V2 Small · Core ML", "Monokulare Tiefenschätzung auf Apple Silicon", "Apache-2.0"],
     ["Prompt zu 3D", "OpenAI Responses API", "Validierter CAD-Bauplan; Vorschau und Mesh entstehen lokal", "optional, nutzungsabhängige API-Kosten"],
     ["3MF-Verpackung", "JSZip", "Mehrfarbige 3MF-Archive und Slicer-Metadaten", "MIT/GPL-3.0+"]

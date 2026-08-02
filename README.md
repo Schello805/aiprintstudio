@@ -283,7 +283,7 @@ Repository stammt.
 | Oberfläche | React, TypeScript, Vite | Studio, Vorschau und Einstellungen |
 | 3D-Vorschau | Three.js, React Three Fiber | interaktive Mesh- und Farbvorschau |
 | Bildpipeline | Sharp, TypeScript | Masken, Höhenkarten, Farben und Meshaufbau |
-| Vektorkonturen | d3-contour, Three.js Earcut | Marching Squares, geglättete Polygone und solide Extrusionen |
+| Vektorkonturen | d3-contour, Manifold, Three.js Earcut | Marching Squares, geglättete Polygone und robuste boolesche Volumen |
 | Native Worker | Swift, Core ML, MLX | lokale Tiefe und optionale komplexe Formrekonstruktion |
 | CAD-Pipeline | OpenAI Structured Outputs, lokaler TypeScript-Generator | validierter Plan und Binär-STL |
 | Konfiguration | scrypt, AES-256-GCM, lokale JSON-Datei | verschlüsselter API-Schlüssel ohne macOS-Schlüsselbund |

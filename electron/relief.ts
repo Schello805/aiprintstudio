@@ -3,6 +3,7 @@ import { basename, extname, join } from "node:path";
 import JSZip from "jszip";
 import sharp from "sharp";
 import { contours } from "d3-contour";
+import ManifoldModule from "manifold-3d/manifold";
 import { ShapeUtils, Vector2 } from "three";
 import { validateGeneratedExportBuffer } from "./export-validation.js";
 import { analyseContourQuality, removeInvalidTriangles, validateMeshGeometry, type ContourQualityReport, type GeometryValidationReport } from "./mesh-quality.js";
@@ -318,9 +319,17 @@ export async function createRelief(
   const emblemBoundary = pipeline.kind === "emblem"
     ? buildSmoothedBoundaryPositions(gridWidth, gridHeight, options.widthMm, heightMm, cellMask, 64)
     : undefined;
-  let planarMesh = steppedCellHeights
-    ? buildSteppedCellMesh(gridWidth, gridHeight, options.widthMm, heightMm, steppedCellHeights, cellMask)
-    : buildWatertightHeightMesh(gridWidth, gridHeight, options.widthMm, heightMm, heights, cellMask, 0, emblemBoundary);
+  // Wappen wurden bisher trotz geglätteter Randpunkte weiterhin als dichtes
+  // Pixelraster trianguliert. An jeder Rasterspalte entstand dadurch eine
+  // sichtbare senkrechte Facette. Der Wappenpfad baut Grundplatte und
+  // Reliefstufen nun aus echten Vektorkonturen auf. Vorschau, STL und 3MF
+  // verwenden exakt dieses eine Mesh; AMS weist ihm anschließend nur Farben
+  // zu und verändert die Geometrie nicht mehr.
+  let planarMesh = pipeline.kind === "emblem" && options.pipelineKind === "emblem" && !steppedCellHeights
+    ? await buildLayeredVectorRelief(gridWidth, gridHeight, options.widthMm, heightMm, heights, cellMask, 8)
+    : steppedCellHeights
+      ? buildSteppedCellMesh(gridWidth, gridHeight, options.widthMm, heightMm, steppedCellHeights, cellMask)
+      : buildWatertightHeightMesh(gridWidth, gridHeight, options.widthMm, heightMm, heights, cellMask, 0, emblemBoundary);
   let mesh = transformProductMesh(planarMesh, options.widthMm, options.curveAngle, options.mirrorX);
   onProgress({ phase: "Mesh schließen", detail: "Boden, Außenwände und Übergänge werden verbunden …", progress: 58 });
   const detectedColorAssignments = options.colors.length
@@ -336,17 +345,12 @@ export async function createRelief(
   const colorAssignments = mappedColorAssignments
     ? enforceUniformEdgeColor(mappedColorAssignments, cellMask, gridWidth, gridHeight, options.sideColorIndex)
     : undefined;
-  if (pipeline.kind === "emblem" && colorAssignments && !steppedCellHeights) {
-    const compositeBoundary = buildCompositeBoundaryPositions(
-      gridWidth, gridHeight, options.widthMm, heightMm,
-      cellMask, colorAssignments, options.colors.length, emblemBoundary
-    );
-    planarMesh = buildWatertightHeightMesh(
-      gridWidth, gridHeight, options.widthMm, heightMm,
-      heights, cellMask, 0, compositeBoundary
-    );
-    mesh = transformProductMesh(planarMesh, options.widthMm, options.curveAngle, options.mirrorX);
-  }
+  // Vektorkonturen können an exakt zusammenfallenden Ringpunkten einzelne
+  // Dreiecke mit Fläche 0 erzeugen. Diese müssen vor der Materialzuordnung
+  // entfernt werden, damit Geometrie und AMS-Materialliste dauerhaft dieselbe
+  // Dreiecksanzahl besitzen.
+  planarMesh = removeInvalidTriangles(planarMesh);
+  mesh = transformProductMesh(planarMesh, options.widthMm, options.curveAngle, options.mirrorX);
   const canonicalTriangleMaterials = colorAssignments && options.processingMode === "vector"
     ? assignCanonicalTriangleMaterials(
       planarMesh, colorAssignments, gridWidth, gridHeight,
@@ -366,8 +370,17 @@ export async function createRelief(
     detail: colorAssignments ? "AMS-Flächen und einfarbiger Tragkörper werden erzeugt …" : "Das vollständige 3D-Mesh wird vorbereitet …",
     progress: 70
   });
-  const planarPreview = canonicalTriangleMaterials
-    ? buildCanonicalMeshPreview(planarMesh, options.widthMm, heightMm, canonicalTriangleMaterials, options.colors)
+  const emblemPreviewMaterials = pipeline.kind === "emblem" && options.pipelineKind === "emblem"
+    ? canonicalTriangleMaterials ?? Array(planarMesh.triangles.length).fill(0)
+    : undefined;
+  const planarPreview = emblemPreviewMaterials
+    ? buildCanonicalMeshPreview(
+      planarMesh,
+      options.widthMm,
+      heightMm,
+      emblemPreviewMaterials,
+      canonicalTriangleMaterials ? options.colors : ["#e6f5c9"]
+    )
     : buildPreviewSurface(
       gridWidth, gridHeight, options.widthMm, heightMm, heights, cellMask,
       colorAssignments, options.colors, options.sideColorIndex,
@@ -1258,6 +1271,108 @@ function buildVectorExtrudedMesh(
   return { vertices, triangles };
 }
 
+let manifoldModulePromise: ReturnType<typeof ManifoldModule> | undefined;
+
+async function buildLayeredVectorRelief(
+  columns: number,
+  rows: number,
+  widthMm: number,
+  heightMm: number,
+  heights: number[],
+  cellMask: boolean[],
+  smoothing = 8
+): Promise<Mesh> {
+  const cellColumns = columns - 1;
+  const cellHeights = cellMask.map((occupied, cell) => {
+    if (!occupied) return 0;
+    const x = cell % cellColumns;
+    const y = Math.floor(cell / cellColumns);
+    const vertex = y * columns + x;
+    const average = (
+      heights[vertex]
+      + heights[vertex + 1]
+      + heights[vertex + columns]
+      + heights[vertex + columns + 1]
+    ) / 4;
+    // Eine 0,2-mm-Schicht ist die kleinste relevante Reliefstufe. Das entfernt
+    // Antialias-Zwischenwerte, ohne druckbare Details zu verlieren.
+    return Math.max(0.2, Math.round(average / 0.2) * 0.2);
+  });
+  const levels = [...new Set(cellHeights.filter((height) => height > 0).map((height) => Number(height.toFixed(4))))]
+    .sort((a, b) => a - b);
+  if (!levels.length) return { vertices: [], triangles: [] };
+
+  manifoldModulePromise ??= ManifoldModule();
+  const manifoldModule = await manifoldModulePromise;
+  manifoldModule.setup();
+  const solids: InstanceType<typeof manifoldModule.Manifold>[] = [];
+  let bottom = 0;
+  for (const top of levels) {
+    const mask = cellHeights.map((height, cell) => cellMask[cell] && height >= top - 1e-6);
+    if (!mask.some(Boolean)) continue;
+    const paddedColumns = cellColumns + 2;
+    const paddedRows = rows + 1;
+    const padded = Array(paddedColumns * paddedRows).fill(0) as number[];
+    for (let y = 0; y < rows - 1; y += 1) for (let x = 0; x < cellColumns; x += 1) {
+      padded[(y + 1) * paddedColumns + x + 1] = Number(mask[y * cellColumns + x]);
+    }
+    const geometry = contours().size([paddedColumns, paddedRows]).smooth(true).thresholds([0.5])(padded)[0];
+    const polygons = geometry.coordinates.flatMap((polygon) => polygon.map((ring) =>
+      smoothVectorRing(ring as Array<[number, number]>, smoothing).map(([x, y]) => [
+        (x - 1) * widthMm / cellColumns,
+        (y - 1) * heightMm / (rows - 1)
+      ] as [number, number])
+    )).filter((ring) => ring.length >= 3);
+    if (polygons.length) {
+      const overlap = bottom > 0 ? 0.01 : 0;
+      const solid = new manifoldModule.CrossSection(polygons, "EvenOdd")
+        .simplify(0.04)
+        .extrude(top - bottom + overlap)
+        .translate([0, 0, bottom - overlap]);
+      if (!solid.isEmpty()) solids.push(solid);
+    }
+    bottom = top;
+  }
+  if (!solids.length) return { vertices: [], triangles: [] };
+  const unified = manifoldModule.Manifold.union(solids);
+  const output = unified.getMesh();
+  const vertices: Vec3[] = [];
+  for (let offset = 0; offset < output.vertProperties.length; offset += output.numProp) {
+    vertices.push([
+      output.vertProperties[offset],
+      output.vertProperties[offset + 1],
+      output.vertProperties[offset + 2]
+    ]);
+  }
+  const triangles: Triangle[] = [];
+  for (let offset = 0; offset < output.triVerts.length; offset += 3) {
+    triangles.push([output.triVerts[offset], output.triVerts[offset + 1], output.triVerts[offset + 2]]);
+  }
+  unified.delete();
+  solids.forEach((solid) => solid.delete());
+  return weldMeshVertices({ vertices, triangles }, 5);
+}
+
+function weldMeshVertices(mesh: Mesh, precision = 6): Mesh {
+  const vertices: Vec3[] = [];
+  const remap = new Uint32Array(mesh.vertices.length);
+  const byPosition = new Map<string, number>();
+  mesh.vertices.forEach((vertex, index) => {
+    const key = vertex.map((value) => value.toFixed(precision)).join(":");
+    let target = byPosition.get(key);
+    if (target === undefined) {
+      target = vertices.length;
+      vertices.push(vertex);
+      byPosition.set(key, target);
+    }
+    remap[index] = target;
+  });
+  return {
+    vertices,
+    triangles: mesh.triangles.map(([a, b, c]) => [remap[a], remap[b], remap[c]])
+  };
+}
+
 function smoothVectorRing(source: Array<[number, number]>, smoothing = 2): Array<[number, number]> {
   let ring = source.slice(0, -1);
   if (ring.length < 4) return ring;
@@ -2011,7 +2126,7 @@ export const reliefInternals = {
   expandPixelMask, expandPixelMaskPreservingHoles,
   buildVectorLevels, buildSmoothedBoundaryPositions, buildColorCellAssignments, buildColoredMeshes,
   buildCompositeBoundaryPositions,
-  buildVectorColorMeshes, buildVectorExtrudedMesh, smoothVectorRing, mergeMeshes,
+  buildVectorColorMeshes, buildVectorExtrudedMesh, buildLayeredVectorRelief, smoothVectorRing, mergeMeshes,
   assignCanonicalTriangleMaterials, buildCanonicalMeshPreview,
   enforceUniformEdgeColor,
   buildWatertightHeightMesh, buildBinaryCellHeights, flattenSteppedOuterRim, buildSteppedCellMesh, buildPreviewSurface, orientMeshLikePreview, encodeBinaryStl, encodeThreeMf,

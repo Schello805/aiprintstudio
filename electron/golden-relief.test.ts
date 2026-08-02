@@ -21,6 +21,7 @@ describe("golden relief exports", () => {
           {
             widthMm: 100, baseMm: 1.6, reliefMm: 4, resolution: 128,
             profile: "logo", processingMode: fixture.mode, smoothing: fixture.name === "emblem" ? 1 : 3,
+            pipelineKind: fixture.name === "emblem" ? "emblem" : "wordmark",
             colors: fixture.colors, sourceColors: fixture.colors, sideColorIndex: Math.max(0, fixture.colors.length - 1),
             includeBackground: fixture.mode === "wordmark"
           }
