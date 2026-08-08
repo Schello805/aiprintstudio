@@ -438,6 +438,21 @@ describe("relief mesh", () => {
     expect(smoothed.length).toBeGreaterThan(jagged.length);
   });
 
+  it("keeps the outer emblem wall on one height instead of stepped bands", () => {
+    const columns = 9, rows = 9;
+    const cellColumns = columns - 1, cellRows = rows - 1;
+    const mask = Array(cellColumns * cellRows).fill(true) as boolean[];
+    const heights = Array(cellColumns * cellRows).fill(2);
+    heights[3 * cellColumns + 3] = 5.6;
+
+    reliefInternals.stabilizeEmblemOuterWallHeights(heights, mask, columns, rows, 1);
+
+    for (let y = 0; y < cellRows; y += 1) for (let x = 0; x < cellColumns; x += 1) {
+      const nearEdge = x === 0 || y === 0 || x === cellColumns - 1 || y === cellRows - 1;
+      expect(heights[y * cellColumns + x]).toBe(nearEdge ? 5.6 : y === 3 && x === 3 ? 5.6 : 2);
+    }
+  });
+
   it("removes isolated raised cells from the outer rim of stepped logos", () => {
     const columns = 8, rows = 8;
     const cellColumns = columns - 1, cellRows = rows - 1;

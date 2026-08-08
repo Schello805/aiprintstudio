@@ -1298,6 +1298,7 @@ async function buildLayeredVectorRelief(
     // Antialias-Zwischenwerte, ohne druckbare Details zu verlieren.
     return Math.max(0.2, Math.round(average / 0.2) * 0.2);
   });
+  stabilizeEmblemOuterWallHeights(cellHeights, cellMask, columns, rows, 3);
   const levels = [...new Set(cellHeights.filter((height) => height > 0).map((height) => Number(height.toFixed(4))))]
     .sort((a, b) => a - b);
   if (!levels.length) return { vertices: [], triangles: [] };
@@ -1354,6 +1355,38 @@ async function buildLayeredVectorRelief(
   unified.delete();
   solids.forEach((solid) => solid.delete());
   return weldMeshVertices({ vertices, triangles }, 5);
+}
+
+function stabilizeEmblemOuterWallHeights(
+  cellHeights: number[],
+  cellMask: boolean[],
+  columns: number,
+  rows: number,
+  radius = 3
+): void {
+  const cellColumns = columns - 1;
+  const cellRows = rows - 1;
+  let maximum = 0;
+  for (let index = 0; index < cellHeights.length; index += 1) {
+    if (cellMask[index]) maximum = Math.max(maximum, cellHeights[index]);
+  }
+  if (maximum <= 0) return;
+  const occupiedAt = (x: number, y: number) =>
+    x >= 0 && y >= 0 && x < cellColumns && y < cellRows && Boolean(cellMask[y * cellColumns + x]);
+  for (let y = 0; y < cellRows; y += 1) for (let x = 0; x < cellColumns; x += 1) {
+    const index = y * cellColumns + x;
+    if (!cellMask[index]) continue;
+    let nearOuterEdge = false;
+    for (let offsetY = -radius; offsetY <= radius && !nearOuterEdge; offsetY += 1) {
+      for (let offsetX = -radius; offsetX <= radius; offsetX += 1) {
+        if (!occupiedAt(x + offsetX, y + offsetY)) {
+          nearOuterEdge = true;
+          break;
+        }
+      }
+    }
+    if (nearOuterEdge) cellHeights[index] = maximum;
+  }
 }
 
 function weldMeshVertices(mesh: Mesh, precision = 6): Mesh {
@@ -2190,6 +2223,7 @@ export const reliefInternals = {
   buildVectorLevels, buildSmoothedBoundaryPositions, buildColorCellAssignments, buildColoredMeshes,
   buildCompositeBoundaryPositions,
   buildVectorColorMeshes, buildVectorExtrudedMesh, buildLayeredVectorRelief, smoothVectorRing, mergeMeshes,
+  stabilizeEmblemOuterWallHeights,
   assignCanonicalTriangleMaterials, buildCanonicalMeshPreview,
   enforceUniformEdgeColor,
   buildWatertightHeightMesh, buildBinaryCellHeights, flattenSteppedOuterRim, buildSteppedCellMesh, buildPreviewSurface, orientMeshLikePreview, encodeBinaryStl, encodeThreeMf,
