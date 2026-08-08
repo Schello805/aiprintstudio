@@ -1078,18 +1078,40 @@ function assignCanonicalTriangleMaterials(
 ): number[] {
   const cellColumns = columns - 1;
   const cellRows = rows - 1;
+  const materialAt = (xMm: number, yMm: number) => {
+    const x = Math.max(0, Math.min(cellColumns - 1, Math.floor(xMm / widthMm * cellColumns)));
+    const y = Math.max(0, Math.min(cellRows - 1, Math.floor(yMm / heightMm * cellRows)));
+    const material = assignments[y * cellColumns + x];
+    return material >= 0 ? material : sideColorIndex;
+  };
   return mesh.triangles.map((triangle) => {
     const a = mesh.vertices[triangle[0]], b = mesh.vertices[triangle[1]], c = mesh.vertices[triangle[2]];
     // Nur nach oben gerichtete Deckflächen erhalten die erkannte Motivfarbe.
     // Boden, Außenwand und senkrechte Höhenübergänge bleiben einheitlich in
     // der gewählten Seitenfarbe.
     if (normalOf(a, b, c)[2] <= 0.85) return sideColorIndex;
-    const centerX = (a[0] + b[0] + c[0]) / 3;
-    const centerY = (a[1] + b[1] + c[1]) / 3;
-    const x = Math.max(0, Math.min(cellColumns - 1, Math.floor(centerX / widthMm * cellColumns)));
-    const y = Math.max(0, Math.min(cellRows - 1, Math.floor(centerY / heightMm * cellRows)));
-    const material = assignments[y * cellColumns + x];
-    return material >= 0 ? material : sideColorIndex;
+    const samples = [
+      [1 / 3, 1 / 3, 1 / 3],
+      [0.6, 0.2, 0.2],
+      [0.2, 0.6, 0.2],
+      [0.2, 0.2, 0.6],
+      [0.45, 0.45, 0.1],
+      [0.45, 0.1, 0.45],
+      [0.1, 0.45, 0.45]
+    ] as const;
+    const counts = new Map<number, number>();
+    let centerMaterial = sideColorIndex;
+    samples.forEach(([wa, wb, wc], index) => {
+      const material = materialAt(
+        a[0] * wa + b[0] * wb + c[0] * wc,
+        a[1] * wa + b[1] * wb + c[1] * wc
+      );
+      if (index === 0) centerMaterial = material;
+      counts.set(material, (counts.get(material) ?? 0) + 1);
+    });
+    return [...counts.entries()].sort((left, right) =>
+      right[1] - left[1] || Number(right[0] === centerMaterial) - Number(left[0] === centerMaterial)
+    )[0]?.[0] ?? sideColorIndex;
   });
 }
 

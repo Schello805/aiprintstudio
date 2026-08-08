@@ -318,6 +318,23 @@ describe("relief mesh", () => {
     expect(materials[1]).toBe(1);
   });
 
+  it("uses the dominant top color for large triangulated emblem faces", () => {
+    const mesh = {
+      vertices: [
+        [0, 0, 4], [60, 0, 4], [0, 60, 4]
+      ] as const,
+      triangles: [[0, 1, 2]] as const
+    };
+    const columns = 7, rows = 7;
+    const cellColumns = columns - 1;
+    const assignments = Array(cellColumns * (rows - 1)).fill(1) as number[];
+    assignments[2 * cellColumns + 2] = 0;
+    const materials = reliefInternals.assignCanonicalTriangleMaterials(
+      mesh, assignments, columns, rows, 60, 60, 0
+    );
+    expect(materials[0]).toBe(1);
+  });
+
   it("widens thin wordmark pixels for a standard 0.4 mm nozzle", () => {
     const mask = Array(9 * 9).fill(false) as boolean[];
     mask[4 * 9 + 4] = true;
