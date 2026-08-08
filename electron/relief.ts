@@ -1389,7 +1389,26 @@ async function buildLayeredVectorRelief(
   }
   unified.delete();
   solids.forEach((solid) => solid.delete());
-  return weldMeshVertices({ vertices, triangles }, 5);
+  return weldMeshVertices(snapMeshZToLevels({ vertices, triangles }, [0, ...levels]), 5);
+}
+
+function snapMeshZToLevels(mesh: Mesh, levels: number[], epsilon = 0.035): Mesh {
+  const sorted = [...new Set(levels.map((level) => Number(level.toFixed(4))))].sort((a, b) => a - b);
+  return {
+    vertices: mesh.vertices.map(([x, y, z]) => {
+      let nearest = z;
+      let distance = Number.POSITIVE_INFINITY;
+      for (const level of sorted) {
+        const candidateDistance = Math.abs(z - level);
+        if (candidateDistance < distance) {
+          distance = candidateDistance;
+          nearest = level;
+        }
+      }
+      return [x, y, distance <= epsilon ? nearest : z] as const;
+    }),
+    triangles: mesh.triangles
+  };
 }
 
 function buildOuterEdgeCellMask(
@@ -2286,7 +2305,7 @@ export const reliefInternals = {
   buildVectorLevels, buildSmoothedBoundaryPositions, buildColorCellAssignments, buildColoredMeshes,
   buildCompositeBoundaryPositions,
   buildVectorColorMeshes, buildVectorExtrudedMesh, buildLayeredVectorRelief, smoothVectorRing, mergeMeshes,
-  buildOuterEdgeCellMask, stabilizeEmblemOuterWallHeights,
+  snapMeshZToLevels, buildOuterEdgeCellMask, stabilizeEmblemOuterWallHeights,
   assignCanonicalTriangleMaterials, buildCanonicalMeshPreview,
   enforceUniformEdgeColor,
   buildWatertightHeightMesh, buildBinaryCellHeights, flattenSteppedOuterRim, buildSteppedCellMesh, buildPreviewSurface, orientMeshLikePreview, encodeBinaryStl, encodeThreeMf,

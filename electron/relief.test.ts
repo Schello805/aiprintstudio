@@ -499,6 +499,20 @@ describe("relief mesh", () => {
     expect(at(7, 7)).toBe(false);
   });
 
+  it("snaps nearly coplanar emblem surfaces to exact layer heights", () => {
+    const mesh = {
+      vertices: [[0, 0, 2.00001], [1, 0, 2.019], [0, 1, 1.982], [1, 1, 3.92]] as const,
+      triangles: [[0, 1, 2], [1, 3, 2]] as const
+    };
+
+    const snapped = reliefInternals.snapMeshZToLevels(mesh, [0, 2, 4]);
+
+    expect(snapped.vertices[0][2]).toBe(2);
+    expect(snapped.vertices[1][2]).toBe(2);
+    expect(snapped.vertices[2][2]).toBe(2);
+    expect(snapped.vertices[3][2]).toBe(3.92);
+  });
+
   it("removes isolated raised cells from the outer rim of stepped logos", () => {
     const columns = 8, rows = 8;
     const cellColumns = columns - 1, cellRows = rows - 1;

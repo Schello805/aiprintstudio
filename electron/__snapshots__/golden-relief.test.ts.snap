@@ -1,11 +1,11 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`golden relief exports > keeps emblem geometry reproducible 1`] = `"ccbfd026aaf4acbaa2b539ade7aea9a4e105fbd54b7bd0ce9e9d69e7f14ab7e1"`;
+exports[`golden relief exports > keeps emblem geometry reproducible 1`] = `"9547f493408a3f1a7542f2279e72ecbc6250d223471a7bf609694618e55bbbc6"`;
 
 exports[`golden relief exports > keeps emblem geometry reproducible 2`] = `
 {
-  "contour": 81,
-  "triangles": 37342,
+  "contour": 79,
+  "triangles": 33299,
 }
 `;
 
