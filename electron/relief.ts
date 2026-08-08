@@ -263,7 +263,8 @@ export async function createRelief(
       / Math.max(1, subjectPixels.length);
     if (options.profile === "logo" && !options.includeBackground && (useWordmarkMask || subjectCoverage < 0.42)) flatVectorSurface = true;
   }
-  const smoothed = useWordmarkMask && options.includeBackground
+  const semanticEmblemLevels = pipeline.kind === "emblem" && activeMode === "vector";
+  const smoothed = semanticEmblemLevels || (useWordmarkMask && options.includeBackground)
     ? rawLevels
     : smoothHeightField(rawLevels, gridWidth, gridHeight, activeMode === "vector" ? Math.min(1, options.smoothing) : options.smoothing);
   onProgress({ phase: "Höhen berechnen", detail: "Reliefstufen und Oberflächen werden aufgebaut …", progress: 38 });
@@ -272,16 +273,16 @@ export async function createRelief(
   // Überhöhungen; im mehrfarbigen 3MF wurden daraus getrennte, gezackte
   // Farbkörper. STL, Vorschau und 3MF verwenden nun dieselbe begrenzte
   // Detailmischung.
-  const detailBlend = pipeline.kind === "emblem"
-    ? Math.min(0.75, options.detail * profile.detail)
-    : options.detail * profile.detail;
+  const detailBlend = semanticEmblemLevels ? 0 : options.detail * profile.detail;
   const detailed = smoothed.map((value, index) =>
     Math.max(0, Math.min(1, value + (rawLevels[index] - value) * detailBlend))
   );
-  const profiledLevels = profile.steps ? detailed.map((value) => Math.round(value * profile.steps) / profile.steps) : detailed;
+  const profiledLevels = semanticEmblemLevels
+    ? detailed
+    : profile.steps ? detailed.map((value) => Math.round(value * profile.steps) / profile.steps) : detailed;
   // Eine flache Konturzone verhindert, dass antialiaste Randpixel als hohe,
   // sägezahnartige Außenwand im Mesh erscheinen.
-  const levels = flatVectorSurface
+  const levels = flatVectorSurface || semanticEmblemLevels
     ? profiledLevels
     : applyBoundaryRim(
       profiledLevels,
