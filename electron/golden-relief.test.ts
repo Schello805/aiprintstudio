@@ -27,11 +27,18 @@ describe("golden relief exports", () => {
           }
         );
         const stl = await readFile(result.stlPath);
+        await readFile(result.threeMfPath);
         expect(result.geometryValidation.valid).toBe(true);
         expect(result.geometryValidation.stats.invalidTriangles).toBe(0);
         expect(result.contourQuality.score).toBeGreaterThanOrEqual(60);
+        expect(result.triangleCount).toBeLessThanOrEqual(250_000);
+        expect(result.fileBytes.stl).toBeLessThanOrEqual(25_000_000);
+        expect(result.fileBytes.threeMf).toBeLessThanOrEqual(25_000_000);
         if (fixture.name === "emblem") {
           expect(result.printability.checks.find((check) => check.label === "Übergänge")?.status).toBe("ok");
+          expect(result.options.pipelineKind).toBe("emblem");
+          expect(result.options.processingMode).toBe("vector");
+          expect(result.colorRegions).toHaveLength(4);
         }
         expect(result.triangleCount).toBeGreaterThan(100);
         expect(createHash("sha256").update(stl).digest("hex")).toMatchSnapshot();

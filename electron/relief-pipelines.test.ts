@@ -12,6 +12,19 @@ describe("relief pipeline contracts", () => {
     expect(wordmark.mask).toBe("wordmark");
   });
 
+  it("treats the explicit emblem pipeline as a locked vector CAD contract", () => {
+    const emblem = resolveReliefPipeline({ pipelineKind: "emblem", processingMode: "wordmark", outputMode: "relief", profile: "photo" });
+    expect(emblem).toEqual({
+      kind: "emblem",
+      heightMode: "vector",
+      mask: "subject",
+      solidOuterSilhouette: true,
+      preserveThinStrokes: true,
+      flattenMotifSurface: false,
+      minimumSmoothing: 1
+    });
+  });
+
   it("keeps photo and lithophane pipelines independent from vector settings", () => {
     expect(resolveReliefPipeline({ pipelineKind: "photo", processingMode: "depth", outputMode: "relief", profile: "photo" }).heightMode).toBe("depth");
     expect(resolveReliefPipeline({ pipelineKind: "lithophane", processingMode: "height", outputMode: "lithophane", profile: "photo" }).heightMode).toBe("height");

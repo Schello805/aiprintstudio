@@ -1326,7 +1326,10 @@ async function buildLayeredVectorRelief(
     if (polygons.length) {
       const overlap = bottom > 0 ? 0.01 : 0;
       const solid = new manifoldModule.CrossSection(polygons, "EvenOdd")
-        .simplify(0.04)
+        // Nur minimal vereinfachen: stärkere Vereinfachung erzeugt bei
+        // Wappen sichtbar abgeflachte Außenwände, auch wenn die Kontur oben
+        // korrekt wirkt.
+        .simplify(0.012)
         .extrude(top - bottom + overlap)
         .translate([0, 0, bottom - overlap]);
       if (!solid.isEmpty()) solids.push(solid);
@@ -1373,20 +1376,77 @@ function weldMeshVertices(mesh: Mesh, precision = 6): Mesh {
   };
 }
 
+function ringPerimeter(ring: Array<[number, number]>): number {
+  return ring.reduce((sum, point, index) => {
+    const next = ring[(index + 1) % ring.length];
+    return sum + Math.hypot(next[0] - point[0], next[1] - point[1]);
+  }, 0);
+}
+
+function ringBounds(ring: Array<[number, number]>): { width: number; height: number } {
+  let minX = Number.POSITIVE_INFINITY, maxX = Number.NEGATIVE_INFINITY;
+  let minY = Number.POSITIVE_INFINITY, maxY = Number.NEGATIVE_INFINITY;
+  for (const [x, y] of ring) {
+    minX = Math.min(minX, x);
+    maxX = Math.max(maxX, x);
+    minY = Math.min(minY, y);
+    maxY = Math.max(maxY, y);
+  }
+  return { width: maxX - minX, height: maxY - minY };
+}
+
+function resampleClosedRing(source: Array<[number, number]>, spacing: number): Array<[number, number]> {
+  if (source.length < 4) return source;
+  const perimeter = ringPerimeter(source);
+  const targetCount = Math.max(source.length, Math.min(4096, Math.ceil(perimeter / Math.max(0.25, spacing))));
+  const result: Array<[number, number]> = [];
+  let edgeIndex = 0;
+  let edgeStart = source[0];
+  let edgeEnd = source[1];
+  let edgeLength = Math.hypot(edgeEnd[0] - edgeStart[0], edgeEnd[1] - edgeStart[1]);
+  let walkedBeforeEdge = 0;
+  for (let sample = 0; sample < targetCount; sample += 1) {
+    const targetDistance = sample * perimeter / targetCount;
+    while (walkedBeforeEdge + edgeLength < targetDistance && edgeIndex < source.length - 1) {
+      walkedBeforeEdge += edgeLength;
+      edgeIndex += 1;
+      edgeStart = source[edgeIndex];
+      edgeEnd = source[(edgeIndex + 1) % source.length];
+      edgeLength = Math.hypot(edgeEnd[0] - edgeStart[0], edgeEnd[1] - edgeStart[1]);
+    }
+    const local = edgeLength > 1e-6 ? (targetDistance - walkedBeforeEdge) / edgeLength : 0;
+    result.push([
+      edgeStart[0] + (edgeEnd[0] - edgeStart[0]) * local,
+      edgeStart[1] + (edgeEnd[1] - edgeStart[1]) * local
+    ]);
+  }
+  return result;
+}
+
 function smoothVectorRing(source: Array<[number, number]>, smoothing = 2): Array<[number, number]> {
   let ring = source.slice(0, -1);
   if (ring.length < 4) return ring;
+  ring = ring.filter((point, index) => {
+    const previous = ring[(index - 1 + ring.length) % ring.length];
+    return Math.hypot(point[0] - previous[0], point[1] - previous[1]) > 1e-3;
+  });
+  if (ring.length < 4) return ring;
+  const initialPerimeter = ringPerimeter(ring);
+  const bounds = ringBounds(ring);
+  const isLargeEmblemContour = initialPerimeter > 180 || Math.max(bounds.width, bounds.height) > 72;
   const reduced: Array<[number, number]> = [];
+  const minimumPointDistance = isLargeEmblemContour ? 2.2 : 1.15;
   for (const point of ring) {
     const previous = reduced.at(-1);
     // Lange Kanten werden vor der Kurvenglättung leicht ausgedünnt. Zwei
     // Chaikin-Schritte unterteilen die resultierenden Sehnen anschließend bis
     // deutlich unter Düsenauflösung; damit verschwinden auch die im Slicer
     // sichtbaren senkrechten Facetten an runden Wappenrändern.
-    if (!previous || Math.hypot(point[0] - previous[0], point[1] - previous[1]) >= 1.15) reduced.push(point);
+    if (!previous || Math.hypot(point[0] - previous[0], point[1] - previous[1]) >= minimumPointDistance) reduced.push(point);
   }
   ring = reduced.length >= 4 ? reduced : ring;
-  for (let pass = 0; pass < Math.min(2, Math.max(0, Math.round(smoothing))); pass += 1) {
+  const chaikinPasses = Math.min(isLargeEmblemContour ? 3 : 2, Math.max(0, Math.round(smoothing)));
+  for (let pass = 0; pass < chaikinPasses; pass += 1) {
     const next: Array<[number, number]> = [];
     for (let index = 0; index < ring.length; index += 1) {
       const current = ring[index], following = ring[(index + 1) % ring.length];
@@ -1397,12 +1457,14 @@ function smoothVectorRing(source: Array<[number, number]>, smoothing = 2): Array
     }
     ring = next;
   }
+  if (isLargeEmblemContour) ring = resampleClosedRing(ring, 0.75);
   // Stärken oberhalb von 2 beruhigen die bereits fein unterteilte Kontur.
   // Mehrere kleine Laplace-Schritte entfernen gezielt die kurzen
   // Links-rechts-Oszillationen des Pixelrasters. Nur mehr Polygone würden
   // diese Zacken lediglich feiner abbilden und zugleich die Exportgrenze von
   // 250.000 Dreiecken gefährden.
-  for (let pass = 2; pass < Math.round(smoothing); pass += 1) {
+  const laplacePasses = Math.round(smoothing) + (isLargeEmblemContour ? 6 : 0);
+  for (let pass = 2; pass < laplacePasses; pass += 1) {
     ring = ring.map((current, index) => {
       const previous = ring[(index - 1 + ring.length) % ring.length];
       const following = ring[(index + 1) % ring.length];
@@ -1412,6 +1474,7 @@ function smoothVectorRing(source: Array<[number, number]>, smoothing = 2): Array
       ];
     });
   }
+  if (isLargeEmblemContour) ring = resampleClosedRing(ring, 0.85);
   return ring;
 }
 

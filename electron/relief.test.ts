@@ -418,8 +418,24 @@ describe("relief mesh", () => {
     });
     const moderate = reliefInternals.buildVectorExtrudedMesh(mask, columns, rows, 80, 80, 0, 4, 2);
     const strong = reliefInternals.buildVectorExtrudedMesh(mask, columns, rows, 80, 80, 0, 4, 4);
-    expect(strong.triangles).toHaveLength(moderate.triangles.length);
+    expect(strong.triangles.length).toBeGreaterThanOrEqual(moderate.triangles.length);
     expect(strong.vertices).not.toEqual(moderate.vertices);
+  });
+
+  it("calms jagged large emblem side contours before extrusion", () => {
+    const jagged: Array<[number, number]> = [];
+    for (let y = 0; y <= 140; y += 4) jagged.push([y % 8 === 0 ? 8 : 13, y]);
+    for (let x = 16; x <= 120; x += 4) jagged.push([x, 144]);
+    for (let y = 140; y >= 0; y -= 4) jagged.push([124, y]);
+    for (let x = 120; x >= 16; x -= 4) jagged.push([x, -4]);
+    jagged.push(jagged[0]);
+
+    const smoothed = reliefInternals.smoothVectorRing(jagged, 8);
+    const leftEdge = smoothed.filter(([, y]) => y > 8 && y < 132).filter(([x]) => x < 20);
+    const wobble = Math.max(...leftEdge.map(([x]) => x)) - Math.min(...leftEdge.map(([x]) => x));
+
+    expect(wobble).toBeLessThan(3.2);
+    expect(smoothed.length).toBeGreaterThan(jagged.length);
   });
 
   it("removes isolated raised cells from the outer rim of stepped logos", () => {
