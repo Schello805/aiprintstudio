@@ -855,6 +855,11 @@ describe("relief mesh", () => {
         </svg>
       `);
       await writeFile(imagePath, await sharp(svg).png().toBuffer());
+      const { data } = await sharp(svg).resize(192, 192, { fit: "fill" }).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+      const foregroundMask = reliefInternals.buildWordmarkForegroundPixelMask(data, 192, 192);
+      const foregroundCoverage = foregroundMask.filter(Boolean).length / foregroundMask.length;
+      expect(foregroundCoverage).toBeGreaterThan(0.04);
+      expect(foregroundCoverage).toBeLessThan(0.19);
       const result = await createRelief(imagePath, directory, {
         widthMm: 100, baseMm: 1.6, reliefMm: 4, resolution: 256, invert: false,
         profile: "logo", smoothing: 2, detail: 1, processingMode: "wordmark",
@@ -911,6 +916,39 @@ describe("relief mesh", () => {
         const horizontalPositions = new Set(vertices.map((vertex) => `${vertex.x.toFixed(4)}:${vertex.z.toFixed(4)}`));
         if (verticalLevels.size > 1) expect(horizontalPositions.size).toBeLessThanOrEqual(2);
       }
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("raises text and signets on multicolor logo backgrounds instead of the whole badge", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "ai-print-wordmark-badge-test-"));
+    try {
+      const imagePath = join(directory, "badge.png");
+      const svg = Buffer.from(`
+        <svg xmlns="http://www.w3.org/2000/svg" width="240" height="240">
+          <rect width="240" height="240" fill="#0b0d12"/>
+          <circle cx="120" cy="120" r="104" fill="#ffd821"/>
+          <path d="M16 120a104 104 0 0 1 208 0z" fill="#1d65b7"/>
+          <circle cx="120" cy="120" r="104" fill="none" stroke="#e2232a" stroke-width="12"/>
+          <text x="120" y="55" text-anchor="middle" font-family="Helvetica" font-size="25" font-weight="bold" fill="#ffd821">MED UKRAINE</text>
+          <text x="120" y="205" text-anchor="middle" font-family="Helvetica" font-size="26" font-weight="bold" fill="#1d65b7">SLAVA UKRAINI</text>
+          <path d="M88 118c18-24 38-24 58-2-22-5-36 6-52 22 8-18 2-22-6-20z" fill="#ffffff"/>
+        </svg>
+      `);
+      await writeFile(imagePath, await sharp(svg).png().toBuffer());
+      const result = await createRelief(imagePath, directory, {
+        widthMm: 100, baseMm: 1.6, reliefMm: 4, resolution: 192, invert: false,
+        profile: "logo", smoothing: 2, detail: 1, processingMode: "wordmark",
+        includeBackground: true, sourceColors: [], colors: [], sideColorIndex: 0
+      });
+      const usedVertices = new Set(result.preview.indices);
+      const usedHeights = [...usedVertices].map((index) => Number(result.preview.positions[index * 3 + 1].toFixed(4)));
+      expect(new Set(usedHeights)).toEqual(new Set([0, 1.6, 5.6]));
+      const raised = usedHeights.filter((height) => height === 5.6).length;
+      const carrier = usedHeights.filter((height) => height === 1.6).length;
+      expect(raised).toBeGreaterThan(40);
+      expect(raised).toBeLessThan(carrier * 0.55);
     } finally {
       await rm(directory, { recursive: true, force: true });
     }

@@ -172,7 +172,9 @@ export async function createRelief(
     options.minimumFeatureMm = Math.max(options.minimumFeatureMm, options.nozzleMm * 2);
   }
   const detectedWordmarkPixels = useWordmarkMask
-    ? buildWordmarkPixelMask(rgba, gridWidth, gridHeight)
+    ? options.includeBackground
+      ? buildWordmarkForegroundPixelMask(rgba, gridWidth, gridHeight)
+      : buildWordmarkPixelMask(rgba, gridWidth, gridHeight)
     : undefined;
   const minimumFeatureRadius = options.minimumFeatureMm > 0
     ? Math.max(0, Math.ceil((options.minimumFeatureMm / (options.widthMm / gridWidth) - 1) / 2))
@@ -1821,6 +1823,68 @@ function buildWordmarkPixelMask(rgba: Buffer, width: number, height: number): bo
   });
 }
 
+function buildWordmarkForegroundPixelMask(rgba: Buffer, width: number, height: number): boolean[] {
+  const pixelCount = width * height;
+  if (hasUsefulTransparency(rgba)) return buildWordmarkPixelMask(rgba, width, height);
+
+  const result = Array(pixelCount).fill(false) as boolean[];
+  const visited = new Uint8Array(pixelCount);
+  const colorKeyAt = (index: number) => {
+    const offset = index * 4;
+    // 32er-Farbklassen verbinden antialiaste Buchstaben noch ausreichend,
+    // trennen aber große Logo-Flächen, Text und Signets robust genug für die
+    // anschließende Komponentenbewertung.
+    return `${rgba[offset] >> 5}:${rgba[offset + 1] >> 5}:${rgba[offset + 2] >> 5}`;
+  };
+  const maxComponentArea = Math.max(24, pixelCount * 0.065);
+  const maxFullWidth = width * 0.82;
+  const maxFullHeight = height * 0.82;
+  const queue: number[] = [];
+  for (let start = 0; start < pixelCount; start += 1) {
+    if (visited[start]) continue;
+    visited[start] = 1;
+    queue.length = 0;
+    queue.push(start);
+    const key = colorKeyAt(start);
+    let cursor = 0, minX = width, maxX = 0, minY = height, maxY = 0, touchesBorder = false;
+    while (cursor < queue.length) {
+      const pixel = queue[cursor++];
+      const x = pixel % width, y = Math.floor(pixel / width);
+      minX = Math.min(minX, x); maxX = Math.max(maxX, x);
+      minY = Math.min(minY, y); maxY = Math.max(maxY, y);
+      touchesBorder ||= x === 0 || y === 0 || x === width - 1 || y === height - 1;
+      const neighbors = [
+        pixel - 1, pixel + 1,
+        pixel - width, pixel + width
+      ];
+      for (const next of neighbors) {
+        if (next < 0 || next >= pixelCount || visited[next]) continue;
+        if ((next === pixel - 1 && x === 0) || (next === pixel + 1 && x === width - 1)) continue;
+        if (colorKeyAt(next) !== key) continue;
+        visited[next] = 1;
+        queue.push(next);
+      }
+    }
+    const area = queue.length;
+    const boxWidth = maxX - minX + 1, boxHeight = maxY - minY + 1;
+    const boxArea = Math.max(1, boxWidth * boxHeight);
+    const fillRatio = area / boxArea;
+    const slender = fillRatio <= 0.68 || boxWidth / Math.max(1, boxHeight) >= 2.2 || boxHeight / Math.max(1, boxWidth) >= 2.2;
+    const compactMotif = area <= maxComponentArea && boxWidth <= maxFullWidth && boxHeight <= maxFullHeight;
+    const likelyBackground = touchesBorder && (area > pixelCount * 0.015 || boxWidth > width * 0.35 || boxHeight > height * 0.35);
+    const likelyOuterRingSegment = area > pixelCount * 0.015
+      && boxHeight > height * 0.45
+      && boxWidth < width * 0.24;
+    if (area >= 3 && compactMotif && slender && !likelyBackground && !likelyOuterRingSegment) {
+      for (const pixel of queue) result[pixel] = true;
+    }
+  }
+  // Komponentenbasierte Erkennung kann bei weich gerenderten Logos einzelne
+  // Antialias-Pixel auslassen. Ein kleiner lokaler Schluss verbindet solche
+  // Lücken, ohne große Hintergrundflächen wieder anzuheben.
+  return expandPixelMaskPreservingHoles(result, width, height, 1);
+}
+
 function fitSmoothBackground(rgba: Buffer, width: number, height: number): {
   at: (x: number, y: number) => readonly [number, number, number];
   threshold: number;
@@ -2361,7 +2425,7 @@ function buildPreviewSurface(
 }
 
 export const reliefInternals = {
-  buildCellMask, buildSubjectPixelMask, buildWordmarkPixelMask, cleanSubjectPixelMask, applyBoundaryRim,
+  buildCellMask, buildSubjectPixelMask, buildWordmarkPixelMask, buildWordmarkForegroundPixelMask, cleanSubjectPixelMask, applyBoundaryRim,
   expandPixelMask, expandPixelMaskPreservingHoles,
   buildVectorLevels, buildSmoothedBoundaryPositions, buildColorCellAssignments, buildColoredMeshes,
   buildCompositeBoundaryPositions,

@@ -701,7 +701,6 @@ export function App() {
                   </div>
                   <div className="automatic-settings-note">
                     <Sparkles /><div><strong>Druckparameter werden automatisch optimiert</strong><span>Grundplatte, Glättung, Detailerhalt, Relief-Richtung und Meshgröße werden passend zum gewählten Verfahren gesetzt.</span></div>
-                    <div className="compact-cost"><strong>0,00 €</strong><span>lokal · keine API-Kosten</span></div>
                   </div>
                   {studioTool === "lithophane" && <div className="product-options">
                     <div className="product-shape-row">
@@ -1742,6 +1741,7 @@ function Footer({ version, openLegal }: { version: string; openLegal: (page: Leg
     <footer>
       <p>Quelloffen für nichtkommerzielle Nutzung · Michael Schellenberger</p>
       <div className="footer-links">
+        <span className="footer-cost"><strong>0,00 €</strong> lokal · keine API-Kosten</span>
         <button onClick={() => openLegal("imprint")}>Impressum</button>
         <button onClick={() => openLegal("privacy")}>Datenschutz</button>
         <button onClick={() => openLegal("cookies")}>Cookiehinweise</button>
