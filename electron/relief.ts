@@ -1324,9 +1324,6 @@ async function buildLayeredVectorRelief(
   const levels = [...new Set(cellHeights.filter((height) => height > 0).map((height) => Number(height.toFixed(4))))]
     .sort((a, b) => a - b);
   if (!levels.length) return { vertices: [], triangles: [] };
-  const maximumHeight = levels[levels.length - 1];
-  const outerWallMask = buildOuterEdgeCellMask(cellMask, columns, rows, 5);
-  const innerLayerMask = cellMask.map((occupied, cell) => occupied && !outerWallMask[cell]);
 
   manifoldModulePromise ??= ManifoldModule();
   const manifoldModule = await manifoldModulePromise;
@@ -1359,18 +1356,14 @@ async function buildLayeredVectorRelief(
     if (!solid.isEmpty()) solids.push(solid);
   };
 
-  // Der äußere Wappenmantel wird bewusst als ein einziger, voller Randstreifen
-  // gebaut. Früher wurde dieselbe Außenkontur pro Höhenstufe erneut extrudiert;
-  // im Slicer sah das wie wellige horizontale Bänder an der Seite aus, obwohl
-  // die Quelldatei sauber war. Die inneren Reliefdetails bleiben weiterhin
-  // gestuft, aber die sichtbare Außenwand ist jetzt ein durchgehender Körper.
-  pushSolid(outerWallMask, 0, maximumHeight);
-
-  let bottom = 0;
+  // Wappen werden als echte, nicht überlappende Höhenkörper gebaut. Der alte
+  // additive Aufbau extrudierte für jede Stufe erneut die komplette Maske
+  // "alle Zellen ab dieser Höhe". Im Slicer/Tinkercad sah das wie übereinander
+  // liegende Platten mit horizontalen Linien aus. Jetzt bekommt jede erkannte
+  // Fläche genau einen Körper von der Unterseite bis zu ihrer Zielhöhe.
   for (const top of levels) {
-    const mask = cellHeights.map((height, cell) => innerLayerMask[cell] && height >= top - 1e-6);
-    pushSolid(mask, bottom, top);
-    bottom = top;
+    const mask = cellHeights.map((height, cell) => cellMask[cell] && Math.abs(height - top) < 1e-6);
+    pushSolid(mask, 0, top);
   }
   if (!solids.length) return { vertices: [], triangles: [] };
   const unified = manifoldModule.Manifold.union(solids);
