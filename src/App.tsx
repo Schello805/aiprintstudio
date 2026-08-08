@@ -955,31 +955,46 @@ function ReliefPreview({ result }: { result: NonNullable<ReliefResult> }) {
 
   useEffect(() => () => geometries.forEach(({ geometry }) => geometry.dispose()), [geometries]);
 
+  const isEmblemPreview = result.options.pipelineKind === "emblem";
+  const previewColor = (color: string) => {
+    if (materialView === "white") return "#F5F3EA";
+    if (materialView === "black") return "#22262C";
+    if (materialView === "gold") return "#D7A827";
+    if (!isEmblemPreview) return color;
+    const rgb = /^#?([0-9a-f]{6})$/i.exec(color)?.[1];
+    if (!rgb) return color;
+    const r = parseInt(rgb.slice(0, 2), 16), g = parseInt(rgb.slice(2, 4), 16), b = parseInt(rgb.slice(4, 6), 16);
+    const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    // Nur die Vorschau wird entschärft: fast schwarze Wappen-Seiten sehen im
+    // WebGL-Licht sonst welliger aus als der echte STL/3MF-Export im Slicer.
+    return luminance < 34 ? "#24282E" : color;
+  };
+
   return (
     <div className="preview-card">
       <div className="panel-label">3D-VORSCHAU · ZIEHEN ZUM DREHEN</div>
       <div className="preview-canvas">
         <Canvas
           key={`${result.stlPath}-${cameraRevision}`}
-          camera={{ position: [modelSize * 0.65, modelSize * 0.55, modelSize * 0.85], fov: 38 }}
+          camera={{ position: [modelSize * 0.82, modelSize * 0.72, modelSize * 1.25], fov: 31 }}
           dpr={[1.5, 2.5]}
           gl={{ antialias: true, powerPreference: "high-performance" }}
         >
         <color attach="background" args={[previewBackground === "dark" ? "#0b0e13" : "#F4F5F2"]} />
-        <ambientLight intensity={materialView === "light" ? 0.45 : 1.5} />
-        <directionalLight position={[60, 100, 80]} intensity={3.2} />
-        <directionalLight position={[-50, 35, -60]} intensity={1.1} color="#b6d7ff" />
+        <ambientLight intensity={materialView === "light" ? 0.45 : isEmblemPreview ? 2.1 : 1.5} />
+        <directionalLight position={[60, 100, 80]} intensity={isEmblemPreview ? 1.65 : 3.2} />
+        <directionalLight position={[-50, 35, -60]} intensity={isEmblemPreview ? 0.7 : 1.1} color="#b6d7ff" />
         {materialView === "light" && <pointLight position={[0, -modelSize * 0.45, 0]} intensity={180} color="#ffdca0" distance={modelSize * 2.5} />}
         {geometries.map(({ geometry, color }, index) => (
           <mesh geometry={geometry} key={`${color}-${index}`}>
             {materialView === "normals" ? <meshNormalMaterial side={THREE.DoubleSide} />
               : materialView === "wireframe" ? <meshBasicMaterial color="#79c7ff" wireframe />
               : materialView === "light" ? <meshPhysicalMaterial color="#fff4d6" roughness={0.4} transmission={0.72} thickness={result.options.baseMm + result.options.reliefMm} transparent opacity={0.94} side={THREE.DoubleSide} />
-              : <meshStandardMaterial color={materialView === "white" ? "#F5F3EA" : materialView === "black" ? "#17191D" : materialView === "gold" ? "#D7A827" : color} roughness={materialView === "gold" ? 0.24 : materialView === "black" ? 0.82 : 0.62} metalness={materialView === "gold" ? 0.68 : 0.05} side={THREE.DoubleSide} />}
+              : <meshStandardMaterial color={previewColor(color)} roughness={materialView === "gold" ? 0.24 : isEmblemPreview ? 0.92 : materialView === "black" ? 0.82 : 0.62} metalness={materialView === "gold" ? 0.68 : 0.02} side={THREE.FrontSide} />}
           </mesh>
         ))}
         {showGrid && <gridHelper args={[modelSize * 1.6, 18, previewBackground === "dark" ? "#2e3944" : "#89939D", previewBackground === "dark" ? "#1b222b" : "#CDD2D6"]} />}
-        <OrbitControls makeDefault autoRotate={autoRotate} autoRotateSpeed={1.6} target={[0, result.options.baseMm + result.options.reliefMm / 2, 0]} minDistance={modelSize * 0.45} maxDistance={modelSize * 2.4} enableDamping />
+        <OrbitControls makeDefault autoRotate={autoRotate} autoRotateSpeed={1.6} target={[0, result.options.baseMm + result.options.reliefMm / 2, 0]} minDistance={modelSize * 0.72} maxDistance={modelSize * 2.8} enableDamping />
         </Canvas>
       </div>
       <div className="preview-tools" aria-label="3D-Prüfansichten">
