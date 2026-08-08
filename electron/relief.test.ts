@@ -531,6 +531,40 @@ describe("relief mesh", () => {
     expect(flattened[3 * cellColumns + 3]).toBe(5.6);
   });
 
+  it("keeps raised wordmark text separate from a printed background", () => {
+    const columns = 8, rows = 8;
+    const cellColumns = columns - 1, cellRows = rows - 1;
+    const fullCarrier = Array(cellColumns * cellRows).fill(true) as boolean[];
+    const wordmarkPixels = Array(columns * rows).fill(false) as boolean[];
+    // Ein dünner Text-/Signet-Strich liegt absichtlich nahe am äußeren Rand.
+    // Die normale Rim-Glättung würde ihn dort entfernen; bei "Logo mit Text"
+    // muss er aber als eigene erhöhte Ebene erhalten bleiben.
+    for (let y = 1; y <= 5; y += 1) wordmarkPixels[y * columns + 1] = true;
+    for (let x = 1; x <= 5; x += 1) wordmarkPixels[5 * columns + x] = true;
+
+    const raised = reliefInternals.buildRaisedWordmarkCellHeights(
+      wordmarkPixels,
+      fullCarrier,
+      columns,
+      rows,
+      1.6,
+      5.6
+    );
+    const flattened = reliefInternals.flattenSteppedOuterRimPreservingRaised(
+      raised.heights,
+      fullCarrier,
+      raised.raisedCells,
+      columns,
+      rows,
+      2
+    );
+
+    expect(flattened[1 * cellColumns + 0]).toBe(5.6);
+    expect(flattened[4 * cellColumns + 4]).toBe(5.6);
+    expect(flattened[0 * cellColumns + 6]).toBe(1.6);
+    expect(new Set(flattened)).toEqual(new Set([1.6, 5.6]));
+  });
+
   it("assigns every outer and color-transition edge to the configured side color", () => {
     const columns = 7, rows = 7;
     const mask = Array((columns - 1) * (rows - 1)).fill(true) as boolean[];

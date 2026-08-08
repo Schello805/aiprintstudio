@@ -313,10 +313,21 @@ export async function createRelief(
       }
     }
   }
-  const steppedLogo = Boolean((useWordmarkMask || options.outputMode === "stamp") && options.includeBackground && wordmarkPixels);
-  const steppedCellHeights = steppedLogo
-    ? flattenSteppedOuterRim(buildBinaryCellHeights(heights, gridWidth, gridHeight), cellMask, gridWidth, gridHeight)
+  const wordmarkBackgroundCells = useWordmarkMask && options.includeBackground && wordmarkPixels
+    ? buildRaisedWordmarkCellHeights(wordmarkPixels, cellMask, gridWidth, gridHeight, options.baseMm, options.baseMm + options.reliefMm)
     : undefined;
+  const steppedLogo = Boolean(wordmarkBackgroundCells || ((useWordmarkMask || options.outputMode === "stamp") && options.includeBackground && wordmarkPixels));
+  const steppedCellHeights = wordmarkBackgroundCells
+    ? flattenSteppedOuterRimPreservingRaised(
+      wordmarkBackgroundCells.heights,
+      cellMask,
+      wordmarkBackgroundCells.raisedCells,
+      gridWidth,
+      gridHeight
+    )
+    : steppedLogo
+      ? flattenSteppedOuterRim(buildBinaryCellHeights(heights, gridWidth, gridHeight), cellMask, gridWidth, gridHeight)
+      : undefined;
   const emblemBoundary = pipeline.kind === "emblem"
     ? buildSmoothedBoundaryPositions(gridWidth, gridHeight, options.widthMm, heightMm, cellMask, 64)
     : undefined;
@@ -386,7 +397,8 @@ export async function createRelief(
       gridWidth, gridHeight, options.widthMm, heightMm, heights, cellMask,
       colorAssignments, options.colors, options.sideColorIndex,
       flatVectorSurface || (useWordmarkMask && options.includeBackground),
-      steppedLogo, options.processingMode === "vector", options.smoothing
+      steppedLogo, options.processingMode === "vector", options.smoothing,
+      steppedCellHeights
     );
   const preview = transformProductPreview(planarPreview, options.widthMm, options.curveAngle, options.mirrorX);
   let printability = analysePrintability(mesh, heights, options, cellMask, gridWidth);
@@ -414,7 +426,7 @@ export async function createRelief(
     ? buildColoredMeshes(
       gridWidth, gridHeight, options.widthMm, heightMm, heights, cellMask,
       colorAssignments, options.colors, options.sideColorIndex, steppedLogo,
-      options.processingMode === "vector", options.smoothing
+      options.processingMode === "vector", options.smoothing, steppedCellHeights
     )
     : undefined;
   const exportColoredMeshes = coloredMeshes?.map((part) => ({
@@ -1147,7 +1159,8 @@ function buildColoredMeshes(
   sideColorIndex: number,
   stepped = false,
   vectorized = false,
-  vectorSmoothing = 2
+  vectorSmoothing = 2,
+  steppedCellHeightsOverride?: number[]
 ): ColoredMesh[] {
   if (vectorized && colors.length) {
     return buildVectorColorMeshes(
@@ -1164,9 +1177,10 @@ function buildColoredMeshes(
   // zusätzlich aufgesetzt (z. B. 4,4 statt 4,0 mm). Der Tragkörper endet nun
   // 0,4 mm tiefer, die jeweilige Farbe schließt exakt auf Sollhöhe ab.
   const structureHeights = heights.map((height) => Math.max(0, height - colorSkinMm));
-  const topCellHeights = stepped
-    ? flattenSteppedOuterRim(buildBinaryCellHeights(heights, columns, rows), cellMask, columns, rows)
-    : undefined;
+  const topCellHeights = steppedCellHeightsOverride
+    ?? (stepped
+      ? flattenSteppedOuterRim(buildBinaryCellHeights(heights, columns, rows), cellMask, columns, rows)
+      : undefined);
   const structureCellHeights = topCellHeights?.map((height) => Math.max(0, height - colorSkinMm));
   const structure = structureCellHeights
     ? buildSteppedCellMesh(columns, rows, widthMm, heightMm, structureCellHeights, cellMask)
@@ -1635,6 +1649,56 @@ function flattenSteppedOuterRim(
     if (nearOuterEdge) result[index] = minimum;
   }
   return result;
+}
+
+function buildRaisedWordmarkCellHeights(
+  wordmarkPixels: boolean[],
+  cellMask: boolean[],
+  columns: number,
+  rows: number,
+  baseHeight: number,
+  raisedHeight: number
+): { heights: number[]; raisedCells: boolean[] } {
+  const cellColumns = columns - 1, cellRows = rows - 1;
+  const heights = Array(cellColumns * cellRows).fill(baseHeight) as number[];
+  const raisedCells = Array(cellColumns * cellRows).fill(false) as boolean[];
+  for (let y = 0; y < cellRows; y += 1) {
+    for (let x = 0; x < cellColumns; x += 1) {
+      const cell = y * cellColumns + x;
+      if (!cellMask[cell]) continue;
+      const vertex = y * columns + x;
+      const occupied =
+        Number(wordmarkPixels[vertex])
+        + Number(wordmarkPixels[vertex + 1])
+        + Number(wordmarkPixels[vertex + columns])
+        + Number(wordmarkPixels[vertex + columns + 1]);
+      // Bei Logos mit Text ist die Semantik eindeutig: Hintergrund/Träger
+      // bleibt unten, erkannte Schrift und Signet liegen separat darüber.
+      // Schon ein berührter Zellpunkt reicht, weil die Wortmarkenmaske vorher
+      // auf druckbare Mindestbreite erweitert und dabei Buchstabenlöcher
+      // geschützt wird. So verschwinden dünne Striche nicht wieder im Export.
+      if (occupied >= 1) {
+        heights[cell] = raisedHeight;
+        raisedCells[cell] = true;
+      }
+    }
+  }
+  return { heights, raisedCells };
+}
+
+function flattenSteppedOuterRimPreservingRaised(
+  cellHeights: number[],
+  cellMask: boolean[],
+  raisedCells: boolean[],
+  columns: number,
+  rows: number,
+  radius = 2
+): number[] {
+  const flattened = flattenSteppedOuterRim(cellHeights, cellMask, columns, rows, radius);
+  for (let index = 0; index < flattened.length; index += 1) {
+    if (raisedCells[index]) flattened[index] = cellHeights[index];
+  }
+  return flattened;
 }
 
 function buildSteppedCellMesh(
@@ -2108,12 +2172,14 @@ function buildPreviewSurface(
   preserveBoundaryHeights = false,
   stepped = false,
   vectorized = false,
-  vectorSmoothing = 2
+  vectorSmoothing = 2,
+  steppedCellHeightsOverride?: number[]
 ): { positions: number[]; indices: number[]; colorParts: Array<{ color: string; indices: number[] }> } {
   if (stepped && cellMask && (!colorAssignments || !colors.length)) {
     const mesh = buildSteppedCellMesh(
       columns, rows, widthMm, heightMm,
-      flattenSteppedOuterRim(buildBinaryCellHeights(heights, columns, rows), cellMask, columns, rows), cellMask
+      steppedCellHeightsOverride ?? flattenSteppedOuterRim(buildBinaryCellHeights(heights, columns, rows), cellMask, columns, rows),
+      cellMask
     );
     const positions = mesh.vertices.flatMap(([x, y, z]) => [x - widthMm / 2, z, y - heightMm / 2]);
     const indices = mesh.triangles.flatMap(([a, b, c]) => [a, c, b]);
@@ -2136,7 +2202,8 @@ function buildPreviewSurface(
       sideColorIndex,
       stepped,
       vectorized,
-      vectorSmoothing
+      vectorSmoothing,
+      steppedCellHeightsOverride
     );
     const positions: number[] = [];
     const indices: number[] = [];
@@ -2303,6 +2370,7 @@ export const reliefInternals = {
   assignCanonicalTriangleMaterials, buildCanonicalMeshPreview,
   enforceUniformEdgeColor,
   buildWatertightHeightMesh, buildBinaryCellHeights, flattenSteppedOuterRim, buildSteppedCellMesh, buildPreviewSurface, orientMeshLikePreview, encodeBinaryStl, encodeThreeMf,
+  buildRaisedWordmarkCellHeights, flattenSteppedOuterRimPreservingRaised,
   smoothHeightField, analysePrintability, profileSettings, buildProductPixelMask, applyRaisedBorder,
   transformProductMesh, transformProductPreview, buildSolidOuterSilhouette
 };
