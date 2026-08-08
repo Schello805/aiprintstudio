@@ -1324,15 +1324,16 @@ async function buildLayeredVectorRelief(
   const levels = [...new Set(cellHeights.filter((height) => height > 0).map((height) => Number(height.toFixed(4))))]
     .sort((a, b) => a - b);
   if (!levels.length) return { vertices: [], triangles: [] };
+  const maximumHeight = levels[levels.length - 1];
+  const outerWallMask = buildOuterEdgeCellMask(cellMask, columns, rows, 5);
+  const innerLayerMask = cellMask.map((occupied, cell) => occupied && !outerWallMask[cell]);
 
   manifoldModulePromise ??= ManifoldModule();
   const manifoldModule = await manifoldModulePromise;
   manifoldModule.setup();
   const solids: InstanceType<typeof manifoldModule.Manifold>[] = [];
-  let bottom = 0;
-  for (const top of levels) {
-    const mask = cellHeights.map((height, cell) => cellMask[cell] && height >= top - 1e-6);
-    if (!mask.some(Boolean)) continue;
+  const pushSolid = (mask: boolean[], bottom: number, top: number) => {
+    if (!mask.some(Boolean) || top <= bottom + 1e-6) return;
     const paddedColumns = cellColumns + 2;
     const paddedRows = rows + 1;
     const padded = Array(paddedColumns * paddedRows).fill(0) as number[];
@@ -1346,17 +1347,29 @@ async function buildLayeredVectorRelief(
         (y - 1) * heightMm / (rows - 1)
       ] as [number, number])
     )).filter((ring) => ring.length >= 3);
-    if (polygons.length) {
-      const overlap = bottom > 0 ? 0.01 : 0;
-      const solid = new manifoldModule.CrossSection(polygons, "EvenOdd")
-        // Nur minimal vereinfachen: stärkere Vereinfachung erzeugt bei
-        // Wappen sichtbar abgeflachte Außenwände, auch wenn die Kontur oben
-        // korrekt wirkt.
-        .simplify(0.012)
-        .extrude(top - bottom + overlap)
-        .translate([0, 0, bottom - overlap]);
-      if (!solid.isEmpty()) solids.push(solid);
-    }
+    if (!polygons.length) return;
+    const overlap = bottom > 0 ? 0.01 : 0;
+    const solid = new manifoldModule.CrossSection(polygons, "EvenOdd")
+      // Nur minimal vereinfachen: stärkere Vereinfachung erzeugt bei
+      // Wappen sichtbar abgeflachte Außenwände, auch wenn die Kontur oben
+      // korrekt wirkt.
+      .simplify(0.012)
+      .extrude(top - bottom + overlap)
+      .translate([0, 0, bottom - overlap]);
+    if (!solid.isEmpty()) solids.push(solid);
+  };
+
+  // Der äußere Wappenmantel wird bewusst als ein einziger, voller Randstreifen
+  // gebaut. Früher wurde dieselbe Außenkontur pro Höhenstufe erneut extrudiert;
+  // im Slicer sah das wie wellige horizontale Bänder an der Seite aus, obwohl
+  // die Quelldatei sauber war. Die inneren Reliefdetails bleiben weiterhin
+  // gestuft, aber die sichtbare Außenwand ist jetzt ein durchgehender Körper.
+  pushSolid(outerWallMask, 0, maximumHeight);
+
+  let bottom = 0;
+  for (const top of levels) {
+    const mask = cellHeights.map((height, cell) => innerLayerMask[cell] && height >= top - 1e-6);
+    pushSolid(mask, bottom, top);
     bottom = top;
   }
   if (!solids.length) return { vertices: [], triangles: [] };
@@ -1377,6 +1390,34 @@ async function buildLayeredVectorRelief(
   unified.delete();
   solids.forEach((solid) => solid.delete());
   return weldMeshVertices({ vertices, triangles }, 5);
+}
+
+function buildOuterEdgeCellMask(
+  cellMask: boolean[],
+  columns: number,
+  rows: number,
+  radius = 4
+): boolean[] {
+  const cellColumns = columns - 1;
+  const cellRows = rows - 1;
+  const result = Array(cellMask.length).fill(false) as boolean[];
+  const occupiedAt = (x: number, y: number) =>
+    x >= 0 && y >= 0 && x < cellColumns && y < cellRows && Boolean(cellMask[y * cellColumns + x]);
+  for (let y = 0; y < cellRows; y += 1) for (let x = 0; x < cellColumns; x += 1) {
+    const index = y * cellColumns + x;
+    if (!cellMask[index]) continue;
+    let nearOuterEdge = false;
+    for (let offsetY = -radius; offsetY <= radius && !nearOuterEdge; offsetY += 1) {
+      for (let offsetX = -radius; offsetX <= radius; offsetX += 1) {
+        if (!occupiedAt(x + offsetX, y + offsetY)) {
+          nearOuterEdge = true;
+          break;
+        }
+      }
+    }
+    result[index] = nearOuterEdge;
+  }
+  return result;
 }
 
 function stabilizeEmblemOuterWallHeights(
@@ -2245,7 +2286,7 @@ export const reliefInternals = {
   buildVectorLevels, buildSmoothedBoundaryPositions, buildColorCellAssignments, buildColoredMeshes,
   buildCompositeBoundaryPositions,
   buildVectorColorMeshes, buildVectorExtrudedMesh, buildLayeredVectorRelief, smoothVectorRing, mergeMeshes,
-  stabilizeEmblemOuterWallHeights,
+  buildOuterEdgeCellMask, stabilizeEmblemOuterWallHeights,
   assignCanonicalTriangleMaterials, buildCanonicalMeshPreview,
   enforceUniformEdgeColor,
   buildWatertightHeightMesh, buildBinaryCellHeights, flattenSteppedOuterRim, buildSteppedCellMesh, buildPreviewSurface, orientMeshLikePreview, encodeBinaryStl, encodeThreeMf,

@@ -485,6 +485,20 @@ describe("relief mesh", () => {
     }
   });
 
+  it("separates a continuous outer emblem wall from stepped inner details", () => {
+    const columns = 11, rows = 11;
+    const cellColumns = columns - 1, cellRows = rows - 1;
+    const mask = Array(cellColumns * cellRows).fill(true) as boolean[];
+    const outer = reliefInternals.buildOuterEdgeCellMask(mask, columns, rows, 2);
+    const at = (x: number, y: number) => outer[y * cellColumns + x];
+
+    expect(at(0, 0)).toBe(true);
+    expect(at(1, 5)).toBe(true);
+    expect(at(5, 1)).toBe(true);
+    expect(at(5, 5)).toBe(false);
+    expect(at(7, 7)).toBe(false);
+  });
+
   it("removes isolated raised cells from the outer rim of stepped logos", () => {
     const columns = 8, rows = 8;
     const cellColumns = columns - 1, cellRows = rows - 1;
