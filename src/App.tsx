@@ -337,7 +337,7 @@ export function App() {
         invert: false, profile, smoothing: automaticSmoothing, detail: automaticDetail,
         processingMode: effectiveMode,
         pipelineKind,
-        includeBackground: effectiveMode === "wordmark" && (repair || includeLogoBackground),
+        includeBackground: effectiveMode === "wordmark" && (repair || includeLogoBackground || multicolorEnabled),
         nozzleMm: 0.4,
         minimumFeatureMm: minimumFeatureForMode(effectiveMode, file.suggestedProfile, repair || optimizeForStandardNozzle),
         sourceColors: multicolorEnabled ? sourceColors : [],
@@ -685,7 +685,7 @@ export function App() {
                   <button className={processingMode === "vector" ? "mode-option has-tooltip selected" : "mode-option has-tooltip"} onClick={() => { setProcessingMode("vector"); setProfile("logo"); }} aria-description={modeTooltips.vector}>
                     <Layers3 /><div><strong>Wappen & Emblem</strong><span>Innenflächen bleiben erhalten</span></div><SettingTooltip text={modeTooltips.vector} />
                   </button>
-                  <button className={processingMode === "wordmark" ? "mode-option has-tooltip selected" : "mode-option has-tooltip"} onClick={() => { setProcessingMode("wordmark"); setProfile("logo"); }} aria-description={modeTooltips.wordmark}>
+                  <button className={processingMode === "wordmark" ? "mode-option has-tooltip selected" : "mode-option has-tooltip"} onClick={() => { setProcessingMode("wordmark"); setProfile("logo"); setIncludeLogoBackground(true); }} aria-description={modeTooltips.wordmark}>
                     <Type /><div><strong>Logo mit Text</strong><span>Offene Buchstabenräume</span></div><SettingTooltip text={modeTooltips.wordmark} />
                   </button>
                   <button className={processingMode === "depth" ? "mode-option has-tooltip selected" : "mode-option has-tooltip"} onClick={() => { setProcessingMode("depth"); setProfile("photo"); }} aria-description={modeTooltips.depth}>
@@ -698,9 +698,6 @@ export function App() {
                     <NumberField label="BREITE" tooltip={parameterTooltips.width} value={widthMm} unit="mm" min={20} max={300} step={5} setValue={setWidthMm} />
                     {studioTool === "lithophane" && <NumberField label="MATERIALBASIS" tooltip={parameterTooltips.base} value={baseMm} unit="mm" min={0.8} max={10} step={0.2} setValue={setBaseMm} />}
                     <NumberField label="RELIEF" tooltip={parameterTooltips.relief} value={reliefMm} unit="mm" min={0.5} max={20} step={0.5} setValue={setReliefMm} />
-                  </div>
-                  <div className="automatic-settings-note">
-                    <Sparkles /><div><strong>Druckparameter werden automatisch optimiert</strong><span>Grundplatte, Glättung, Detailerhalt, Relief-Richtung und Meshgröße werden passend zum gewählten Verfahren gesetzt.</span></div>
                   </div>
                   {studioTool === "lithophane" && <div className="product-options">
                     <div className="product-shape-row">
@@ -716,14 +713,18 @@ export function App() {
                   <div className="compact-option-grid">
                   {processingMode === "wordmark" && (
                     <button
-                      className={includeLogoBackground ? "background-toggle selected" : "background-toggle"}
-                      onClick={() => setIncludeLogoBackground((current) => !current)}
-                      aria-pressed={includeLogoBackground}
+                      className={includeLogoBackground || multicolorEnabled ? "background-toggle selected" : "background-toggle"}
+                      onClick={() => {
+                        if (!multicolorEnabled) {
+                          setIncludeLogoBackground((current) => !current);
+                        }
+                      }}
+                      aria-pressed={includeLogoBackground || multicolorEnabled}
                     >
                       <Layers3 />
                       <div>
                         <strong>Hintergrund mitdrucken</strong>
-                        <span>{includeLogoBackground ? "Grundfläche bleibt in Vorschau, STL und 3MF erhalten" : "Nur Signet und Schrift werden freigestellt exportiert"}</span>
+                        <span>{multicolorEnabled ? "Bei AMS automatisch aktiv: Text und Signet liegen sichtbar erhöht auf der Grundfläche" : includeLogoBackground ? "Grundfläche bleibt in Vorschau, STL und 3MF erhalten" : "Nur Signet und Schrift werden freigestellt exportiert"}</span>
                       </div>
                       <SettingTooltip text={"Legt fest, ob die Bildfläche als zusammenhängende Grundplatte Teil des Modells bleibt.\nBeispiel: Aktiv für ein quadratisches App-Logo; deaktiviert für einen freistehenden Schriftzug."} />
                       <span className="toggle-track"><span /></span>
