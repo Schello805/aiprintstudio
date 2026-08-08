@@ -1083,7 +1083,7 @@ function assignCanonicalTriangleMaterials(
     // Nur nach oben gerichtete Deckflächen erhalten die erkannte Motivfarbe.
     // Boden, Außenwand und senkrechte Höhenübergänge bleiben einheitlich in
     // der gewählten Seitenfarbe.
-    if (normalOf(a, b, c)[2] <= 0.25) return sideColorIndex;
+    if (normalOf(a, b, c)[2] <= 0.85) return sideColorIndex;
     const centerX = (a[0] + b[0] + c[0]) / 3;
     const centerY = (a[1] + b[1] + c[1]) / 3;
     const x = Math.max(0, Math.min(cellColumns - 1, Math.floor(centerX / widthMm * cellColumns)));

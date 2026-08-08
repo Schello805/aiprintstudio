@@ -303,6 +303,21 @@ describe("relief mesh", () => {
     expect(preview.colorParts.reduce((sum, part) => sum + part.indices.length, 0)).toBe(preview.indices.length);
   });
 
+  it("keeps sloped emblem seams in the side color instead of drawing color threads", () => {
+    const mesh = {
+      vertices: [
+        [0, 0, 0], [10, 0, 0], [0, 10, 10],
+        [12, 0, 4], [20, 0, 4], [12, 10, 4]
+      ] as const,
+      triangles: [[0, 1, 2], [3, 4, 5]] as const
+    };
+    const materials = reliefInternals.assignCanonicalTriangleMaterials(
+      mesh, [1, 1, 1, 1], 3, 3, 20, 20, 0
+    );
+    expect(materials[0]).toBe(0);
+    expect(materials[1]).toBe(1);
+  });
+
   it("widens thin wordmark pixels for a standard 0.4 mm nozzle", () => {
     const mask = Array(9 * 9).fill(false) as boolean[];
     mask[4 * 9 + 4] = true;
