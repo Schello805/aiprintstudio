@@ -1825,12 +1825,12 @@ function buildWordmarkPixelMask(rgba: Buffer, width: number, height: number): bo
 
 function buildWordmarkForegroundPixelMask(rgba: Buffer, width: number, height: number): boolean[] {
   const pixelCount = width * height;
-  if (hasUsefulTransparency(rgba)) return buildWordmarkPixelMask(rgba, width, height);
 
   const result = Array(pixelCount).fill(false) as boolean[];
   const visited = new Uint8Array(pixelCount);
   const colorKeyAt = (index: number) => {
     const offset = index * 4;
+    if (rgba[offset + 3] < 64) return "transparent";
     // 32er-Farbklassen verbinden antialiaste Buchstaben noch ausreichend,
     // trennen aber große Logo-Flächen, Text und Signets robust genug für die
     // anschließende Komponentenbewertung.
@@ -1879,10 +1879,12 @@ function buildWordmarkForegroundPixelMask(rgba: Buffer, width: number, height: n
       for (const pixel of queue) result[pixel] = true;
     }
   }
-  // Komponentenbasierte Erkennung kann bei weich gerenderten Logos einzelne
-  // Antialias-Pixel auslassen. Ein kleiner lokaler Schluss verbindet solche
-  // Lücken, ohne große Hintergrundflächen wieder anzuheben.
-  return expandPixelMaskPreservingHoles(result, width, height, 1);
+  // Keine pauschale Verbreiterung an dieser Stelle: Bei runden Badges mit
+  // Textfarben, die auch im Hintergrund vorkommen, verteilt eine Expansion
+  // kleine Antialias-Komponenten über große Flächen. Die druckbare
+  // Mindestbreite wird später kontrolliert und deutlich vorsichtiger
+  // angewendet.
+  return result;
 }
 
 function fitSmoothBackground(rgba: Buffer, width: number, height: number): {

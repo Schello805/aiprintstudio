@@ -954,6 +954,28 @@ describe("relief mesh", () => {
     }
   });
 
+  it("does not treat a transparent round badge as raised wordmark foreground", async () => {
+    const svg = Buffer.from(`
+      <svg xmlns="http://www.w3.org/2000/svg" width="240" height="240">
+        <circle cx="120" cy="120" r="104" fill="#ffd821"/>
+        <path d="M16 120a104 104 0 0 1 208 0z" fill="#1d65b7"/>
+        <circle cx="120" cy="120" r="104" fill="none" stroke="#e2232a" stroke-width="12"/>
+        <text x="120" y="55" text-anchor="middle" font-family="Helvetica" font-size="25" font-weight="bold" fill="#ffd821">MED UKRAINE</text>
+        <text x="120" y="205" text-anchor="middle" font-family="Helvetica" font-size="26" font-weight="bold" fill="#1d65b7">SLAVA UKRAINI</text>
+        <path d="M88 118c18-24 38-24 58-2-22-5-36 6-52 22 8-18 2-22-6-20z" fill="#ffffff"/>
+      </svg>
+    `);
+    const { data, info } = await sharp(svg)
+      .resize(192, 192, { fit: "fill" })
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    const foregroundMask = reliefInternals.buildWordmarkForegroundPixelMask(data, info.width, info.height);
+    const coverage = foregroundMask.filter(Boolean).length / foregroundMask.length;
+    expect(coverage).toBeGreaterThan(0.04);
+    expect(coverage).toBeLessThan(0.24);
+  });
+
   it("automatically treats a gradient logo as one printable background relief", async () => {
     const directory = await mkdtemp(join(tmpdir(), "ai-print-auto-gradient-logo-test-"));
     try {
