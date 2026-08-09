@@ -341,6 +341,17 @@ export async function createRelief(
   // zu und verändert die Geometrie nicht mehr.
   let planarMesh = pipeline.kind === "emblem" && options.pipelineKind === "emblem" && !steppedCellHeights
     ? await buildLayeredVectorRelief(gridWidth, gridHeight, options.widthMm, heightMm, heights, cellMask, 8)
+    : steppedCellHeights && useWordmarkMask && options.includeBackground
+      ? await buildLayeredCellVectorRelief(
+        gridWidth,
+        gridHeight,
+        options.widthMm,
+        heightMm,
+        steppedCellHeights,
+        cellMask,
+        Math.max(3, options.smoothing),
+        false
+      )
     : steppedCellHeights
       ? buildSteppedCellMesh(gridWidth, gridHeight, options.widthMm, heightMm, steppedCellHeights, cellMask)
       : buildWatertightHeightMesh(gridWidth, gridHeight, options.widthMm, heightMm, heights, cellMask, 0, emblemBoundary);
@@ -1337,7 +1348,21 @@ async function buildLayeredVectorRelief(
     // Antialias-Zwischenwerte, ohne druckbare Details zu verlieren.
     return Math.max(0.2, Math.round(average / 0.2) * 0.2);
   });
-  stabilizeEmblemOuterWallHeights(cellHeights, cellMask, columns, rows, 3);
+  return buildLayeredCellVectorRelief(columns, rows, widthMm, heightMm, cellHeights, cellMask, smoothing, true);
+}
+
+async function buildLayeredCellVectorRelief(
+  columns: number,
+  rows: number,
+  widthMm: number,
+  heightMm: number,
+  cellHeights: number[],
+  cellMask: boolean[],
+  smoothing = 8,
+  stabilizeOuterWall = true
+): Promise<Mesh> {
+  const cellColumns = columns - 1;
+  if (stabilizeOuterWall) stabilizeEmblemOuterWallHeights(cellHeights, cellMask, columns, rows, 3);
   const levels = [...new Set(cellHeights.filter((height) => height > 0).map((height) => Number(height.toFixed(4))))]
     .sort((a, b) => a - b);
   if (!levels.length) return { vertices: [], triangles: [] };

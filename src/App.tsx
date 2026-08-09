@@ -80,7 +80,7 @@ type StudioProject = {
   };
 };
 
-const RELIEF_ENGINE_VERSION = "2026-08-09-stable-emblem-wordmark-v4";
+const RELIEF_ENGINE_VERSION = "2026-08-09-vector-wordmark-background-v5";
 
 const optimalResolution: Record<QualityProfile, number> = {
   fast: 192,
@@ -183,7 +183,7 @@ export function App() {
           applyProject(
             project,
             project.engineVersion === RELIEF_ENGINE_VERSION
-              ? "Letzten Studio-Stand automatisch wiederhergestellt."
+              ? "Bild und Einstellungen wiederhergestellt · Modell bitte neu aktualisieren."
               : "Bild und Einstellungen wiederhergestellt · Alte Modellvorschau wegen Qualitätsupdate verworfen."
           );
         }

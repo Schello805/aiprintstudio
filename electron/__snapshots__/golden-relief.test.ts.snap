@@ -9,11 +9,11 @@ exports[`golden relief exports > keeps emblem geometry reproducible 2`] = `
 }
 `;
 
-exports[`golden relief exports > keeps wordmark geometry reproducible 1`] = `"d897c70aee15fcd0116841b46b2a62f1ee090f09b4166a6efd4834a30cba3b58"`;
+exports[`golden relief exports > keeps wordmark geometry reproducible 1`] = `"93ce1f901cea3e13da55f72f7e97910ba792dc5355694104a96dd93abd45cd8e"`;
 
 exports[`golden relief exports > keeps wordmark geometry reproducible 2`] = `
 {
-  "contour": 100,
-  "triangles": 23514,
+  "contour": 81,
+  "triangles": 4944,
 }
 `;
