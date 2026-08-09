@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { readFileSync } from "node:fs";
+import { pathToFileURL } from "node:url";
 
 const appPath = resolve(process.argv[2] || "release/mac-arm64/AI Print Studio.app");
 const packageJson = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
@@ -32,4 +33,11 @@ const electronVersion = execFileSync(join(appPath, "Contents/MacOS/AI Print Stud
   timeout: 15_000
 }).trim();
 if (!electronVersion) throw new Error("Das gepackte Electron-Laufzeitsystem startet nicht.");
+const reliefModuleUrl = pathToFileURL(join(appPath, "Contents/Resources/app.asar/dist-electron/relief.js")).href;
+const reliefImportCheck = execFileSync(join(appPath, "Contents/MacOS/AI Print Studio"), ["-e", `import(${JSON.stringify(reliefModuleUrl)}).then(() => process.stdout.write('ok'))`], {
+  encoding: "utf8",
+  env: { ...process.env, ELECTRON_RUN_AS_NODE: "1" },
+  timeout: 15_000
+}).trim();
+if (reliefImportCheck !== "ok") throw new Error("Das gepackte Relief-Modul konnte nicht geladen werden.");
 console.log(`Release-Smoke-Test bestanden: AI Print Studio ${version}, Electron ${electronVersion}, arm64`);

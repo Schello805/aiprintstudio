@@ -6,7 +6,7 @@ import { contours } from "d3-contour";
 import ManifoldModule from "manifold-3d/manifold";
 import { DOMParser } from "@xmldom/xmldom";
 import { Color, ExtrudeGeometry, ShapeUtils, Vector2 } from "three";
-import { SVGLoader } from "three/examples/jsm/loaders/SVGLoader.js";
+import { SVGLoader } from "./vendor/SVGLoader.js";
 import { validateGeneratedExportBuffer } from "./export-validation.js";
 import { analyseContourQuality, removeInvalidTriangles, validateMeshGeometry, type ContourQualityReport, type GeometryValidationReport } from "./mesh-quality.js";
 import { resolveReliefPipeline, type ReliefPipelineKind } from "./relief-pipelines.js";

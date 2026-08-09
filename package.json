@@ -1,6 +1,6 @@
 {
   "name": "ai-print-studio",
-  "version": "0.31.37",
+  "version": "0.31.38",
   "description": "Lokale Bild-zu-3D-Desktop-App für Apple Silicon",
   "author": "Michael Schellenberger",
   "license": "SEE LICENSE IN LICENSE.md",
@@ -8,7 +8,7 @@
   "main": "dist-electron/main.js",
   "scripts": {
     "dev": "concurrently -k \"vite\" \"wait-on tcp:5173 && electron .\"",
-    "build": "tsc -b && vite build && tsc -p electron/tsconfig.json",
+    "build": "tsc -b && vite build && tsc -p electron/tsconfig.json && node scripts/copy-electron-vendor.mjs",
     "test": "vitest run",
     "test:golden": "vitest run electron/golden-relief.test.ts electron/export-validation.test.ts",
     "test:slicers": "vitest run electron/slicer-compatibility.test.ts",
