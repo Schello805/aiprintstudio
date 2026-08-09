@@ -47,12 +47,14 @@
 - Rasterbilder im Modus **Logo mit Text** werden lokal in SVG-Farbflächen
   vektorisiert und anschließend durch den SVG-Direktpfad extrudiert. Echte SVGs
   bleiben der Qualitätsmaßstab; PNG/JPG werden nicht mehr als Pixel-Höhenkarte
-  zu Schrift-STL verarbeitet.
+  zu Schrift-STL verarbeitet. Die Raster-Vektorisierung nutzt ein festes,
+  dokumentiertes Preset, damit spätere UI- oder Wappenänderungen die
+  Wortmarkenqualität nicht unbeabsichtigt verändern.
 
 ## Nächste Produktverbesserungen
 
-- integrierter PNG/JPG-zu-SVG-Schritt mit sichtbarer Vektorvorschau und
-  Qualitätswarnung vor STL/3MF
+- sichtbare Vektorvorschau für automatisch vektorisierte PNG/JPG-Logos, damit
+  Nutzer die Zwischenqualität vor STL/3MF beurteilen können
 - SVG-Pfade mit echten Textobjekten erkennen und den Nutzer auffordern, Text in
   Pfade/Kurven umzuwandeln, falls die Schrift nicht eingebettet ist
 - eigene Regressionstests für direkte SVG-Extrusion, damit spätere

@@ -80,7 +80,7 @@ type StudioProject = {
   };
 };
 
-const RELIEF_ENGINE_VERSION = "2026-08-09-svg-path-wordmark-v1";
+const RELIEF_ENGINE_VERSION = "2026-08-09-wordmark-trace-v2";
 
 const optimalResolution: Record<QualityProfile, number> = {
   fast: 192,
@@ -93,7 +93,7 @@ const optimalResolution: Record<QualityProfile, number> = {
 const modeTooltips: Record<ProcessingMode, string> = {
   auto: "Analysiert das Bild und verwendet automatisch die hochwertigste passende Methode.\nBeispiel: Ein Wappen nutzt saubere Flächen, ein Foto die lokale KI-Tiefenschätzung.",
   vector: "Bewahrt geschlossene Innenflächen und ordnet Motivbereichen feste Höhen zu.\nBeispiel: Weiße Felder und Rollen innerhalb eines Wappens bleiben erhalten.",
-  wordmark: "Für Logo-Schrift nutzt die App SVG-Pfade. PNG/JPG werden vorher lokal in SVG umgewandelt; echte SVG-Dateien bleiben am saubersten.\nBeispiel: Die Innenräume von a, e, d, o und ö bleiben bei guten Pfaden offen.",
+  wordmark: "Für Logo-Schrift nutzt die App SVG-Pfade. PNG/JPG werden lokal nach SVG vektorisiert, echte SVG-Dateien liefern aber deutlich sauberere Schrift und Konturen.\nBeispiel: Die Innenräume von a, e, d, o und ö bleiben bei echten Pfaden am zuverlässigsten offen.",
   depth: "Schätzt mit Depth Anything V2 die räumliche Tiefe eines Fotos.\nBeispiel: Eine Person wird vom Hintergrund räumlich getrennt.",
   height: "Übernimmt die Helligkeit des Bildes direkt als Höhe.\nBeispiel: Weiß entspricht hoch und Schwarz niedrig – oder umgekehrt."
 };
@@ -300,8 +300,10 @@ export function App() {
     if (selected.format === "svg") setIncludeLogoBackground(true);
     setResult(null);
     setUploadStatus(selected.format === "svg"
-      ? `${selected.width} × ${selected.height} SVG geladen · echte Pfade für Logo/Text aktiv.`
-      : `${selected.width} × ${selected.height} Pixel geladen · Profil „${selected.suggestedProfile === "logo" ? "Logo" : "Foto"}“ empfohlen.`);
+      ? `${selected.width} × ${selected.height} SVG geladen · beste Qualität: echte Pfade für Logo/Text aktiv.`
+      : selected.suggestedProfile === "logo"
+        ? `${selected.width} × ${selected.height} Pixel geladen · PNG/JPG ist erlaubt, aber mit einer SVG-Datei wird Logo-Schrift deutlich sauberer.`
+        : `${selected.width} × ${selected.height} Pixel geladen · Profil „Foto“ empfohlen.`);
   }
 
   async function createTextSource(options: Parameters<NonNullable<typeof window.desktop>["createTextImage"]>[0]) {
@@ -738,8 +740,8 @@ export function App() {
                       <div className={file?.format === "svg" ? "svg-workflow-note ready" : "svg-workflow-note"}>
                         <Type />
                         <div>
-                          <strong>{file?.format === "svg" ? "SVG-Pfade direkt aktiv" : "PNG/JPG wird zu SVG vektorisiert"}</strong>
-                          <span>{file?.format === "svg" ? "Schrift und Signet werden aus echten Kurven extrudiert – ohne Pixelraten." : "Die App erzeugt lokal SVG-Pfade und nutzt danach die saubere Pfad-Extrusion. Eine echte SVG-Datei bleibt die beste Quelle."}</span>
+                          <strong>{file?.format === "svg" ? "SVG-Pfade direkt aktiv" : "PNG/JPG wird lokal zu SVG vektorisiert"}</strong>
+                          <span>{file?.format === "svg" ? "Beste Qualität: Schrift und Signet werden aus echten Kurven extrudiert." : "PNG funktioniert. Für lesbare kleine Schrift, offene Buchstabenräume und glatte Konturen ist eine echte SVG-Datei aber deutlich besser."}</span>
                         </div>
                       </div>
                       <button

@@ -3,9 +3,24 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import sharp from "sharp";
 import { describe, expect, it } from "vitest";
-import { createRelief } from "./relief";
+import { createRelief, reliefInternals } from "./relief";
 
 describe("real-world logo regression fixtures", () => {
+  it("keeps raster wordmark vectorization parameters locked", () => {
+    expect(reliefInternals.wordmarkRasterTracePreset).toMatchObject({
+      minimumTraceWidthPx: 256,
+      maximumTraceWidthPx: 1200,
+      resolutionScale: 2,
+      sampleTargetPixels: 20_000,
+      alphaCutoff: 24,
+      maximumColorClusters: 6,
+      kMeansIterations: 9,
+      minimumComponentAreaRatio: 0.00008,
+      backgroundTraceSmoothing: 2,
+      motifTraceSmoothing: 3
+    });
+  });
+
   it("extrudes SVG wordmark paths directly instead of rasterizing them first", async () => {
     const directory = await mkdtemp(join(tmpdir(), "logo-svg-direct-"));
     try {

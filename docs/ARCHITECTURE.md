@@ -136,7 +136,10 @@ und WEBP bleiben Rasterquellen. Sie werden für Wappen, Embleme und Fotos lokal
 in SVG-Farbflächen vektorisiert und anschließend durch denselben
 SVG-Extrusionspfad geführt; echte SVG-Dateien bleiben dadurch der
 Qualitätsmaßstab, Rasterlogos bekommen aber einen sauberen Pfad-basierten
-Workflow statt einer Pixel-Höhenkarte.
+Workflow statt einer Pixel-Höhenkarte. Die Raster-zu-SVG-Parameter liegen als
+festes `wordmarkRasterTracePreset` in der Engine und sind absichtlich keine
+UI-Regler. Damit bleibt der Modus **Logo mit Text** reproduzierbar, auch wenn
+andere Pipelines später angepasst werden.
 
 Lithophane verwenden dieselbe wasserdichte Meshpipeline und ergänzen sie vor
 der Vermaschung um eine definierte Außenmaske. Rechteck,

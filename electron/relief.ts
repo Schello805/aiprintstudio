@@ -92,6 +92,25 @@ type Mesh = { vertices: Vec3[]; triangles: Triangle[] };
 type ColoredMesh = { mesh: Mesh; color: string; name: string };
 type SvgReliefPart = { mesh: Mesh; color: string; area: number; bounds: { minX: number; minY: number; maxX: number; maxY: number } };
 
+const wordmarkRasterTracePreset = {
+  /**
+   * Festgezurrtes Qualitätsprofil für PNG/JPG → SVG im Modus "Logo mit Text".
+   * Diese Werte sind absichtlich keine UI-Regler: SVG bleibt der saubere
+   * Qualitätsweg, Rasterlogos sollen aber stabil und ohne zufällige
+   * Detail-/Artefaktänderungen konvertiert werden.
+   */
+  minimumTraceWidthPx: 256,
+  maximumTraceWidthPx: 1200,
+  resolutionScale: 2,
+  sampleTargetPixels: 20_000,
+  alphaCutoff: 24,
+  maximumColorClusters: 6,
+  kMeansIterations: 9,
+  minimumComponentAreaRatio: 0.00008,
+  backgroundTraceSmoothing: 2,
+  motifTraceSmoothing: 3
+} as const;
+
 const safeDefaults: ReliefOptions = {
   sourceName: "",
   widthMm: 100,
@@ -1342,7 +1361,13 @@ async function createTracedWordmarkSvg(
   sourceWidth: number,
   sourceHeight: number
 ): Promise<string | null> {
-  const targetWidth = Math.min(1200, Math.max(256, Math.min(sourceWidth, options.resolution * 2)));
+  const targetWidth = Math.min(
+    wordmarkRasterTracePreset.maximumTraceWidthPx,
+    Math.max(
+      wordmarkRasterTracePreset.minimumTraceWidthPx,
+      Math.min(sourceWidth, options.resolution * wordmarkRasterTracePreset.resolutionScale)
+    )
+  );
   const targetHeight = Math.max(64, Math.round(targetWidth * sourceHeight / Math.max(1, sourceWidth)));
   const { data } = await sharp(imagePath)
     .rotate()
@@ -1353,21 +1378,27 @@ async function createTracedWordmarkSvg(
   const pixels = targetWidth * targetHeight;
   const hasAlpha = hasUsefulTransparency(data);
   const colorSamples: Array<[number, number, number]> = [];
-  const sampleStep = Math.max(1, Math.floor(pixels / 20_000));
+  const sampleStep = Math.max(1, Math.floor(pixels / wordmarkRasterTracePreset.sampleTargetPixels));
   for (let index = 0; index < pixels; index += sampleStep) {
     const offset = index * 4;
-    if (data[offset + 3] < 24) continue;
+    if (data[offset + 3] < wordmarkRasterTracePreset.alphaCutoff) continue;
     colorSamples.push([data[offset], data[offset + 1], data[offset + 2]]);
   }
   if (colorSamples.length < 16) return null;
-  const clusterCount = Math.max(2, Math.min(6, new Set(colorSamples.map(([r, g, b]) => `${r >> 4}:${g >> 4}:${b >> 4}`)).size));
+  const clusterCount = Math.max(
+    2,
+    Math.min(
+      wordmarkRasterTracePreset.maximumColorClusters,
+      new Set(colorSamples.map(([r, g, b]) => `${r >> 4}:${g >> 4}:${b >> 4}`)).size
+    )
+  );
   let centers = seedColorCenters(colorSamples, clusterCount);
   const assignments = new Int16Array(pixels);
-  for (let iteration = 0; iteration < 9; iteration += 1) {
+  for (let iteration = 0; iteration < wordmarkRasterTracePreset.kMeansIterations; iteration += 1) {
     const sums = Array.from({ length: clusterCount }, () => [0, 0, 0, 0]);
     for (let index = 0; index < pixels; index += 1) {
       const offset = index * 4;
-      if (data[offset + 3] < 24) { assignments[index] = -1; continue; }
+      if (data[offset + 3] < wordmarkRasterTracePreset.alphaCutoff) { assignments[index] = -1; continue; }
       const best = nearestColorCenter([data[offset], data[offset + 1], data[offset + 2]], centers);
       assignments[index] = best;
       sums[best][0] += data[offset]; sums[best][1] += data[offset + 1]; sums[best][2] += data[offset + 2]; sums[best][3] += 1;
@@ -1388,7 +1419,7 @@ async function createTracedWordmarkSvg(
   const counts = grouped.counts;
   const groupedClusterCount = centers.length;
   const backgroundIndex = rawBackgroundIndex >= 0 ? grouped.map[rawBackgroundIndex] : -1;
-  const minArea = Math.max(14, Math.round(pixels * 0.00008));
+  const minArea = Math.max(14, Math.round(pixels * wordmarkRasterTracePreset.minimumComponentAreaRatio));
   const paths: string[] = [];
   for (let cluster = 0; cluster < groupedClusterCount; cluster += 1) {
     if (counts[cluster] < minArea) continue;
@@ -1400,7 +1431,14 @@ async function createTracedWordmarkSvg(
       minArea,
       true
     );
-    const path = traceMaskToSvgPath(mask, targetWidth, targetHeight, options.includeBackground && cluster === backgroundIndex ? 2 : 3);
+    const path = traceMaskToSvgPath(
+      mask,
+      targetWidth,
+      targetHeight,
+      options.includeBackground && cluster === backgroundIndex
+        ? wordmarkRasterTracePreset.backgroundTraceSmoothing
+        : wordmarkRasterTracePreset.motifTraceSmoothing
+    );
     if (!path) continue;
     const color = rgbToHex(centers[cluster]);
     paths.push(`<path fill="${color}" d="${path}"/>`);
@@ -3009,5 +3047,6 @@ export const reliefInternals = {
   buildWatertightHeightMesh, buildBinaryCellHeights, flattenSteppedOuterRim, buildSteppedCellMesh, buildPreviewSurface, orientMeshLikePreview, encodeBinaryStl, encodeThreeMf,
   buildRaisedWordmarkCellHeights, flattenSteppedOuterRimPreservingRaised,
   smoothHeightField, analysePrintability, profileSettings, buildProductPixelMask, applyRaisedBorder,
-  transformProductMesh, transformProductPreview, buildSolidOuterSilhouette
+  transformProductMesh, transformProductPreview, buildSolidOuterSilhouette,
+  wordmarkRasterTracePreset
 };

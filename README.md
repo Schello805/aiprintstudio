@@ -178,12 +178,13 @@ enthält 0,4 mm zusätzlich als Profilhinweis; die tatsächlich verwendete Düse
 muss weiterhin im Slicer zum ausgewählten Drucker passen.
 
 Für Logos mit kleiner oder geschwungener Schrift ist eine **SVG-Datei mit echten
-Pfaden** weiterhin die beste Quelle. Bei SVG nutzt AI Print Studio die
-vorhandenen Pfade direkt für STL und 3MF. PNG/JPG/WEBP werden im Modus
-**Logo mit Text** automatisch lokal vektorisiert; die App erzeugt also zuerst
-SVG-Konturen und extrudiert anschließend diese Pfade. Bei sehr kleinen,
-verrauschten oder verlaufenden Logos sollte das Ergebnis trotzdem im Slicer
-geprüft werden.
+Pfaden** die empfohlene Quelle. Bei SVG nutzt AI Print Studio die vorhandenen
+Pfade direkt für STL und 3MF und erzielt dadurch deutlich sauberere Schrift,
+offene Buchstabeninnenräume und glattere Konturen. PNG/JPG/WEBP sind erlaubt
+und werden im Modus **Logo mit Text** automatisch lokal vektorisiert; die App
+zeigt beim Upload aber bewusst den Hinweis, dass eine echte SVG-Datei die
+Qualität sichtbar verbessert. Bei sehr kleinen, verrauschten oder verlaufenden
+Logos sollte das Ergebnis trotzdem im Slicer geprüft werden.
 
 Ist **Hintergrund mitdrucken** aktiv, erzeugt die App einen geschlossenen,
 massiven Körper: Boden und Hintergrund bilden die Grundplatte; erkannte Schrift
