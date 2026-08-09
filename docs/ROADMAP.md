@@ -17,7 +17,8 @@
   Seiten- und Übergangskanten
 - polygonbasierte Wappen- und Farbkonturen für identisch glatte Vorschau-,
   STL- und 3MF-Geometrie ohne pixelweise Außenwände
-- SVG-Import, Druckscore, Verlauf und Updateprüfung
+- SVG-Import mit direkter Pfad-Extrusion für **Logo mit Text**, Druckscore,
+  Verlauf und Updateprüfung
 - `.aips`-Projektdateien mit eingebetteter Quelle und Bearbeitungsstand
 - automatische Druckreparatur für 0,4-mm-Düsen
 - lokale Variantenprüfung für Konturglättung ohne Wechsel des gewählten Modus
@@ -43,6 +44,15 @@
   Wappenkonturen werden nicht mehr zu einem Brim erweitert
 - loch-erhaltende Mindestbreitenkorrektur für Wortmarken sowie motivbasierte
   Farbmessung ohne weißen Bildhintergrund
+
+## Nächste Produktverbesserungen
+
+- integrierter PNG/JPG-zu-SVG-Schritt mit sichtbarer Vektorvorschau und
+  Qualitätswarnung vor STL/3MF
+- SVG-Pfade mit echten Textobjekten erkennen und den Nutzer auffordern, Text in
+  Pfade/Kurven umzuwandeln, falls die Schrift nicht eingebettet ist
+- eigene Regressionstests für direkte SVG-Extrusion, damit spätere
+  Wappenänderungen den Logo-mit-Text-Pfad nicht verändern
 - frei umschaltbarer schwarzer oder weißer Hintergrund in der 3D-Vorschau
 - semantisch erhabene, schwarz umrandete Wappenmotive auch bei kleinen
   Antialias-Unterbrechungen der Kontur

@@ -5,6 +5,21 @@ import { describe, expect, it } from "vitest";
 import { createRelief } from "./relief";
 
 describe("real-world logo regression fixtures", () => {
+  it("extrudes SVG wordmark paths directly instead of rasterizing them first", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "logo-svg-direct-"));
+    try {
+      const result = await createRelief(resolve("test-fixtures/logos/counters.svg"), directory, {
+        pipelineKind: "wordmark", processingMode: "wordmark", profile: "logo", resolution: 512,
+        widthMm: 120, minimumFeatureMm: 0.3, includeBackground: false
+      });
+      expect(result.geometryValidation.valid).toBe(true);
+      expect(result.printability.issues).toContain("SVG-Pfade direkt extrudiert – keine Raster-Vektorisierung nötig.");
+      expect(result.triangleCount).toBeLessThan(250_000);
+      expect(result.fileBytes.stl).toBeLessThan(25_000_000);
+      expect(result.fileBytes.threeMf).toBeLessThan(25_000_000);
+    } finally { await rm(directory, { recursive: true, force: true }); }
+  }, 20_000);
+
   it("keeps small enclosed counters open", async () => {
     const directory = await mkdtemp(join(tmpdir(), "logo-counters-"));
     try {

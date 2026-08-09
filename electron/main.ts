@@ -647,6 +647,7 @@ app.whenReady().then(async () => {
       size: bytes.length,
       width: metadata.width,
       height: metadata.height,
+      format: metadata.format === "svg" ? "svg" : metadata.format === "jpeg" ? "jpg" : metadata.format,
       suggestedProfile,
       dataUrl: `data:${mime};base64,${previewBytes.toString("base64")}`
     };

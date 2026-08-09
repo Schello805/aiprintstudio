@@ -29,6 +29,7 @@ interface Window {
       size: number;
       width: number;
       height: number;
+      format: "png" | "jpg" | "webp" | "svg";
       suggestedProfile: "logo" | "photo";
       dataUrl: string;
     } | null>;
@@ -50,6 +51,7 @@ interface Window {
       size: number;
       width: number;
       height: number;
+      format?: "png" | "jpg" | "webp" | "svg";
       suggestedProfile: "logo";
       dataUrl: string;
     }>;

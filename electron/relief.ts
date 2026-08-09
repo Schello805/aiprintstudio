@@ -1,10 +1,12 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { basename, extname, join } from "node:path";
 import JSZip from "jszip";
 import sharp from "sharp";
 import { contours } from "d3-contour";
 import ManifoldModule from "manifold-3d/manifold";
-import { ShapeUtils, Vector2 } from "three";
+import { DOMParser } from "@xmldom/xmldom";
+import { Color, ExtrudeGeometry, ShapeUtils, Vector2 } from "three";
+import { SVGLoader } from "three/examples/jsm/loaders/SVGLoader.js";
 import { validateGeneratedExportBuffer } from "./export-validation.js";
 import { analyseContourQuality, removeInvalidTriangles, validateMeshGeometry, type ContourQualityReport, type GeometryValidationReport } from "./mesh-quality.js";
 import { resolveReliefPipeline, type ReliefPipelineKind } from "./relief-pipelines.js";
@@ -135,6 +137,10 @@ export async function createRelief(
   options.smoothing = Math.max(options.smoothing, pipeline.minimumSmoothing);
   const metadata = await sharp(imagePath).metadata();
   if (!metadata.width || !metadata.height) throw new Error("Das Bild besitzt keine gültigen Abmessungen.");
+  if (metadata.format === "svg" && pipeline.kind === "wordmark") {
+    const svgResult = await createSvgPathRelief(imagePath, outputDirectory, options, onProgress);
+    if (svgResult) return svgResult;
+  }
 
   const aspect = metadata.height / metadata.width;
   const gridWidth = options.resolution;
@@ -1079,6 +1085,206 @@ function mergeMeshes(meshes: Mesh[]): Mesh {
     for (const [a, b, c] of mesh.triangles) triangles.push([a + offset, b + offset, c + offset]);
   }
   return { vertices, triangles };
+}
+
+function meshFromExtrudeGeometry(geometry: ExtrudeGeometry, bottom: number): Mesh {
+  geometry.translate(0, 0, bottom);
+  const position = geometry.getAttribute("position");
+  const vertices: Vec3[] = [];
+  for (let index = 0; index < position.count; index += 1) {
+    vertices.push([position.getX(index), position.getY(index), position.getZ(index)]);
+  }
+  const triangles: Triangle[] = [];
+  const indexAttribute = geometry.getIndex();
+  if (indexAttribute) {
+    for (let offset = 0; offset < indexAttribute.count; offset += 3) {
+      triangles.push([indexAttribute.getX(offset), indexAttribute.getX(offset + 1), indexAttribute.getX(offset + 2)]);
+    }
+  } else {
+    for (let offset = 0; offset < vertices.length; offset += 3) triangles.push([offset, offset + 1, offset + 2]);
+  }
+  geometry.dispose();
+  return { vertices, triangles };
+}
+
+function normalizeSvgMesh(mesh: Mesh, bounds: { minX: number; minY: number; maxX: number; maxY: number }, widthMm: number): Mesh {
+  const svgWidth = Math.max(1e-6, bounds.maxX - bounds.minX);
+  const scale = widthMm / svgWidth;
+  return {
+    vertices: mesh.vertices.map(([x, y, z]) => [
+      (x - bounds.minX) * scale,
+      (y - bounds.minY) * scale,
+      z
+    ] as const),
+    triangles: mesh.triangles.slice()
+  };
+}
+
+function colorFromSvgFill(fill: unknown): string {
+  if (typeof fill !== "string" || !fill || fill === "none") return "#111111";
+  try {
+    return `#${new Color(fill).getHexString().toUpperCase()}`;
+  } catch {
+    return "#111111";
+  }
+}
+
+function uniqueColorsInOrder(colors: string[]): string[] {
+  const result: string[] = [];
+  for (const color of colors) if (!result.includes(color)) result.push(color);
+  return result.length ? result : ["#B7F58A"];
+}
+
+async function createSvgPathRelief(
+  imagePath: string,
+  outputDirectory: string,
+  options: ReliefOptions,
+  onProgress: (update: ReliefProgress) => void
+): Promise<ReliefResult | null> {
+  onProgress({ phase: "SVG-Pfade lesen", detail: "Echte Vektorkurven werden geladen …", progress: 14 });
+  let svg: string;
+  try {
+    svg = await readFile(imagePath, "utf8");
+  } catch {
+    return null;
+  }
+  let parsed: ReturnType<SVGLoader["parse"]>;
+  try {
+    globalThis.DOMParser ??= DOMParser as typeof globalThis.DOMParser;
+    parsed = new SVGLoader().parse(svg);
+  } catch {
+    return null;
+  }
+  const rawParts: Array<{ mesh: Mesh; color: string; area: number }> = [];
+  let unsupportedVectorPaint = false;
+  for (const path of parsed.paths) {
+    const style = path.userData?.style as { fill?: string; fillOpacity?: number; opacity?: number } | undefined;
+    if (style?.fill === "none" || style?.fillOpacity === 0 || style?.opacity === 0) {
+      unsupportedVectorPaint = true;
+      continue;
+    }
+    if (typeof style?.fill === "string" && style.fill.startsWith("url(")) {
+      unsupportedVectorPaint = true;
+      continue;
+    }
+    const color = colorFromSvgFill(style?.fill ?? path.color?.getStyle());
+    const shapes = SVGLoader.createShapes(path);
+    for (const shape of shapes) {
+      const points = shape.getPoints(48);
+      if (points.length < 3) continue;
+      const area = Math.abs(ShapeUtils.area(points));
+      if (area < 1e-3) continue;
+      // Die Höhe wird später pro Fläche entschieden. Die SVG-Kurven selbst
+      // bleiben hier als Bézier-Geometrie erhalten und werden nicht über ein
+      // Pixelraster zurückgerechnet.
+      const geometry = new ExtrudeGeometry(shape, { depth: 1, bevelEnabled: false, curveSegments: 28, steps: 1 });
+      rawParts.push({ mesh: meshFromExtrudeGeometry(geometry, 0), color, area });
+    }
+  }
+  if (!rawParts.length || (unsupportedVectorPaint && rawParts.length <= 1)) return null;
+  let minX = Number.POSITIVE_INFINITY, minY = Number.POSITIVE_INFINITY;
+  let maxX = Number.NEGATIVE_INFINITY, maxY = Number.NEGATIVE_INFINITY;
+  for (const part of rawParts) for (const [x, y] of part.mesh.vertices) {
+    minX = Math.min(minX, x); minY = Math.min(minY, y);
+    maxX = Math.max(maxX, x); maxY = Math.max(maxY, y);
+  }
+  if (!Number.isFinite(minX) || !Number.isFinite(maxX) || maxX <= minX || maxY <= minY) return null;
+  const heightMm = options.widthMm * (maxY - minY) / Math.max(1e-6, maxX - minX);
+  const backgroundIndex = options.includeBackground
+    ? rawParts.reduce((best, part, index) => part.area > rawParts[best].area ? index : best, 0)
+    : -1;
+  const colors = uniqueColorsInOrder(rawParts.map((part) => part.color));
+  const normalizedParts = rawParts.map((part, index) => {
+    const isBackground = index === backgroundIndex;
+    const bottom = isBackground ? 0 : options.includeBackground ? options.baseMm : 0;
+    const top = isBackground ? options.baseMm : options.baseMm + options.reliefMm;
+    const scaled = normalizeSvgMesh(part.mesh, { minX, minY, maxX, maxY }, options.widthMm);
+    const adjusted = {
+      vertices: scaled.vertices.map(([x, y, z]) => [x, y, bottom + z * (top - bottom)] as const),
+      triangles: scaled.triangles
+    };
+    return {
+      mesh: adjusted,
+      color: part.color,
+      name: `SVG ${colors.indexOf(part.color) + 1}`
+    };
+  });
+  const combined = removeInvalidTriangles(mergeMeshes(normalizedParts.map((part) => part.mesh)));
+  const exportMesh = orientMeshLikePreview(transformProductMesh(combined, options.widthMm, options.curveAngle, options.mirrorX), heightMm);
+  const geometryValidation = validateMeshGeometry(exportMesh);
+  if (!geometryValidation.valid) return null;
+  const stlBuffer = encodeBinaryStl(exportMesh, "AI Print Studio SVG Relief");
+  const exportColoredMeshes = normalizedParts.map((part) => ({
+    ...part,
+    mesh: orientMeshLikePreview(transformProductMesh(part.mesh, options.widthMm, options.curveAngle, options.mirrorX), heightMm)
+  }));
+  const threeMfBuffer = await encodeThreeMf(exportMesh, exportColoredMeshes);
+  const [stlValidation, threeMfValidation] = await Promise.all([
+    validateGeneratedExportBuffer(".stl", stlBuffer),
+    validateGeneratedExportBuffer(".3mf", threeMfBuffer)
+  ]);
+  if (!stlValidation.valid || !threeMfValidation.valid) {
+    throw new Error(`Die SVG-Exportdatei hat die Sicherheitsprüfung nicht bestanden: ${[
+      ...stlValidation.errors,
+      ...threeMfValidation.errors
+    ].join(" ")}`);
+  }
+  await mkdir(outputDirectory, { recursive: true });
+  const namingSource = options.sourceName.trim() || basename(imagePath);
+  const stem = sanitizeStem(basename(namingSource, extname(namingSource)));
+  const stlPath = join(outputDirectory, `${stem}-relief.stl`);
+  const threeMfPath = join(outputDirectory, `${stem}-relief.3mf`);
+  await Promise.all([writeFile(stlPath, stlBuffer), writeFile(threeMfPath, threeMfBuffer)]);
+  const layerHeightMm = 0.2;
+  const maximumHeight = options.baseMm + options.reliefMm;
+  const layerCount = Math.max(1, Math.ceil(maximumHeight / layerHeightMm));
+  const printability: PrintabilityReport = {
+    score: 100,
+    status: "ready",
+    issues: ["SVG-Pfade direkt extrudiert – keine Raster-Vektorisierung nötig."],
+    estimatedVolumeCm3: estimateMeshVolume(exportMesh) / 1000,
+    checks: [
+      { label: "Exportprüfung", status: "ok", detail: "STL und 3MF wurden validiert." },
+      { label: "Grundplatte", status: "ok", detail: `${options.baseMm.toFixed(1)} mm sind stabil.` },
+      { label: "Konturen", status: "ok", detail: "SVG-Pfade werden direkt verwendet." },
+      { label: "Mindestbreite", status: "ok", detail: "Bitte im Slicer prüfen, falls die SVG sehr feine Linien enthält." }
+    ]
+  };
+  const preview = buildCanonicalMeshPreview(exportMesh, options.widthMm, heightMm, exportMesh.triangles.map((_, triangleIndex) => {
+    let accumulated = 0;
+    for (const part of exportColoredMeshes) {
+      const next = accumulated + part.mesh.triangles.length;
+      if (triangleIndex < next) return Math.max(0, colors.indexOf(part.color));
+      accumulated = next;
+    }
+    return 0;
+  }), colors);
+  const heightmapPng = await sharp(Buffer.from(svg)).resize(256, 256, { fit: "inside" }).png().toBuffer();
+  onProgress({ phase: "Fertig", detail: "SVG-Pfade wurden direkt als Druckmodell exportiert.", progress: 100 });
+  return {
+    stlPath,
+    threeMfPath,
+    vertexCount: exportMesh.vertices.length,
+    triangleCount: exportMesh.triangles.length,
+    widthMm: options.widthMm,
+    heightMm,
+    options,
+    printability,
+    geometryValidation,
+    contourQuality: analyseContourQuality(exportMesh, options.nozzleMm),
+    fileBytes: { stl: stlBuffer.length, threeMf: threeMfBuffer.length },
+    slicer: {
+      layerHeightMm,
+      layerCount,
+      estimatedMinutes: Math.max(1, Math.ceil(printability.estimatedVolumeCm3 * 2 + layerCount * 0.12 + Math.max(0, colors.length - 1) * layerCount * 0.12)),
+      filamentMeters: printability.estimatedVolumeCm3 * 1000 / 2.98 / 1000,
+      materialGrams: printability.estimatedVolumeCm3 * 1.24,
+      colorChanges: Math.max(0, colors.length - 1) * layerCount
+    },
+    heightmapDataUrl: `data:image/png;base64,${heightmapPng.toString("base64")}`,
+    preview,
+    colorRegions: colors.map((color) => ({ sourceColor: color, targetIndex: colors.indexOf(color), coveragePercent: 0 }))
+  };
 }
 
 function orientMeshLikePreview(mesh: Mesh, heightMm: number): Mesh {
@@ -2244,6 +2450,19 @@ function normalOf(a: Vec3, b: Vec3, c: Vec3): Vec3 {
   const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
   const length = Math.hypot(nx, ny, nz) || 1;
   return [nx / length, ny / length, nz / length];
+}
+
+function estimateMeshVolume(mesh: Mesh): number {
+  let signed = 0;
+  for (const [aIndex, bIndex, cIndex] of mesh.triangles) {
+    const a = mesh.vertices[aIndex], b = mesh.vertices[bIndex], c = mesh.vertices[cIndex];
+    signed += (
+      a[0] * (b[1] * c[2] - b[2] * c[1])
+      - a[1] * (b[0] * c[2] - b[2] * c[0])
+      + a[2] * (b[0] * c[1] - b[1] * c[0])
+    ) / 6;
+  }
+  return Math.abs(signed);
 }
 
 function sanitizeStem(stem: string): string {

@@ -61,11 +61,12 @@ grundsätzlich kompatibel.
 ### Bild zu 3D
 
 PNG, JPG, WEBP und SVG werden zu einem wasserdichten 2,5D-Relief verarbeitet.
-Für Logos und Wappen erkennt die App Motivflächen und Höhenebenen, glättet die
-Konturen als echte Polygone und hält den Tragkörper geschlossen. Vorschau, STL
-und 3MF werden bei **Wappen & Emblem** aus denselben vektorisierten Farbflächen
-erzeugt; runde Ränder sind dadurch keine pixelweise Höhenwand mehr. Für Fotos
-steht Depth Anything V2 Small lokal über Apple Core ML zur Verfügung.
+Für Wappen erkennt die App Motivflächen und Höhenebenen, glättet die Konturen
+als Polygone und hält den Tragkörper geschlossen. Für **Logo mit Text** ist SVG
+der bevorzugte Weg: echte SVG-Pfade werden direkt extrudiert und nicht mehr aus
+Pixeln zurückgeraten. PNG/JPG-Logos funktionieren weiter, bleiben bei feiner
+Schrift aber eine Näherung. Für Fotos steht Depth Anything V2 Small lokal über
+Apple Core ML zur Verfügung.
 
 Nach einer Berechnung zeigt die App eine lokale Schichtsimulation mit
 Schichtzahl, Materialmenge, grober Druckzeit und Farbwechseln. Diese Angaben
@@ -175,6 +176,14 @@ Für Logos mit Text ist die Optimierung für eine **0,4-mm-Düse** automatisch
 aktiv. Feine Stege werden dabei auf mindestens 0,8 mm verbreitert. Die 3MF-Datei
 enthält 0,4 mm zusätzlich als Profilhinweis; die tatsächlich verwendete Düse
 muss weiterhin im Slicer zum ausgewählten Drucker passen.
+
+Für Logos mit kleiner oder geschwungener Schrift ist eine **SVG-Datei** deutlich
+besser als PNG/JPG. Bei SVG nutzt AI Print Studio die vorhandenen Pfade direkt
+für STL und 3MF. Bei PNG/JPG muss die App Antialiasing, Innenräume und
+Strichstärken aus Pixeln schätzen; das kann bei feiner Schreibschrift sichtbar
+schlechter sein. Wenn nur ein PNG/JPG vorhanden ist, sollte es vor dem Export in
+einem Vektorprogramm oder künftig im integrierten Vektorisierungs-Schritt in
+SVG umgewandelt und geprüft werden.
 
 Ist **Hintergrund mitdrucken** aktiv, erzeugt die App einen geschlossenen,
 massiven Körper: Boden und Hintergrund bilden die Grundplatte; erkannte Schrift

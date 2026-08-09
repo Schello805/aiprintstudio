@@ -1,6 +1,6 @@
 {
   "name": "ai-print-studio",
-  "version": "0.31.36",
+  "version": "0.31.37",
   "description": "Lokale Bild-zu-3D-Desktop-App für Apple Silicon",
   "author": "Michael Schellenberger",
   "license": "SEE LICENSE IN LICENSE.md",
@@ -24,6 +24,7 @@
   "dependencies": {
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.4.0",
+    "@xmldom/xmldom": "^0.9.10",
     "d3-contour": "^4.0.2",
     "jszip": "^3.10.1",
     "lucide-react": "^0.468.0",

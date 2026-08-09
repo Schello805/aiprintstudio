@@ -34,7 +34,7 @@ type View = "studio" | "history" | "settings" | "info";
 type StudioTool = "home" | "image" | "text" | "lithophane" | "prompt";
 type ProductShape = "source" | "rectangle" | "rounded" | "circle" | "shield" | "hexagon" | "heart";
 type LegalPage = "imprint" | "privacy" | "cookies" | null;
-type SelectedImage = { path: string; name: string; size: number; width: number; height: number; suggestedProfile: "logo" | "photo"; dataUrl: string };
+type SelectedImage = { path: string; name: string; size: number; width: number; height: number; format?: "png" | "jpg" | "webp" | "svg"; suggestedProfile: "logo" | "photo"; dataUrl: string };
 type ReliefResult = Awaited<ReturnType<NonNullable<typeof window.desktop>["createRelief"]>>;
 type Ai3dResult = Awaited<ReturnType<NonNullable<typeof window.desktop>["createAi3d"]>>;
 type Ai3dModel = Awaited<ReturnType<NonNullable<typeof window.desktop>["getAi3dModels"]>>[number];
@@ -80,7 +80,7 @@ type StudioProject = {
   };
 };
 
-const RELIEF_ENGINE_VERSION = "2026-08-09-wordmark-contour-resolution-v6";
+const RELIEF_ENGINE_VERSION = "2026-08-09-svg-path-wordmark-v1";
 
 const optimalResolution: Record<QualityProfile, number> = {
   fast: 192,
@@ -93,7 +93,7 @@ const optimalResolution: Record<QualityProfile, number> = {
 const modeTooltips: Record<ProcessingMode, string> = {
   auto: "Analysiert das Bild und verwendet automatisch die hochwertigste passende Methode.\nBeispiel: Ein Wappen nutzt saubere Flächen, ein Foto die lokale KI-Tiefenschätzung.",
   vector: "Bewahrt geschlossene Innenflächen und ordnet Motivbereichen feste Höhen zu.\nBeispiel: Weiße Felder und Rollen innerhalb eines Wappens bleiben erhalten.",
-  wordmark: "Entfernt den Hintergrund auch aus geschlossenen Buchstaben und setzt das Motiv auf eine ruhige gemeinsame Höhe.\nBeispiel: Die Innenräume von a, e, d, o und ö bleiben offen.",
+  wordmark: "Für SVG-Logos werden echte Pfade direkt extrudiert. PNG/JPG werden lokal angenähert und sind für feine Schrift weniger zuverlässig.\nBeispiel: Die Innenräume von a, e, d, o und ö bleiben bei SVG-Pfaden offen.",
   depth: "Schätzt mit Depth Anything V2 die räumliche Tiefe eines Fotos.\nBeispiel: Eine Person wird vom Hintergrund räumlich getrennt.",
   height: "Übernimmt die Helligkeit des Bildes direkt als Höhe.\nBeispiel: Weiß entspricht hoch und Schwarz niedrig – oder umgekehrt."
 };
@@ -296,9 +296,12 @@ export function App() {
     setPreview(selected.dataUrl);
     setSourcePreviewMode("original");
     setProfile(selected.suggestedProfile);
-    setProcessingMode(selected.suggestedProfile === "logo" ? "vector" : "depth");
+    setProcessingMode(selected.format === "svg" ? "wordmark" : selected.suggestedProfile === "logo" ? "vector" : "depth");
+    if (selected.format === "svg") setIncludeLogoBackground(true);
     setResult(null);
-    setUploadStatus(`${selected.width} × ${selected.height} Pixel geladen · Profil „${selected.suggestedProfile === "logo" ? "Logo" : "Foto"}“ empfohlen.`);
+    setUploadStatus(selected.format === "svg"
+      ? `${selected.width} × ${selected.height} SVG geladen · echte Pfade für Logo/Text aktiv.`
+      : `${selected.width} × ${selected.height} Pixel geladen · Profil „${selected.suggestedProfile === "logo" ? "Logo" : "Foto"}“ empfohlen.`);
   }
 
   async function createTextSource(options: Parameters<NonNullable<typeof window.desktop>["createTextImage"]>[0]) {
@@ -730,19 +733,28 @@ export function App() {
                   </div>}
                   <div className="compact-option-grid">
                   {processingMode === "wordmark" && (
-                    <button
-                      className={includeLogoBackground ? "background-toggle selected" : "background-toggle"}
-                      onClick={() => setIncludeLogoBackground((current) => !current)}
-                      aria-pressed={includeLogoBackground}
-                    >
-                      <Layers3 />
-                      <div>
-                        <strong>Hintergrund mitdrucken</strong>
-                        <span>{includeLogoBackground ? "Grundfläche bleibt erhalten; Text und Signet werden darüber angehoben" : "Nur Signet und Schrift werden freigestellt exportiert"}</span>
+                    <>
+                      <div className={file?.format === "svg" ? "svg-workflow-note ready" : "svg-workflow-note"}>
+                        <Type />
+                        <div>
+                          <strong>{file?.format === "svg" ? "SVG-Pfade direkt aktiv" : "SVG empfohlen für Logo-Schrift"}</strong>
+                          <span>{file?.format === "svg" ? "Schrift und Signet werden aus echten Kurven extrudiert – ohne Pixelraten." : "PNG/JPG kann feine Schrift nur schätzen. Für saubere Buchstaben bitte als SVG hochladen oder vorher vektorisieren."}</span>
+                        </div>
                       </div>
-                      <SettingTooltip text={"Legt fest, ob die Bildfläche als zusammenhängende Grundplatte Teil des Modells bleibt.\nBeispiel: Aktiv für ein quadratisches App-Logo; deaktiviert für einen freistehenden Schriftzug."} />
-                      <span className="toggle-track"><span /></span>
-                    </button>
+                      <button
+                        className={includeLogoBackground ? "background-toggle selected" : "background-toggle"}
+                        onClick={() => setIncludeLogoBackground((current) => !current)}
+                        aria-pressed={includeLogoBackground}
+                      >
+                        <Layers3 />
+                        <div>
+                          <strong>Hintergrund mitdrucken</strong>
+                          <span>{includeLogoBackground ? "Grundfläche bleibt erhalten; Text und Signet werden darüber angehoben" : "Nur Signet und Schrift werden freigestellt exportiert"}</span>
+                        </div>
+                        <SettingTooltip text={"Legt fest, ob die Bildfläche als zusammenhängende Grundplatte Teil des Modells bleibt.\nBeispiel: Aktiv für ein quadratisches App-Logo; deaktiviert für einen freistehenden Schriftzug."} />
+                        <span className="toggle-track"><span /></span>
+                      </button>
+                    </>
                   )}
                   {studioTool !== "lithophane" && <div className={multicolorEnabled ? "multicolor-panel active" : "multicolor-panel"}>
                     <button className="multicolor-toggle" onClick={() => setMulticolorEnabled((current) => !current)} aria-pressed={multicolorEnabled}>
@@ -799,6 +811,7 @@ function InfoView({ version }: { version: string }) {
     ["3D-Vorschau", "Three.js · React Three Fiber · Drei", "Dreh- und zoombare Mesh-Vorschau", "MIT"],
     ["Bildverarbeitung", "Sharp", "Rasterung, Masken, Höhenkarten und Farbanalyse", "Apache-2.0"],
     ["Vektorkonturen", "d3-contour · Manifold · Three.js Earcut", "Geglättete Konturen und robust vereinigte Wappen-Volumen", "ISC · Apache-2.0 · MIT"],
+    ["SVG-Logo/Text", "Three.js SVGLoader · ExtrudeGeometry", "SVG-Pfade werden direkt zu STL/3MF extrudiert statt aus Pixeln geschätzt", "MIT"],
     ["Lokale Foto-Tiefe", "Depth Anything V2 Small · Core ML", "Monokulare Tiefenschätzung auf Apple Silicon", "Apache-2.0"],
     ["Prompt zu 3D", "OpenAI Responses API", "Validierter CAD-Bauplan; Vorschau und Mesh entstehen lokal", "optional, nutzungsabhängige API-Kosten"],
     ["3MF-Verpackung", "JSZip", "Mehrfarbige 3MF-Archive und Slicer-Metadaten", "MIT/GPL-3.0+"]
@@ -813,7 +826,7 @@ function InfoView({ version }: { version: string }) {
       <div className="info-section">
         <div className="info-heading"><span>01</span><div><h3>Die vier Arbeitswege</h3><p>Welcher Teil lokal läuft und wann ein externer Dienst beteiligt ist.</p></div></div>
         <div className="info-flow-grid">
-          <article><ImagePlus /><h4>Bild zu 3D</h4><p>Das Bild wird lokal validiert, gerastert und in Motivmaske, Höhenwerte und optional AMS-Farben zerlegt. Daraus entsteht ein geschlossenes Reliefmesh.</p><strong>Vollständig lokal</strong></article>
+          <article><ImagePlus /><h4>Bild zu 3D</h4><p>Das Bild wird lokal validiert. Wappen/Fotos laufen durch die lokale Reliefanalyse; SVG-Logos mit Text werden als echte Pfade extrudiert.</p><strong>Vollständig lokal</strong></article>
           <article><Type /><h4>Schrift zu 3D</h4><p>Die Schrift wird lokal gerendert, konturiert, extrudiert und durch dieselbe Druckbarkeits- und Exportpipeline geführt.</p><strong>Vollständig lokal</strong></article>
           <article><ImagePlus /><h4>Foto zu Lithophan</h4><p>Bildhelligkeit wird in Materialstärke übersetzt. Außenform, Rahmen, Aufhängeloch und Wölbung entstehen gemeinsam mit dem wasserdichten Mesh.</p><strong>Vollständig lokal</strong></article>
           <article><Sparkles /><h4>Prompt zu 3D</h4><p>Nur Beschreibung und bei Änderungen der aktuelle CAD-Bauplan gehen an OpenAI. Die Antwort wird streng validiert; STL und Vorschau erzeugt die App lokal.</p><strong>OpenAI optional</strong></article>
@@ -824,7 +837,7 @@ function InfoView({ version }: { version: string }) {
         <div className="info-heading"><span>02</span><div><h3>Verarbeitungspipeline</h3><p>Die Ausgabe wird nicht einfach aus einem Bild „kopiert“, sondern schrittweise konstruiert.</p></div></div>
         <ol className="pipeline-list">
           <li><span>1</span><div><strong>Eingabe prüfen</strong><p>Format, Größe, Pixelabmessungen und Transparenz werden validiert.</p></div></li>
-          <li><span>2</span><div><strong>Motiv verstehen</strong><p>Konturen, Flächen, Helligkeit oder Tiefe werden passend zum Werkzeug analysiert.</p></div></li>
+          <li><span>2</span><div><strong>Motiv verstehen</strong><p>Konturen, Flächen, Helligkeit oder Tiefe werden passend zum Werkzeug analysiert. Bei SVG werden vorhandene Pfade direkt gelesen.</p></div></li>
           <li><span>3</span><div><strong>Geometrie aufbauen</strong><p>Die App erzeugt Höhen, Grundplatte, Außenform, optionale Aussparungen und geschlossene Seitenflächen.</p></div></li>
           <li><span>4</span><div><strong>Druckbarkeit prüfen</strong><p>Zusammenhalt, Mindestbreiten, Steigungen, Dreiecksmenge und Materialvolumen fließen in den Druckscore ein.</p></div></li>
           <li><span>5</span><div><strong>Exportieren</strong><p>STL für einfarbige Modelle und 3MF für AMS-Farben.</p></div></li>
@@ -854,6 +867,7 @@ function InfoView({ version }: { version: string }) {
           <div className="info-heading"><span>05</span><div><h3>Grenzen</h3><p>Was die Ergebnisse beeinflusst.</p></div></div>
           <ul className="info-checklist neutral">
             <li><Info /> Ein einzelnes Bild liefert keine echte Rückseiteninformation</li>
+            <li><Info /> PNG/JPG-Logos mit feiner Schrift bleiben eine Näherung; beste Qualität liefert eine echte SVG-Datei</li>
             <li><Info /> Reliefs sind kontrollierte 2,5D-Modelle, keine vollständigen Scans</li>
             <li><Info /> Prompt-Modelle bestehen aus validierten Grundkörpern und ersetzen keine Hersteller-CAD-Dateien</li>
             <li><Info /> Vor dem Druck sollte jedes Modell im Slicer kontrolliert werden</li>

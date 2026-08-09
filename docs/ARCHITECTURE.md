@@ -127,8 +127,12 @@ und 3MF verwenden dieselben Polygone; ein Rückfall auf die alte zellenweise
 Rasterwand ist damit ausgeschlossen.
 
 Schrift wird zunächst lokal als eng zugeschnittene transparente Vorlage
-gerendert und anschließend durch dieselbe Reliefpipeline verarbeitet. SVG wird
-beim Import sicher gerastert, bevor die Verarbeitung beginnt.
+gerendert und anschließend durch dieselbe Reliefpipeline verarbeitet. Für
+hochgeladene SVG-Dateien im Modus **Logo mit Text** gibt es einen separaten
+Pfad: `SVGLoader` liest die vorhandenen Pfade, `ExtrudeGeometry` baut daraus
+direkte Volumenkörper und STL/3MF entstehen ohne Raster-Rückrechnung. PNG, JPG
+und WEBP bleiben Rasterquellen und werden lokal über Masken und Konturen
+angenähert.
 
 Lithophane verwenden dieselbe wasserdichte Meshpipeline und ergänzen sie vor
 der Vermaschung um eine definierte Außenmaske. Rechteck,
