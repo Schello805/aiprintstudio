@@ -1676,10 +1676,10 @@ function buildRaisedWordmarkCellHeights(
         + Number(wordmarkPixels[vertex + columns + 1]);
       // Bei Logos mit Text ist die Semantik eindeutig: Hintergrund/Träger
       // bleibt unten, erkannte Schrift und Signet liegen separat darüber.
-      // Schon ein berührter Zellpunkt reicht, weil die Wortmarkenmaske vorher
-      // auf druckbare Mindestbreite erweitert und dabei Buchstabenlöcher
-      // geschützt wird. So verschwinden dünne Striche nicht wieder im Export.
-      if (occupied >= 1) {
+      // Mindestens zwei berührte Zellpunkte ergeben eine ruhigere Kontur.
+      // Ein einzelner Antialias-Pixel erzeugte bei kleinen Rundschriften
+      // schnell klumpige oder scheinbar verschmierte Buchstaben.
+      if (occupied >= 2) {
         heights[cell] = raisedHeight;
         raisedCells[cell] = true;
       }

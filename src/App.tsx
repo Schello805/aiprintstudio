@@ -337,7 +337,7 @@ export function App() {
         invert: false, profile, smoothing: automaticSmoothing, detail: automaticDetail,
         processingMode: effectiveMode,
         pipelineKind,
-        includeBackground: effectiveMode === "wordmark" && (repair || includeLogoBackground || multicolorEnabled),
+        includeBackground: effectiveMode === "wordmark" && (repair || includeLogoBackground),
         nozzleMm: 0.4,
         minimumFeatureMm: minimumFeatureForMode(effectiveMode, file.suggestedProfile, repair || optimizeForStandardNozzle),
         sourceColors: multicolorEnabled ? sourceColors : [],
@@ -713,18 +713,14 @@ export function App() {
                   <div className="compact-option-grid">
                   {processingMode === "wordmark" && (
                     <button
-                      className={includeLogoBackground || multicolorEnabled ? "background-toggle selected" : "background-toggle"}
-                      onClick={() => {
-                        if (!multicolorEnabled) {
-                          setIncludeLogoBackground((current) => !current);
-                        }
-                      }}
-                      aria-pressed={includeLogoBackground || multicolorEnabled}
+                      className={includeLogoBackground ? "background-toggle selected" : "background-toggle"}
+                      onClick={() => setIncludeLogoBackground((current) => !current)}
+                      aria-pressed={includeLogoBackground}
                     >
                       <Layers3 />
                       <div>
                         <strong>Hintergrund mitdrucken</strong>
-                        <span>{multicolorEnabled ? "Bei AMS automatisch aktiv: Text und Signet liegen sichtbar erhöht auf der Grundfläche" : includeLogoBackground ? "Grundfläche bleibt in Vorschau, STL und 3MF erhalten" : "Nur Signet und Schrift werden freigestellt exportiert"}</span>
+                        <span>{includeLogoBackground ? "Grundfläche bleibt erhalten; Text und Signet werden darüber angehoben" : "Nur Signet und Schrift werden freigestellt exportiert"}</span>
                       </div>
                       <SettingTooltip text={"Legt fest, ob die Bildfläche als zusammenhängende Grundplatte Teil des Modells bleibt.\nBeispiel: Aktiv für ein quadratisches App-Logo; deaktiviert für einen freistehenden Schriftzug."} />
                       <span className="toggle-track"><span /></span>

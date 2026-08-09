@@ -69,7 +69,7 @@ export function minimumFeatureForMode(mode: ReliefProcessingMode, suggestedProfi
   if (!optimize) return 0;
   // Eine Mindestbreite ist für Schriftzüge sinnvoll. Bei Wappen würde dieselbe
   // Flächenerweiterung jedoch eine umlaufende, brim-artige Kontur erzeugen.
-  return mode === "wordmark" || (mode === "auto" && suggestedProfile === "logo") ? 0.8 : 0;
+  return mode === "wordmark" || (mode === "auto" && suggestedProfile === "logo") ? 0.6 : 0;
 }
 
 export function rankReliefCandidate(input: {

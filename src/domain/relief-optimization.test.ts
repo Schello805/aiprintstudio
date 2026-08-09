@@ -15,7 +15,7 @@ describe("local relief optimization", () => {
 
   it("never grows an emblem into a brim during automatic optimization", () => {
     expect(minimumFeatureForMode("vector", "logo", true)).toBe(0);
-    expect(minimumFeatureForMode("wordmark", "logo", true)).toBe(0.8);
+    expect(minimumFeatureForMode("wordmark", "logo", true)).toBe(0.6);
   });
 
   it("locks normal emblem generation to the proven smooth contour setting", () => {
