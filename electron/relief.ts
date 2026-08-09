@@ -1376,26 +1376,30 @@ async function createTracedWordmarkSvg(
       ? [sums[index][0] / sums[index][3], sums[index][1] / sums[index][3], sums[index][2] / sums[index][3]] as [number, number, number]
       : center);
   }
-  const counts = Array(clusterCount).fill(0) as number[];
-  for (const assignment of assignments) if (assignment >= 0) counts[assignment] += 1;
-  const backgroundIndex = hasAlpha ? -1 : dominantCornerCluster(assignments, targetWidth, targetHeight, clusterCount);
+  const rawCounts = Array(clusterCount).fill(0) as number[];
+  for (const assignment of assignments) if (assignment >= 0) rawCounts[assignment] += 1;
+  const rawBackgroundIndex = hasAlpha ? -1 : dominantCornerCluster(assignments, targetWidth, targetHeight, clusterCount);
+  const grouped = groupSimilarLogoClusters(centers, rawCounts, rawBackgroundIndex);
+  for (let index = 0; index < assignments.length; index += 1) {
+    const assignment = assignments[index];
+    if (assignment >= 0) assignments[index] = grouped.map[assignment] ?? assignment;
+  }
+  centers = grouped.centers;
+  const counts = grouped.counts;
+  const groupedClusterCount = centers.length;
+  const backgroundIndex = rawBackgroundIndex >= 0 ? grouped.map[rawBackgroundIndex] : -1;
   const minArea = Math.max(14, Math.round(pixels * 0.00008));
   const paths: string[] = [];
-  for (let cluster = 0; cluster < clusterCount; cluster += 1) {
+  for (let cluster = 0; cluster < groupedClusterCount; cluster += 1) {
     if (counts[cluster] < minArea) continue;
     if (!options.includeBackground && cluster === backgroundIndex) continue;
-    let mask = cleanTraceMask(
+    const mask = cleanTraceMask(
       Array.from(assignments, (assignment) => assignment === cluster),
       targetWidth,
       targetHeight,
-      minArea
+      minArea,
+      true
     );
-    if (options.includeBackground && cluster !== backgroundIndex) {
-      mask = filterTraceComponentsByArea(mask, targetWidth, targetHeight, {
-        minArea,
-        maxArea: Math.round(pixels * 0.015)
-      });
-    }
     const path = traceMaskToSvgPath(mask, targetWidth, targetHeight, options.includeBackground && cluster === backgroundIndex ? 2 : 3);
     if (!path) continue;
     const color = rgbToHex(centers[cluster]);
@@ -1436,6 +1440,65 @@ function colorDistance(left: [number, number, number], right: [number, number, n
   return (left[0] - right[0]) ** 2 + (left[1] - right[1]) ** 2 + (left[2] - right[2]) ** 2;
 }
 
+function groupSimilarLogoClusters(
+  centers: Array<[number, number, number]>,
+  counts: number[],
+  backgroundIndex: number
+): { centers: Array<[number, number, number]>; counts: number[]; map: number[] } {
+  const groups: Array<{ center: [number, number, number]; count: number; raw: number[] }> = [];
+  const ordered = centers.map((center, index) => ({ center, index, count: counts[index] ?? 0 }))
+    .sort((left, right) => {
+      if (left.index === backgroundIndex) return -1;
+      if (right.index === backgroundIndex) return 1;
+      return right.count - left.count;
+    });
+  for (const item of ordered) {
+    const target = groups.findIndex((group) => shouldMergeLogoCluster(item.center, group.center, item.index === backgroundIndex || group.raw.includes(backgroundIndex)));
+    if (target >= 0) {
+      const group = groups[target];
+      const total = group.count + item.count;
+      group.center = total > 0 ? [
+        (group.center[0] * group.count + item.center[0] * item.count) / total,
+        (group.center[1] * group.count + item.center[1] * item.count) / total,
+        (group.center[2] * group.count + item.center[2] * item.count) / total
+      ] : group.center;
+      group.count = total;
+      group.raw.push(item.index);
+    } else {
+      groups.push({ center: item.center, count: item.count, raw: [item.index] });
+    }
+  }
+  const map = Array(centers.length).fill(0) as number[];
+  groups.forEach((group, groupIndex) => group.raw.forEach((rawIndex) => { map[rawIndex] = groupIndex; }));
+  return { centers: groups.map((group) => group.center), counts: groups.map((group) => group.count), map };
+}
+
+function shouldMergeLogoCluster(left: [number, number, number], right: [number, number, number], touchesBackground: boolean): boolean {
+  if (colorDistance(left, right) < 900) return true;
+  const leftHsl = rgbToHsl(left), rightHsl = rgbToHsl(right);
+  const bothNeutral = leftHsl.s < 0.12 && rightHsl.s < 0.12;
+  if (bothNeutral && Math.abs(leftHsl.l - rightHsl.l) < 0.18) return true;
+  if (touchesBackground && bothNeutral) return Math.abs(leftHsl.l - rightHsl.l) < 0.28;
+  if (leftHsl.s < 0.16 || rightHsl.s < 0.16) return false;
+  const hueDelta = Math.min(Math.abs(leftHsl.h - rightHsl.h), 360 - Math.abs(leftHsl.h - rightHsl.h));
+  return hueDelta < 18 && Math.abs(leftHsl.l - rightHsl.l) < 0.42;
+}
+
+function rgbToHsl([r, g, b]: [number, number, number]): { h: number; s: number; l: number } {
+  const rn = r / 255, gn = g / 255, bn = b / 255;
+  const max = Math.max(rn, gn, bn), min = Math.min(rn, gn, bn);
+  const l = (max + min) / 2;
+  if (max === min) return { h: 0, s: 0, l };
+  const delta = max - min;
+  const s = l > 0.5 ? delta / (2 - max - min) : delta / (max + min);
+  const h = max === rn
+    ? ((gn - bn) / delta + (gn < bn ? 6 : 0)) * 60
+    : max === gn
+      ? ((bn - rn) / delta + 2) * 60
+      : ((rn - gn) / delta + 4) * 60;
+  return { h, s, l };
+}
+
 function dominantCornerCluster(assignments: Int16Array, width: number, height: number, count: number): number {
   const votes = Array(count).fill(0) as number[];
   const inset = Math.max(1, Math.round(Math.min(width, height) * 0.04));
@@ -1454,10 +1517,10 @@ function dominantCornerCluster(assignments: Int16Array, width: number, height: n
   return votes.reduce((best, value, index) => value > votes[best] ? index : best, 0);
 }
 
-function cleanTraceMask(mask: boolean[], width: number, height: number, minArea: number): boolean[] {
-  let cleaned = majorityFilter(mask, width, height);
+function cleanTraceMask(mask: boolean[], width: number, height: number, minArea: number, preserveThinStrokes = false): boolean[] {
+  let cleaned = preserveThinStrokes ? mask.slice() : majorityFilter(mask, width, height);
   cleaned = removeSmallComponents(cleaned, width, height, minArea);
-  return majorityFilter(cleaned, width, height);
+  return preserveThinStrokes ? cleaned : majorityFilter(cleaned, width, height);
 }
 
 function majorityFilter(mask: boolean[], width: number, height: number): boolean[] {
