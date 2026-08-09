@@ -62,12 +62,11 @@ grundsätzlich kompatibel.
 
 PNG, JPG, WEBP und SVG werden zu einem wasserdichten 2,5D-Relief verarbeitet.
 Für Wappen erkennt die App Motivflächen und Höhenebenen, glättet die Konturen
-als Polygone und hält den Tragkörper geschlossen. Für **Logo mit Text** ist SVG
-der verbindliche Qualitätsweg: echte SVG-Pfade werden direkt extrudiert und
-nicht mehr aus Pixeln zurückgeraten. PNG/JPG-Logos können als Wappen/Emblem oder
-Foto verarbeitet werden, sind für feine Logo-Schrift aber keine saubere
-STL/3MF-Grundlage. Für Fotos steht Depth Anything V2 Small lokal über Apple Core
-ML zur Verfügung.
+als Polygone und hält den Tragkörper geschlossen. Für **Logo mit Text** nutzt
+AI Print Studio echte SVG-Pfade. Hochgeladene SVGs werden direkt extrudiert;
+PNG/JPG/WEBP werden vorher lokal in SVG-Konturen vektorisiert und anschließend
+über denselben Pfad verarbeitet. Für Fotos steht Depth Anything V2 Small lokal
+über Apple Core ML zur Verfügung.
 
 Nach einer Berechnung zeigt die App eine lokale Schichtsimulation mit
 Schichtzahl, Materialmenge, grober Druckzeit und Farbwechseln. Diese Angaben
@@ -179,13 +178,12 @@ enthält 0,4 mm zusätzlich als Profilhinweis; die tatsächlich verwendete Düse
 muss weiterhin im Slicer zum ausgewählten Drucker passen.
 
 Für Logos mit kleiner oder geschwungener Schrift ist eine **SVG-Datei mit echten
-Pfaden erforderlich**. Bei SVG nutzt AI Print Studio die vorhandenen Pfade direkt
-für STL und 3MF. Bei PNG/JPG müsste die App Antialiasing, Innenräume und
-Strichstärken aus Pixeln schätzen; das erzeugt bei feiner Schrift sichtbar
-schlechte Buchstaben. Deshalb blockiert der Modus **Logo mit Text** Rasterbilder
-und fordert eine SVG-Datei an. Wenn nur ein PNG/JPG vorhanden ist, sollte es vor
-dem Export in einem Vektorprogramm oder künftig im integrierten
-Vektorisierungs-Schritt in SVG umgewandelt und geprüft werden.
+Pfaden** weiterhin die beste Quelle. Bei SVG nutzt AI Print Studio die
+vorhandenen Pfade direkt für STL und 3MF. PNG/JPG/WEBP werden im Modus
+**Logo mit Text** automatisch lokal vektorisiert; die App erzeugt also zuerst
+SVG-Konturen und extrudiert anschließend diese Pfade. Bei sehr kleinen,
+verrauschten oder verlaufenden Logos sollte das Ergebnis trotzdem im Slicer
+geprüft werden.
 
 Ist **Hintergrund mitdrucken** aktiv, erzeugt die App einen geschlossenen,
 massiven Körper: Boden und Hintergrund bilden die Grundplatte; erkannte Schrift

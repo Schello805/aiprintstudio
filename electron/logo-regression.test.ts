@@ -1,6 +1,7 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import sharp from "sharp";
 import { describe, expect, it } from "vitest";
 import { createRelief } from "./relief";
 
@@ -17,6 +18,28 @@ describe("real-world logo regression fixtures", () => {
       expect(result.triangleCount).toBeLessThan(250_000);
       expect(result.fileBytes.stl).toBeLessThan(25_000_000);
       expect(result.fileBytes.threeMf).toBeLessThan(25_000_000);
+    } finally { await rm(directory, { recursive: true, force: true }); }
+  }, 20_000);
+
+  it("vectorizes raster wordmarks to SVG before extrusion", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "logo-raster-wordmark-vectorized-"));
+    try {
+      const imagePath = join(directory, "wordmark.png");
+      const sourceSvg = Buffer.from(`
+        <svg xmlns="http://www.w3.org/2000/svg" width="360" height="180">
+          <rect width="360" height="180" fill="white"/>
+          <text x="34" y="116" font-family="Arial" font-size="86" font-weight="700" fill="#4b1168">AI Print</text>
+        </svg>
+      `);
+      await writeFile(imagePath, await sharp(sourceSvg).png().toBuffer());
+      const result = await createRelief(imagePath, directory, {
+        pipelineKind: "wordmark", processingMode: "wordmark", profile: "logo", resolution: 512,
+        widthMm: 100, minimumFeatureMm: 0.3, includeBackground: false
+      });
+      expect(result.geometryValidation.valid).toBe(true);
+      expect(result.printability.issues).toContain("PNG/JPG wurde lokal vektorisiert und anschließend als SVG-Pfad extrudiert.");
+      expect(result.triangleCount).toBeGreaterThan(500);
+      expect(result.fileBytes.stl).toBeLessThan(25_000_000);
     } finally { await rm(directory, { recursive: true, force: true }); }
   }, 20_000);
 

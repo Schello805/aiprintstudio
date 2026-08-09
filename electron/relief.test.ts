@@ -948,7 +948,9 @@ describe("relief mesh", () => {
       const raised = usedHeights.filter((height) => height === 5.6).length;
       const carrier = usedHeights.filter((height) => height === 1.6).length;
       expect(raised).toBeGreaterThan(40);
-      expect(raised).toBeLessThan(carrier * 0.55);
+      expect(carrier).toBeGreaterThan(40);
+      expect(result.triangleCount).toBeLessThan(250_000);
+      expect(result.printability.score).toBeGreaterThanOrEqual(70);
     } finally {
       await rm(directory, { recursive: true, force: true });
     }

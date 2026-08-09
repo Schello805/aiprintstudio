@@ -93,7 +93,7 @@ const optimalResolution: Record<QualityProfile, number> = {
 const modeTooltips: Record<ProcessingMode, string> = {
   auto: "Analysiert das Bild und verwendet automatisch die hochwertigste passende Methode.\nBeispiel: Ein Wappen nutzt saubere Flächen, ein Foto die lokale KI-Tiefenschätzung.",
   vector: "Bewahrt geschlossene Innenflächen und ordnet Motivbereichen feste Höhen zu.\nBeispiel: Weiße Felder und Rollen innerhalb eines Wappens bleiben erhalten.",
-  wordmark: "Für Logo-Schrift werden echte SVG-Pfade benötigt. Rasterbilder wie PNG/JPG eignen sich hier nur als Vorlage, aber nicht für eine saubere STL/3MF-Geometrie.\nBeispiel: Die Innenräume von a, e, d, o und ö bleiben bei SVG-Pfaden offen.",
+  wordmark: "Für Logo-Schrift nutzt die App SVG-Pfade. PNG/JPG werden vorher lokal in SVG umgewandelt; echte SVG-Dateien bleiben am saubersten.\nBeispiel: Die Innenräume von a, e, d, o und ö bleiben bei guten Pfaden offen.",
   depth: "Schätzt mit Depth Anything V2 die räumliche Tiefe eines Fotos.\nBeispiel: Eine Person wird vom Hintergrund räumlich getrennt.",
   height: "Übernimmt die Helligkeit des Bildes direkt als Höhe.\nBeispiel: Weiß entspricht hoch und Schwarz niedrig – oder umgekehrt."
 };
@@ -149,7 +149,6 @@ export function App() {
   const [smoothing, setSmoothing] = useState(2);
   const [detail, setDetail] = useState(1);
   const [processingMode, setProcessingMode] = useState<ProcessingMode>("auto");
-  const rasterWordmarkBlocked = Boolean(studioTool === "image" && file && processingMode === "wordmark" && file.format !== "svg");
   const [includeLogoBackground, setIncludeLogoBackground] = useState(true);
   const optimizeForStandardNozzle = true;
   const reduceTo250kTriangles = true;
@@ -315,10 +314,6 @@ export function App() {
 
   async function generateRelief(repair = false) {
     if (!file) return;
-    if (studioTool === "image" && processingMode === "wordmark" && file.format !== "svg") {
-      setFileError("Logo mit Text benötigt für saubere Buchstaben eine SVG-Datei mit echten Pfaden. PNG/JPG kann dafür nur Pixel schätzen und erzeugt sichtbar schlechte STL-Konturen. Bitte lade eine SVG hoch oder nutze für Rasterbilder „Wappen & Emblem“.");
-      return;
-    }
     const jobId = crypto.randomUUID();
     activeReliefJob.current = jobId;
     reliefProgressWindow.current = { start: 1, end: repair ? 4 : 90 };
@@ -742,8 +737,8 @@ export function App() {
                       <div className={file?.format === "svg" ? "svg-workflow-note ready" : "svg-workflow-note"}>
                         <Type />
                         <div>
-                          <strong>{file?.format === "svg" ? "SVG-Pfade direkt aktiv" : "SVG für Logo-Schrift erforderlich"}</strong>
-                          <span>{file?.format === "svg" ? "Schrift und Signet werden aus echten Kurven extrudiert – ohne Pixelraten." : "PNG/JPG bleibt eine Pixelvorlage. Für lesbare, druckbare Schrift bitte eine SVG mit Pfaden hochladen."}</span>
+                          <strong>{file?.format === "svg" ? "SVG-Pfade direkt aktiv" : "PNG/JPG wird zu SVG vektorisiert"}</strong>
+                          <span>{file?.format === "svg" ? "Schrift und Signet werden aus echten Kurven extrudiert – ohne Pixelraten." : "Die App erzeugt lokal SVG-Pfade und nutzt danach die saubere Pfad-Extrusion. Eine echte SVG-Datei bleibt die beste Quelle."}</span>
                         </div>
                       </div>
                       <button
@@ -790,7 +785,7 @@ export function App() {
             </div>
             <div className="action-bar">
               <div><Box size={20} /><div><strong>{file ? file.name : "Noch kein Bild gewählt"}</strong><span>{file ? `${(file.size / 1_048_576).toFixed(1)} MB · ${file.width} × ${file.height} px · bereit` : "Wähle zuerst eine geeignete Aufnahme aus."}</span></div></div>
-              <button className="primary-button" disabled={!file || busy || rasterWordmarkBlocked} onClick={() => void generateRelief()}>{rasterWordmarkBlocked ? "SVG erforderlich" : busy ? "Modell wird erzeugt …" : result ? "Modell aktualisieren" : "Relief erstellen"} <ChevronRight size={18} /></button>
+              <button className="primary-button" disabled={!file || busy} onClick={() => void generateRelief()}>{busy ? "Modell wird erzeugt …" : result ? "Modell aktualisieren" : "Relief erstellen"} <ChevronRight size={18} /></button>
             </div>
               </>
             )}
@@ -872,7 +867,7 @@ function InfoView({ version }: { version: string }) {
           <div className="info-heading"><span>05</span><div><h3>Grenzen</h3><p>Was die Ergebnisse beeinflusst.</p></div></div>
           <ul className="info-checklist neutral">
             <li><Info /> Ein einzelnes Bild liefert keine echte Rückseiteninformation</li>
-            <li><Info /> Logo-Schrift braucht echte SVG-Pfade; PNG/JPG wird in diesem Modus bewusst blockiert, statt schlechte Buchstaben zu erzeugen</li>
+            <li><Info /> PNG/JPG-Logo-Schrift wird lokal vektorisiert; echte SVG-Dateien liefern weiterhin die saubersten Pfade</li>
             <li><Info /> Reliefs sind kontrollierte 2,5D-Modelle, keine vollständigen Scans</li>
             <li><Info /> Prompt-Modelle bestehen aus validierten Grundkörpern und ersetzen keine Hersteller-CAD-Dateien</li>
             <li><Info /> Vor dem Druck sollte jedes Modell im Slicer kontrolliert werden</li>

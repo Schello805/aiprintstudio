@@ -141,6 +141,23 @@ export async function createRelief(
     const svgResult = await createSvgPathRelief(imagePath, outputDirectory, options, onProgress);
     if (svgResult) return svgResult;
   }
+  if (metadata.format !== "svg" && pipeline.kind === "wordmark") {
+    onProgress({ phase: "Logo vektorisieren", detail: "PNG/JPG wird lokal in saubere SVG-Pfade umgewandelt …", progress: 10 });
+    const tracedSvg = await createTracedWordmarkSvg(imagePath, outputDirectory, options, metadata.width, metadata.height);
+    if (tracedSvg) {
+      const svgResult = await createSvgPathRelief(tracedSvg, outputDirectory, {
+        ...options,
+        sourceName: options.sourceName.replace(/\.[^.]+$/, ".svg")
+      }, onProgress);
+      if (svgResult) return {
+        ...svgResult,
+        printability: {
+          ...svgResult.printability,
+          issues: ["PNG/JPG wurde lokal vektorisiert und anschließend als SVG-Pfad extrudiert."]
+        }
+      };
+    }
+  }
 
   const aspect = metadata.height / metadata.width;
   const gridWidth = options.resolution;
@@ -1197,7 +1214,7 @@ async function createSvgPathRelief(
   const normalizedParts = rawParts.map((part, index) => {
     const isBackground = index === backgroundIndex;
     const bottom = isBackground ? 0 : options.includeBackground ? options.baseMm : 0;
-    const top = isBackground ? options.baseMm : options.baseMm + options.reliefMm;
+    const top = isBackground ? options.baseMm : options.includeBackground ? options.baseMm + options.reliefMm : options.reliefMm;
     const scaled = normalizeSvgMesh(part.mesh, { minX, minY, maxX, maxY }, options.widthMm);
     const adjusted = {
       vertices: scaled.vertices.map(([x, y, z]) => [x, y, bottom + z * (top - bottom)] as const),
@@ -1236,7 +1253,7 @@ async function createSvgPathRelief(
   const threeMfPath = join(outputDirectory, `${stem}-relief.3mf`);
   await Promise.all([writeFile(stlPath, stlBuffer), writeFile(threeMfPath, threeMfBuffer)]);
   const layerHeightMm = 0.2;
-  const maximumHeight = options.baseMm + options.reliefMm;
+  const maximumHeight = options.includeBackground ? options.baseMm + options.reliefMm : options.reliefMm;
   const layerCount = Math.max(1, Math.ceil(maximumHeight / layerHeightMm));
   const printability: PrintabilityReport = {
     score: 100,
@@ -1285,6 +1302,207 @@ async function createSvgPathRelief(
     preview,
     colorRegions: colors.map((color) => ({ sourceColor: color, targetIndex: colors.indexOf(color), coveragePercent: 0 }))
   };
+}
+
+async function createTracedWordmarkSvg(
+  imagePath: string,
+  outputDirectory: string,
+  options: ReliefOptions,
+  sourceWidth: number,
+  sourceHeight: number
+): Promise<string | null> {
+  const targetWidth = Math.min(1200, Math.max(384, sourceWidth));
+  const targetHeight = Math.max(64, Math.round(targetWidth * sourceHeight / Math.max(1, sourceWidth)));
+  const { data } = await sharp(imagePath)
+    .rotate()
+    .resize(targetWidth, targetHeight, { fit: "fill" })
+    .ensureAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  const pixels = targetWidth * targetHeight;
+  const hasAlpha = hasUsefulTransparency(data);
+  const colorSamples: Array<[number, number, number]> = [];
+  const sampleStep = Math.max(1, Math.floor(pixels / 20_000));
+  for (let index = 0; index < pixels; index += sampleStep) {
+    const offset = index * 4;
+    if (data[offset + 3] < 24) continue;
+    colorSamples.push([data[offset], data[offset + 1], data[offset + 2]]);
+  }
+  if (colorSamples.length < 16) return null;
+  const clusterCount = Math.max(2, Math.min(6, new Set(colorSamples.map(([r, g, b]) => `${r >> 4}:${g >> 4}:${b >> 4}`)).size));
+  let centers = seedColorCenters(colorSamples, clusterCount);
+  const assignments = new Int16Array(pixels);
+  for (let iteration = 0; iteration < 9; iteration += 1) {
+    const sums = Array.from({ length: clusterCount }, () => [0, 0, 0, 0]);
+    for (let index = 0; index < pixels; index += 1) {
+      const offset = index * 4;
+      if (data[offset + 3] < 24) { assignments[index] = -1; continue; }
+      const best = nearestColorCenter([data[offset], data[offset + 1], data[offset + 2]], centers);
+      assignments[index] = best;
+      sums[best][0] += data[offset]; sums[best][1] += data[offset + 1]; sums[best][2] += data[offset + 2]; sums[best][3] += 1;
+    }
+    centers = centers.map((center, index) => sums[index][3]
+      ? [sums[index][0] / sums[index][3], sums[index][1] / sums[index][3], sums[index][2] / sums[index][3]] as [number, number, number]
+      : center);
+  }
+  const counts = Array(clusterCount).fill(0) as number[];
+  for (const assignment of assignments) if (assignment >= 0) counts[assignment] += 1;
+  const backgroundIndex = hasAlpha ? -1 : dominantCornerCluster(assignments, targetWidth, targetHeight, clusterCount);
+  const minArea = Math.max(14, Math.round(pixels * 0.00008));
+  const paths: string[] = [];
+  for (let cluster = 0; cluster < clusterCount; cluster += 1) {
+    if (counts[cluster] < minArea) continue;
+    if (!options.includeBackground && cluster === backgroundIndex) continue;
+    let mask = cleanTraceMask(
+      Array.from(assignments, (assignment) => assignment === cluster),
+      targetWidth,
+      targetHeight,
+      minArea
+    );
+    if (options.includeBackground && cluster !== backgroundIndex) {
+      mask = filterTraceComponentsByArea(mask, targetWidth, targetHeight, {
+        minArea,
+        maxArea: Math.round(pixels * 0.015)
+      });
+    }
+    const path = traceMaskToSvgPath(mask, targetWidth, targetHeight, options.includeBackground && cluster === backgroundIndex ? 2 : 3);
+    if (!path) continue;
+    const color = rgbToHex(centers[cluster]);
+    paths.push(`<path fill="${color}" d="${path}"/>`);
+  }
+  if (!paths.length) return null;
+  await mkdir(outputDirectory, { recursive: true });
+  const stem = sanitizeStem(basename(options.sourceName || basename(imagePath), extname(options.sourceName || imagePath)));
+  const svgPath = join(outputDirectory, `${stem}-vectorized-wordmark.svg`);
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${targetWidth}" height="${targetHeight}" viewBox="0 0 ${targetWidth} ${targetHeight}">${paths.join("")}</svg>`;
+  await writeFile(svgPath, svg, "utf8");
+  return svgPath;
+}
+
+function seedColorCenters(samples: Array<[number, number, number]>, count: number): Array<[number, number, number]> {
+  const centers: Array<[number, number, number]> = [samples[0]];
+  while (centers.length < count) {
+    let best = samples[0], bestDistance = -1;
+    for (const sample of samples) {
+      const distance = Math.min(...centers.map((center) => colorDistance(sample, center)));
+      if (distance > bestDistance) { best = sample; bestDistance = distance; }
+    }
+    centers.push(best);
+  }
+  return centers;
+}
+
+function nearestColorCenter(color: [number, number, number], centers: Array<[number, number, number]>): number {
+  let best = 0, bestDistance = Number.POSITIVE_INFINITY;
+  centers.forEach((center, index) => {
+    const distance = colorDistance(color, center);
+    if (distance < bestDistance) { best = index; bestDistance = distance; }
+  });
+  return best;
+}
+
+function colorDistance(left: [number, number, number], right: [number, number, number]) {
+  return (left[0] - right[0]) ** 2 + (left[1] - right[1]) ** 2 + (left[2] - right[2]) ** 2;
+}
+
+function dominantCornerCluster(assignments: Int16Array, width: number, height: number, count: number): number {
+  const votes = Array(count).fill(0) as number[];
+  const inset = Math.max(1, Math.round(Math.min(width, height) * 0.04));
+  const ranges = [
+    [0, inset, 0, inset],
+    [width - inset, width, 0, inset],
+    [0, inset, height - inset, height],
+    [width - inset, width, height - inset, height]
+  ] as const;
+  for (const [x0, x1, y0, y1] of ranges) {
+    for (let y = y0; y < y1; y += 1) for (let x = x0; x < x1; x += 1) {
+      const assignment = assignments[y * width + x];
+      if (assignment >= 0) votes[assignment] += 1;
+    }
+  }
+  return votes.reduce((best, value, index) => value > votes[best] ? index : best, 0);
+}
+
+function cleanTraceMask(mask: boolean[], width: number, height: number, minArea: number): boolean[] {
+  let cleaned = majorityFilter(mask, width, height);
+  cleaned = removeSmallComponents(cleaned, width, height, minArea);
+  return majorityFilter(cleaned, width, height);
+}
+
+function majorityFilter(mask: boolean[], width: number, height: number): boolean[] {
+  const output = mask.slice();
+  for (let y = 1; y < height - 1; y += 1) for (let x = 1; x < width - 1; x += 1) {
+    let filled = 0;
+    for (let oy = -1; oy <= 1; oy += 1) for (let ox = -1; ox <= 1; ox += 1) {
+      if (mask[(y + oy) * width + x + ox]) filled += 1;
+    }
+    if (filled >= 6) output[y * width + x] = true;
+    else if (filled <= 2) output[y * width + x] = false;
+  }
+  return output;
+}
+
+function removeSmallComponents(mask: boolean[], width: number, height: number, minArea: number): boolean[] {
+  return filterTraceComponentsByArea(mask, width, height, { minArea });
+}
+
+function filterTraceComponentsByArea(
+  mask: boolean[],
+  width: number,
+  height: number,
+  limits: { minArea: number; maxArea?: number }
+): boolean[] {
+  const output = mask.slice();
+  const seen = new Uint8Array(mask.length);
+  const queue: number[] = [];
+  for (let start = 0; start < mask.length; start += 1) {
+    if (!mask[start] || seen[start]) continue;
+    const component: number[] = [];
+    seen[start] = 1; queue.push(start);
+    while (queue.length) {
+      const current = queue.pop() as number;
+      component.push(current);
+      const x = current % width, y = Math.floor(current / width);
+      const neighbors = [
+        x > 0 ? current - 1 : -1,
+        x < width - 1 ? current + 1 : -1,
+        y > 0 ? current - width : -1,
+        y < height - 1 ? current + width : -1
+      ];
+      for (const neighbor of neighbors) {
+        if (neighbor >= 0 && mask[neighbor] && !seen[neighbor]) {
+          seen[neighbor] = 1; queue.push(neighbor);
+        }
+      }
+    }
+    if (component.length < limits.minArea || (limits.maxArea !== undefined && component.length > limits.maxArea)) {
+      component.forEach((index) => { output[index] = false; });
+    }
+  }
+  return output;
+}
+
+function traceMaskToSvgPath(mask: boolean[], width: number, height: number, smoothing: number): string {
+  if (!mask.some(Boolean)) return "";
+  const geometry = contours().size([width, height]).smooth(true).thresholds([0.5])(mask.map(Number))[0];
+  if (!geometry?.coordinates.length) return "";
+  const parts: string[] = [];
+  for (const polygon of geometry.coordinates) {
+    for (const ring of polygon) {
+      const points = smoothVectorRing(ring as Array<[number, number]>, smoothing);
+      if (points.length < 3) continue;
+      parts.push(`M${points.map(([x, y]) => `${roundPathNumber(x)},${roundPathNumber(y)}`).join("L")}Z`);
+    }
+  }
+  return parts.join("");
+}
+
+function roundPathNumber(value: number): string {
+  return Number(value.toFixed(2)).toString();
+}
+
+function rgbToHex([r, g, b]: [number, number, number]): string {
+  return `#${[r, g, b].map((value) => Math.max(0, Math.min(255, Math.round(value))).toString(16).padStart(2, "0")).join("")}`;
 }
 
 function orientMeshLikePreview(mesh: Mesh, heightMm: number): Mesh {

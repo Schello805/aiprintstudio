@@ -132,9 +132,11 @@ hochgeladene SVG-Dateien im Modus **Logo mit Text** gibt es einen separaten
 Pfad: `SVGLoader` liest die vorhandenen Pfade, `ExtrudeGeometry` baut daraus
 direkte Volumenkörper und STL/3MF entstehen ohne Raster-Rückrechnung. PNG, JPG
 und WEBP bleiben Rasterquellen. Sie werden für Wappen, Embleme und Fotos lokal
-über Masken und Konturen angenähert; für feine Logo-Schrift werden sie im
-Wordmark-Modus bewusst blockiert, weil Pixel keine zuverlässigen Buchstabenpfade
-enthalten.
+über Masken und Konturen angenähert. Im Wordmark-Modus werden sie zuerst lokal
+in SVG-Farbflächen vektorisiert und anschließend durch denselben
+SVG-Extrusionspfad geführt; echte SVG-Dateien bleiben dadurch der
+Qualitätsmaßstab, Rasterlogos bekommen aber einen sauberen Pfad-basierten
+Workflow statt einer Pixel-Höhenkarte.
 
 Lithophane verwenden dieselbe wasserdichte Meshpipeline und ergänzen sie vor
 der Vermaschung um eine definierte Außenmaske. Rechteck,
