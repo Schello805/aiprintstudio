@@ -63,10 +63,11 @@ grundsätzlich kompatibel.
 PNG, JPG, WEBP und SVG werden zu einem wasserdichten 2,5D-Relief verarbeitet.
 Für Wappen erkennt die App Motivflächen und Höhenebenen, glättet die Konturen
 als Polygone und hält den Tragkörper geschlossen. Für **Logo mit Text** ist SVG
-der bevorzugte Weg: echte SVG-Pfade werden direkt extrudiert und nicht mehr aus
-Pixeln zurückgeraten. PNG/JPG-Logos funktionieren weiter, bleiben bei feiner
-Schrift aber eine Näherung. Für Fotos steht Depth Anything V2 Small lokal über
-Apple Core ML zur Verfügung.
+der verbindliche Qualitätsweg: echte SVG-Pfade werden direkt extrudiert und
+nicht mehr aus Pixeln zurückgeraten. PNG/JPG-Logos können als Wappen/Emblem oder
+Foto verarbeitet werden, sind für feine Logo-Schrift aber keine saubere
+STL/3MF-Grundlage. Für Fotos steht Depth Anything V2 Small lokal über Apple Core
+ML zur Verfügung.
 
 Nach einer Berechnung zeigt die App eine lokale Schichtsimulation mit
 Schichtzahl, Materialmenge, grober Druckzeit und Farbwechseln. Diese Angaben
@@ -177,13 +178,14 @@ aktiv. Feine Stege werden dabei auf mindestens 0,8 mm verbreitert. Die 3MF-Datei
 enthält 0,4 mm zusätzlich als Profilhinweis; die tatsächlich verwendete Düse
 muss weiterhin im Slicer zum ausgewählten Drucker passen.
 
-Für Logos mit kleiner oder geschwungener Schrift ist eine **SVG-Datei** deutlich
-besser als PNG/JPG. Bei SVG nutzt AI Print Studio die vorhandenen Pfade direkt
-für STL und 3MF. Bei PNG/JPG muss die App Antialiasing, Innenräume und
-Strichstärken aus Pixeln schätzen; das kann bei feiner Schreibschrift sichtbar
-schlechter sein. Wenn nur ein PNG/JPG vorhanden ist, sollte es vor dem Export in
-einem Vektorprogramm oder künftig im integrierten Vektorisierungs-Schritt in
-SVG umgewandelt und geprüft werden.
+Für Logos mit kleiner oder geschwungener Schrift ist eine **SVG-Datei mit echten
+Pfaden erforderlich**. Bei SVG nutzt AI Print Studio die vorhandenen Pfade direkt
+für STL und 3MF. Bei PNG/JPG müsste die App Antialiasing, Innenräume und
+Strichstärken aus Pixeln schätzen; das erzeugt bei feiner Schrift sichtbar
+schlechte Buchstaben. Deshalb blockiert der Modus **Logo mit Text** Rasterbilder
+und fordert eine SVG-Datei an. Wenn nur ein PNG/JPG vorhanden ist, sollte es vor
+dem Export in einem Vektorprogramm oder künftig im integrierten
+Vektorisierungs-Schritt in SVG umgewandelt und geprüft werden.
 
 Ist **Hintergrund mitdrucken** aktiv, erzeugt die App einen geschlossenen,
 massiven Körper: Boden und Hintergrund bilden die Grundplatte; erkannte Schrift

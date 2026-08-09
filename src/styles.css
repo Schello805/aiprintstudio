@@ -216,14 +216,14 @@ h1,h2,h3 { font-family:Manrope, sans-serif; margin:0; }
 .compact-option-grid>.multicolor-panel.active { grid-column:auto; }
 .compact-option-grid .background-toggle { min-height:52px; padding:9px 12px; }
 .compact-option-grid .multicolor-toggle { min-height:50px; padding:9px 12px; }
-.svg-workflow-note { min-height:52px; display:flex; align-items:center; gap:12px; border:1px solid #3e4a58; border-radius:11px; background:#10151b; color:#aab3bf; padding:9px 12px; }
+.svg-workflow-note { min-height:52px; display:flex; align-items:center; gap:12px; border:1px solid #b66a2d; border-radius:11px; background:rgba(82,46,13,.28); color:#ffd7a6; padding:9px 12px; }
 .svg-workflow-note.ready { border-color:#52783e; background:#122014; }
-.svg-workflow-note>svg { width:19px; flex:0 0 auto; color:#90a0b2; }
+.svg-workflow-note>svg { width:19px; flex:0 0 auto; color:#ffbd73; }
 .svg-workflow-note.ready>svg { color:#a5f36d; }
 .svg-workflow-note strong,.svg-workflow-note span { display:block; }
-.svg-workflow-note strong { color:#e7edf5; font-size:11px; }
+.svg-workflow-note strong { color:#ffe5c5; font-size:11px; }
 .svg-workflow-note.ready strong { color:#dffff0; }
-.svg-workflow-note span { color:#7f8995; margin-top:3px; font-size:9px; line-height:1.35; }
+.svg-workflow-note span { color:#cda984; margin-top:3px; font-size:9px; line-height:1.35; }
 .secondary-modes { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
 .number-field>span { display:block; color:#68717e; font-size:8px; font-weight:700; letter-spacing:.1em; margin-bottom:5px; }
 .number-field>div { display:flex; align-items:center; border:1px solid #2c333e; border-radius:8px; background:#090c11; overflow:hidden; }

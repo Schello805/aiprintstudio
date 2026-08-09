@@ -44,6 +44,9 @@
   Wappenkonturen werden nicht mehr zu einem Brim erweitert
 - loch-erhaltende Mindestbreitenkorrektur für Wortmarken sowie motivbasierte
   Farbmessung ohne weißen Bildhintergrund
+- Rasterbilder im Modus **Logo mit Text** werden blockiert, damit PNG/JPG nicht
+  mehr als scheinbar gutes, aber unlesbares Schrift-STL ausgegeben wird. Bis zur
+  integrierten Vektorisierung ist SVG der verbindliche Qualitätsweg.
 
 ## Nächste Produktverbesserungen
 
