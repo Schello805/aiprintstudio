@@ -43,6 +43,33 @@ describe("real-world logo regression fixtures", () => {
     } finally { await rm(directory, { recursive: true, force: true }); }
   }, 20_000);
 
+  it("removes isolated needle artifacts from SVG wordmarks", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "logo-svg-needle-cleanup-"));
+    try {
+      const imagePath = join(directory, "needle.svg");
+      await writeFile(imagePath, `
+        <svg xmlns="http://www.w3.org/2000/svg" width="400" height="180" viewBox="0 0 400 180">
+          <path fill="#111111" d="M40 40h120v60h-120z"/>
+          <path fill="#111111" d="M230 30h120v65h-120z"/>
+          <path fill="#111111" d="M200 8h0.6v80h-0.6z"/>
+        </svg>
+      `);
+      const result = await createRelief(imagePath, directory, {
+        pipelineKind: "wordmark", processingMode: "wordmark", profile: "logo", resolution: 512,
+        widthMm: 100, minimumFeatureMm: 0.3, includeBackground: false
+      });
+      const topVertices = result.preview.positions.filter((_, index) => index % 3 === 1);
+      expect(Math.max(...topVertices)).toBe(4);
+      let needleVertices = 0;
+      for (let index = 0; index < result.preview.positions.length; index += 3) {
+        const x = result.preview.positions[index];
+        const y = result.preview.positions[index + 1];
+        if (Math.abs(x - 1.6) < 0.4 && y > 0) needleVertices += 1;
+      }
+      expect(needleVertices).toBe(0);
+    } finally { await rm(directory, { recursive: true, force: true }); }
+  }, 20_000);
+
   it("keeps small enclosed counters open", async () => {
     const directory = await mkdtemp(join(tmpdir(), "logo-counters-"));
     try {

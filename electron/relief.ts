@@ -90,6 +90,7 @@ type Vec3 = readonly [number, number, number];
 type Triangle = readonly [number, number, number];
 type Mesh = { vertices: Vec3[]; triangles: Triangle[] };
 type ColoredMesh = { mesh: Mesh; color: string; name: string };
+type SvgReliefPart = { mesh: Mesh; color: string; area: number; bounds: { minX: number; minY: number; maxX: number; maxY: number } };
 
 const safeDefaults: ReliefOptions = {
   sourceName: "",
@@ -1152,6 +1153,31 @@ function uniqueColorsInOrder(colors: string[]): string[] {
   return result.length ? result : ["#B7F58A"];
 }
 
+function svgPointBounds(points: Array<{ x: number; y: number }>): SvgReliefPart["bounds"] {
+  let minX = Number.POSITIVE_INFINITY, minY = Number.POSITIVE_INFINITY;
+  let maxX = Number.NEGATIVE_INFINITY, maxY = Number.NEGATIVE_INFINITY;
+  for (const point of points) {
+    minX = Math.min(minX, point.x); minY = Math.min(minY, point.y);
+    maxX = Math.max(maxX, point.x); maxY = Math.max(maxY, point.y);
+  }
+  return { minX, minY, maxX, maxY };
+}
+
+function isNeedleLikeSvgArtifact(part: SvgReliefPart, scaleMm: number): boolean {
+  const widthMm = Math.max(0, (part.bounds.maxX - part.bounds.minX) * scaleMm);
+  const heightMm = Math.max(0, (part.bounds.maxY - part.bounds.minY) * scaleMm);
+  const minDimensionMm = Math.min(widthMm, heightMm);
+  const maxDimensionMm = Math.max(widthMm, heightMm);
+  const areaMm2 = part.area * scaleMm * scaleMm;
+  if (minDimensionMm <= 1e-6 || maxDimensionMm <= 1e-6) return true;
+  const aspect = maxDimensionMm / minDimensionMm;
+  // Entfernt isolierte Nadeln aus SVG-/Trace-Artefakten. Kleine Punkte,
+  // Umlautpunkte und echte kurze Details bleiben erhalten; gefiltert werden
+  // nur extrem langgezogene, sehr schmale Restflächen, die im Druck als
+  // ungewollte Spitzen erscheinen.
+  return aspect >= 14 && minDimensionMm < 0.32 && areaMm2 < 6;
+}
+
 async function createSvgPathRelief(
   imagePath: string,
   outputDirectory: string,
@@ -1172,7 +1198,7 @@ async function createSvgPathRelief(
   } catch {
     return null;
   }
-  const rawParts: Array<{ mesh: Mesh; color: string; area: number }> = [];
+  const rawParts: SvgReliefPart[] = [];
   let unsupportedVectorPaint = false;
   for (const path of parsed.paths) {
     const style = path.userData?.style as { fill?: string; fillOpacity?: number; opacity?: number } | undefined;
@@ -1195,7 +1221,7 @@ async function createSvgPathRelief(
       // bleiben hier als Bézier-Geometrie erhalten und werden nicht über ein
       // Pixelraster zurückgerechnet.
       const geometry = new ExtrudeGeometry(shape, { depth: 1, bevelEnabled: false, curveSegments: 28, steps: 1 });
-      rawParts.push({ mesh: meshFromExtrudeGeometry(geometry, 0), color, area });
+      rawParts.push({ mesh: meshFromExtrudeGeometry(geometry, 0), color, area, bounds: svgPointBounds(points) });
     }
   }
   if (!rawParts.length || (unsupportedVectorPaint && rawParts.length <= 1)) return null;
@@ -1207,11 +1233,14 @@ async function createSvgPathRelief(
   }
   if (!Number.isFinite(minX) || !Number.isFinite(maxX) || maxX <= minX || maxY <= minY) return null;
   const heightMm = options.widthMm * (maxY - minY) / Math.max(1e-6, maxX - minX);
+  const scaleMm = options.widthMm / Math.max(1e-6, maxX - minX);
+  const printableParts = rawParts.filter((part) => !isNeedleLikeSvgArtifact(part, scaleMm));
+  if (!printableParts.length) return null;
   const backgroundIndex = options.includeBackground
-    ? rawParts.reduce((best, part, index) => part.area > rawParts[best].area ? index : best, 0)
+    ? printableParts.reduce((best, part, index) => part.area > printableParts[best].area ? index : best, 0)
     : -1;
-  const colors = uniqueColorsInOrder(rawParts.map((part) => part.color));
-  const normalizedParts = rawParts.map((part, index) => {
+  const colors = uniqueColorsInOrder(printableParts.map((part) => part.color));
+  const normalizedParts = printableParts.map((part, index) => {
     const isBackground = index === backgroundIndex;
     const bottom = isBackground ? 0 : options.includeBackground ? options.baseMm : 0;
     const top = isBackground ? options.baseMm : options.includeBackground ? options.baseMm + options.reliefMm : options.reliefMm;
