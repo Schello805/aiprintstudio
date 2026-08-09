@@ -9,7 +9,7 @@ exports[`golden relief exports > keeps emblem geometry reproducible 2`] = `
 }
 `;
 
-exports[`golden relief exports > keeps wordmark geometry reproducible 1`] = `"2e6f21969b6f796b9f90cf3baeeb60930d500677107b5b845604f871fd0dc0bb"`;
+exports[`golden relief exports > keeps wordmark geometry reproducible 1`] = `"0c89209a7c195e6b5209548d10337390c3b4c6edd4b9226a1d8aad5431524c18"`;
 
 exports[`golden relief exports > keeps wordmark geometry reproducible 2`] = `
 {

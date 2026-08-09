@@ -1113,10 +1113,10 @@ function normalizeSvgMesh(mesh: Mesh, bounds: { minX: number; minY: number; maxX
   return {
     vertices: mesh.vertices.map(([x, y, z]) => [
       (x - bounds.minX) * scale,
-      (y - bounds.minY) * scale,
+      (bounds.maxY - y) * scale,
       z
     ] as const),
-    triangles: mesh.triangles.slice()
+    triangles: mesh.triangles.map(([a, b, c]) => [a, c, b] as const)
   };
 }
 
