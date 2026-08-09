@@ -339,7 +339,9 @@ export function App() {
         pipelineKind,
         includeBackground: effectiveMode === "wordmark" && (repair || includeLogoBackground),
         nozzleMm: 0.4,
-        minimumFeatureMm: minimumFeatureForMode(effectiveMode, file.suggestedProfile, repair || optimizeForStandardNozzle),
+        minimumFeatureMm: effectiveMode === "wordmark" && includeLogoBackground
+          ? 0.3
+          : minimumFeatureForMode(effectiveMode, file.suggestedProfile, repair || optimizeForStandardNozzle),
         sourceColors: multicolorEnabled ? sourceColors : [],
         colors: multicolorEnabled ? colors : [],
         colorMapping: multicolorEnabled ? colorMapping : [],
