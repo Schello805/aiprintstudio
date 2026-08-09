@@ -80,7 +80,7 @@ type StudioProject = {
   };
 };
 
-const RELIEF_ENGINE_VERSION = "2026-08-09-vector-wordmark-background-v5";
+const RELIEF_ENGINE_VERSION = "2026-08-09-wordmark-contour-resolution-v6";
 
 const optimalResolution: Record<QualityProfile, number> = {
   fast: 192,
@@ -322,9 +322,15 @@ export function App() {
       // Insbesondere bleibt ein Wappen im Vektormodus und wird nicht mehr
       // stillschweigend als Wortlogo neu interpretiert.
       const effectiveMode = resolveReliefMode(processingMode, file.suggestedProfile);
-      const effectiveResolution = effectiveMode === "auto" && file.suggestedProfile === "logo"
-        ? 384
-        : repair ? Math.min(384, optimalResolution[profile]) : optimalResolution[profile];
+      const wordmarkWithBackground = effectiveMode === "wordmark" && (repair || includeLogoBackground);
+      const effectiveResolution = wordmarkWithBackground
+        // Feine Logo-Schriften enthalten oft Antialias-Rauschen. 512px erkennt
+        // dieses Rauschen als echte Mikro-Konturen; 256px liefert sichtbar
+        // ruhigere Vektorkonturen und bleibt trotzdem scharf genug für Druck.
+        ? 256
+        : effectiveMode === "auto" && file.suggestedProfile === "logo"
+          ? 384
+          : repair ? Math.min(384, optimalResolution[profile]) : optimalResolution[profile];
       const automaticSmoothing = automaticSmoothingForMode(effectiveMode);
       const automaticDetail = effectiveMode === "depth" ? 0.75 : 1;
       const pipelineKind: PipelineKind = studioTool === "text"
@@ -345,7 +351,7 @@ export function App() {
         invert: false, profile, smoothing: automaticSmoothing, detail: automaticDetail,
         processingMode: effectiveMode,
         pipelineKind,
-        includeBackground: effectiveMode === "wordmark" && (repair || includeLogoBackground),
+        includeBackground: wordmarkWithBackground,
         nozzleMm: 0.4,
         minimumFeatureMm: effectiveMode === "wordmark" && includeLogoBackground
           ? 0.3

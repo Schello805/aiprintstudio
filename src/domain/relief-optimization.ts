@@ -43,6 +43,14 @@ export function optimizationVariants(mode: ReliefProcessingMode, resolution: num
     { smoothing: 1, detail: 0.85, resolution },
     { smoothing: 1, detail: 0.7, resolution }
   ];
+  if (mode === "wordmark") {
+    const resolutions = [...new Set([256, 320, Math.min(384, resolution)])].filter((value) => value <= resolution);
+    return resolutions.flatMap((candidateResolution) => [2, 3, 4].map((smoothing) => ({
+      smoothing,
+      detail,
+      resolution: candidateResolution
+    })));
+  }
   return smoothingCandidates(mode).map((smoothing) => ({ smoothing, detail, resolution }));
 }
 

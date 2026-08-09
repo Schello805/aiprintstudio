@@ -31,6 +31,12 @@ describe("local relief optimization", () => {
     expect(variants.every((variant) => variant.resolution === 320)).toBe(true);
   });
 
+  it("compares lower wordmark resolutions instead of blindly maximizing raster detail", () => {
+    const variants = optimizationVariants("wordmark", 512, 1);
+    expect(new Set(variants.map((variant) => variant.resolution))).toEqual(new Set([256, 320, 384]));
+    expect(new Set(variants.map((variant) => variant.smoothing))).toEqual(new Set([2, 3, 4]));
+  });
+
   it("does not count the no-problems summary as an issue", () => {
     expect(meaningfulReliefIssueCount(["Keine offensichtlichen Druckprobleme erkannt."])).toBe(0);
     expect(meaningfulReliefIssueCount(["Viele steile Übergänge können Details unsauber drucken."])).toBe(1);
