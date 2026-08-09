@@ -1199,6 +1199,8 @@ async function createSvgPathRelief(
     return null;
   }
   const rawParts: SvgReliefPart[] = [];
+  const pathSamplePoints = svgPathSamplePoints(options.resolution);
+  const curveSegments = svgCurveSegments(options.resolution);
   let unsupportedVectorPaint = false;
   for (const path of parsed.paths) {
     const style = path.userData?.style as { fill?: string; fillOpacity?: number; opacity?: number } | undefined;
@@ -1213,14 +1215,14 @@ async function createSvgPathRelief(
     const color = colorFromSvgFill(style?.fill ?? path.color?.getStyle());
     const shapes = SVGLoader.createShapes(path);
     for (const shape of shapes) {
-      const points = shape.getPoints(48);
+      const points = shape.getPoints(pathSamplePoints);
       if (points.length < 3) continue;
       const area = Math.abs(ShapeUtils.area(points));
       if (area < 1e-3) continue;
       // Die Höhe wird später pro Fläche entschieden. Die SVG-Kurven selbst
       // bleiben hier als Bézier-Geometrie erhalten und werden nicht über ein
       // Pixelraster zurückgerechnet.
-      const geometry = new ExtrudeGeometry(shape, { depth: 1, bevelEnabled: false, curveSegments: 28, steps: 1 });
+      const geometry = new ExtrudeGeometry(shape, { depth: 1, bevelEnabled: false, curveSegments, steps: 1 });
       rawParts.push({ mesh: meshFromExtrudeGeometry(geometry, 0), color, area, bounds: svgPointBounds(points) });
     }
   }
@@ -1340,7 +1342,7 @@ async function createTracedWordmarkSvg(
   sourceWidth: number,
   sourceHeight: number
 ): Promise<string | null> {
-  const targetWidth = Math.min(1200, Math.max(384, sourceWidth));
+  const targetWidth = Math.min(1200, Math.max(256, Math.min(sourceWidth, options.resolution * 2)));
   const targetHeight = Math.max(64, Math.round(targetWidth * sourceHeight / Math.max(1, sourceWidth)));
   const { data } = await sharp(imagePath)
     .rotate()
@@ -1524,6 +1526,21 @@ function traceMaskToSvgPath(mask: boolean[], width: number, height: number, smoo
     }
   }
   return parts.join("");
+}
+
+function svgPathSamplePoints(resolution: number): number {
+  // SVGLoader.createShapes gibt analytische Kurven zurück; getPoints wird nur
+  // für Flächen-, Bounds- und Artefaktprüfung genutzt. Bei automatischer
+  // Exportreduzierung muss dieser Wert mitfallen, sonst bleiben große SVGs
+  // trotz niedrigerer App-Auflösung über dem 250k-Limit.
+  return Math.max(12, Math.min(48, Math.round(resolution / 8)));
+}
+
+function svgCurveSegments(resolution: number): number {
+  // Der wichtigste Dreieckshebel für Logo/Text-SVGs. 512 bleibt hochwertig,
+  // reduzierte Durchläufe werden aber wirklich kleiner und erreichen die
+  // Exportgrenze zuverlässig.
+  return Math.max(6, Math.min(28, Math.round(resolution / 18)));
 }
 
 function roundPathNumber(value: number): string {

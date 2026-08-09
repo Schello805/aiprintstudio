@@ -43,6 +43,25 @@ describe("real-world logo regression fixtures", () => {
     } finally { await rm(directory, { recursive: true, force: true }); }
   }, 20_000);
 
+  it("reduces SVG wordmark tessellation when export limits require a smaller mesh", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "logo-svg-tessellation-reduction-"));
+    try {
+      const high = await createRelief(resolve("test-fixtures/logos/thin-script.svg"), directory, {
+        pipelineKind: "wordmark", processingMode: "wordmark", profile: "logo", resolution: 512,
+        widthMm: 120, minimumFeatureMm: 0.8, includeBackground: false
+      });
+      const reduced = await createRelief(resolve("test-fixtures/logos/thin-script.svg"), directory, {
+        pipelineKind: "wordmark", processingMode: "wordmark", profile: "logo", resolution: 128,
+        widthMm: 120, minimumFeatureMm: 0.8, includeBackground: false
+      });
+      expect(reduced.geometryValidation.valid).toBe(true);
+      expect(reduced.triangleCount).toBeLessThan(high.triangleCount);
+      expect(reduced.triangleCount).toBeLessThan(250_000);
+      expect(reduced.fileBytes.stl).toBeLessThan(25_000_000);
+      expect(reduced.fileBytes.threeMf).toBeLessThan(25_000_000);
+    } finally { await rm(directory, { recursive: true, force: true }); }
+  }, 20_000);
+
   it("removes isolated needle artifacts from SVG wordmarks", async () => {
     const directory = await mkdtemp(join(tmpdir(), "logo-svg-needle-cleanup-"));
     try {

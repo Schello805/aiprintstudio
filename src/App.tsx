@@ -432,16 +432,17 @@ export function App() {
       request.resolution = currentResolution;
       reliefProgressWindow.current = { start: repair ? 52 : 2, end: 90 };
       let next = await window.desktop.createRelief(jobId, file.path, request);
-      for (let attempt = 0; next && reduceTo250kTriangles && (next.triangleCount > 250_000 || next.fileBytes.stl > 25_000_000 || next.fileBytes.threeMf > 25_000_000) && attempt < 4; attempt += 1) {
+      for (let attempt = 0; next && reduceTo250kTriangles && (next.triangleCount > 250_000 || next.fileBytes.stl > 25_000_000 || next.fileBytes.threeMf > 25_000_000) && attempt < 8; attempt += 1) {
         const triangleFactor = Math.sqrt(225_000 / Math.max(1, next.triangleCount));
         const fileFactor = Math.sqrt(23_000_000 / Math.max(1, next.fileBytes.stl, next.fileBytes.threeMf));
-        const reducedResolution = Math.max(64, Math.floor(currentResolution * Math.min(0.9, triangleFactor, fileFactor)));
+        let reducedResolution = Math.max(32, Math.floor(currentResolution * Math.min(0.88, triangleFactor, fileFactor)));
+        if (reducedResolution >= currentResolution) reducedResolution = Math.max(32, currentResolution - 32);
         if (reducedResolution >= currentResolution) break;
-        const reductionStart = 90 + attempt * 1.75;
+        const reductionStart = 90 + attempt * 0.85;
         reliefProgressWindow.current = { start: reductionStart, end: Math.min(97, reductionStart + 1.75) };
         setReliefProgress({
           phase: "Meshgröße reduzieren",
-          detail: `Die Auflösung wird automatisch angepasst (${next.triangleCount.toLocaleString("de-DE")} → maximal 250.000 Dreiecke) …`,
+          detail: `Die Exportgröße wird automatisch angepasst (${next.triangleCount.toLocaleString("de-DE")} Dreiecke, ${(Math.max(next.fileBytes.stl, next.fileBytes.threeMf) / 1_048_576).toFixed(1).replace(".", ",")} MB) …`,
           progress: Math.round(reductionStart)
         });
         currentResolution = reducedResolution;
