@@ -65,6 +65,7 @@ type HistoryEntry = {
 };
 type StudioProject = {
   schemaVersion: 1;
+  engineVersion?: string;
   savedAt: string;
   source: SelectedImage;
   tool: "image" | "text" | "lithophane";
@@ -78,6 +79,8 @@ type StudioProject = {
     curveAngle?: number;
   };
 };
+
+const RELIEF_ENGINE_VERSION = "2026-08-09-stable-emblem-wordmark-v4";
 
 const optimalResolution: Record<QualityProfile, number> = {
   fast: 192,
@@ -177,7 +180,12 @@ export function App() {
         recoveryLoaded.current = true;
         const project = stored as StudioProject | null;
         if (project?.schemaVersion === 1 && project.source) {
-          applyProject(project, "Letzten Studio-Stand automatisch wiederhergestellt.");
+          applyProject(
+            project,
+            project.engineVersion === RELIEF_ENGINE_VERSION
+              ? "Letzten Studio-Stand automatisch wiederhergestellt."
+              : "Bild und Einstellungen wiederhergestellt · Alte Modellvorschau wegen Qualitätsupdate verworfen."
+          );
         }
       })
       .catch(() => { recoveryLoaded.current = true; });
@@ -470,6 +478,7 @@ export function App() {
     if (!file || studioTool === "prompt" || studioTool === "home") return null;
     return {
       schemaVersion: 1,
+      engineVersion: RELIEF_ENGINE_VERSION,
       savedAt: new Date().toISOString(),
       source: file,
       tool: studioTool,
@@ -487,6 +496,7 @@ export function App() {
     const timer = window.setTimeout(() => {
       const project: StudioProject | null = studioTool === "prompt" || studioTool === "home" ? null : {
         schemaVersion: 1,
+        engineVersion: RELIEF_ENGINE_VERSION,
         savedAt: new Date().toISOString(),
         source: file,
         tool: studioTool,
