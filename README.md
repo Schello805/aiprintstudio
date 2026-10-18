@@ -9,7 +9,7 @@ CAD-Pläne und Mesh-Dateien bleiben standardmäßig auf dem eigenen Mac.
 
 [![Quality](https://github.com/Schello805/aiprintstudio/actions/workflows/quality.yml/badge.svg)](https://github.com/Schello805/aiprintstudio/actions/workflows/quality.yml)
 
-> Aktueller Stand: Version 0.22.0. Bild- und Schrift-Reliefs, mehrfarbige
+> Aktueller Stand: Version 0.31.46. Bild- und Schrift-Reliefs, Lithophane, mehrfarbige
 > AMS-3MF-Dateien sowie einfache, per OpenAI geplante und lokal konstruierte
 > Prompt-zu-3D-Modelle sind testbar. Die vollständige Rundum-Rekonstruktion aus
 > einem einzelnen Bild bleibt eine spätere Ausbaustufe.

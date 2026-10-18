@@ -12,6 +12,12 @@ interface Window {
       totalStorageBytes: number;
     }>;
     checkForUpdate: () => Promise<{ currentVersion: string; latestVersion: string; available: boolean; url: string; directDownload: boolean }>;
+    installUpdate: (downloadUrl: string) => Promise<{ installed: boolean; message: string }>;
+    onUpdateProgress: (callback: (progress: {
+      phase: "downloading" | "verifying" | "installing" | "ready" | "error";
+      detail: string;
+      percent: number;
+    }) => void) => () => void;
     getSettingsStatus: () => Promise<{
       openAiConfigured: boolean;
       openAiStored: boolean;

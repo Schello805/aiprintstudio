@@ -1090,4 +1090,66 @@ describe("relief mesh", () => {
     expect(mask[65 * width + 40]).toBe(false);
     expect(mask[40 * width + 40]).toBe(true);
   });
+
+  it("classifies warm-toned photographs as photo and badges/graphics as logo", () => {
+    const width = 48, height = 36;
+    const photoRgba = Buffer.alloc(width * height * 4);
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const offset = (y * width + x) * 4;
+        const wave = Math.sin(x * 0.7) * 18 + Math.cos(y * 0.9) * 16 + ((x * 13 + y * 29) % 19);
+        photoRgba[offset] = Math.max(0, Math.min(255, Math.round(60 + (x / width) * 160 + wave)));
+        photoRgba[offset + 1] = Math.max(0, Math.min(255, Math.round(25 + (y / height) * 110 + wave * 0.7)));
+        photoRgba[offset + 2] = Math.max(0, Math.min(255, Math.round(15 + ((x + y) / (width + height)) * 70 + wave * 0.5)));
+        photoRgba[offset + 3] = 255;
+      }
+    }
+    expect(reliefInternals.suggestImageProfile(photoRgba, width, height, "jpeg")).toBe("photo");
+
+    const logoRgba = Buffer.alloc(width * height * 4, 255);
+    for (let y = 8; y < 28; y += 1) {
+      for (let x = 10; x < 38; x += 1) {
+        const offset = (y * width + x) * 4;
+        logoRgba[offset] = 220;
+        logoRgba[offset + 1] = 30;
+        logoRgba[offset + 2] = 40;
+      }
+    }
+    expect(reliefInternals.suggestImageProfile(logoRgba, width, height, "png")).toBe("logo");
+  });
+
+  it("builds a full rectangular photo relief from a depth map with foreground raised above background", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "ai-print-photo-depth-test-"));
+    try {
+      const width = 48, height = 36;
+      const photo = Buffer.alloc(width * height * 3);
+      const depth = Buffer.alloc(width * height * 3);
+      for (let y = 0; y < height; y += 1) {
+        for (let x = 0; x < width; x += 1) {
+          const offset = (y * width + x) * 3;
+          const isForegroundPerson = y >= 14 && y <= 32 && x >= 12 && x <= 36;
+          const lum = isForegroundPerson ? 210 : 35;
+          const d = isForegroundPerson ? 230 : 20;
+          photo[offset] = lum; photo[offset + 1] = Math.max(0, lum - 20); photo[offset + 2] = Math.max(0, lum - 40);
+          depth[offset] = d; depth[offset + 1] = d; depth[offset + 2] = d;
+        }
+      }
+      const imagePath = join(directory, "photo.png");
+      const depthPath = join(directory, "depth.png");
+      await sharp(photo, { raw: { width, height, channels: 3 } }).png().toFile(imagePath);
+      await sharp(depth, { raw: { width, height, channels: 3 } }).png().toFile(depthPath);
+
+      const result = await createRelief(imagePath, directory, {
+        widthMm: 100, baseMm: 1.6, reliefMm: 4, resolution: 48, invert: false,
+        profile: "photo", processingMode: "depth", pipelineKind: "photo",
+        smoothing: 2, detail: 0.75, sourceColors: [], colors: [], sideColorIndex: 0
+      }, depthPath);
+
+      expect(result.geometryValidation.valid).toBe(true);
+      const ys = result.preview.positions.filter((_, index) => index % 3 === 1 && result.preview.positions[index] > 0.1);
+      expect(Math.max(...ys) - Math.min(...ys)).toBeGreaterThan(2.5);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
 });

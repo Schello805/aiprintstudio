@@ -3,6 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' ws://localhost:* http://localhost:*; worker-src 'self' blob:; font-src 'self' data:;"
+    />
     <meta name="theme-color" content="#090b10" />
     <meta name="description" content="Aus einem Bild wird ein druckbares 3D-Modell." />
     <title>AI Print Studio</title>

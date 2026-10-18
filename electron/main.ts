@@ -8,13 +8,21 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { Worker } from "node:worker_threads";
 import sharp, { type Metadata } from "sharp";
-import type { ReliefOptions, ReliefProgress, ReliefResult } from "./relief.js";
+import type { ReliefProgress, ReliefResult } from "./relief.js";
 import { exportFitsLimits, validateGeneratedExportBuffer } from "./export-validation.js";
-import { renderTextImage, type TextImageOptions } from "./text-image.js";
+import { renderTextImage } from "./text-image.js";
 import { buildCadPlanningRequest, encodeCadStl, validateCadPlan, type CadPlan } from "./cad.js";
 import { checkSystemCompatibility } from "./system-check.js";
 import { decryptApiKey, encryptApiKey, type EncryptedApiKey } from "./api-key-vault.js";
 import { calculateAiCost, defaultOpenAiModel, estimateTokens, getOpenAiModel, listOpenAiModels, type OpenAiModelId } from "./openai-usage.js";
+import {
+  isAllowedShowItemPath,
+  isApprovedSourceImagePath,
+  validateIpcReliefOptions,
+  validateIpcTextImageOptions
+} from "./ipc-validation.js";
+import { downloadAndInstallDmgUpdate, fetchLatestUpdateInfo, isNewerVersion } from "./updater.js";
+import { suggestImageProfile } from "./relief-masks.js";
 
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
 const developmentUrl = process.env.VITE_DEV_SERVER_URL ?? "http://localhost:5173";
@@ -30,10 +38,26 @@ type StoredSettings = {
 const settingsDirectoryName = "de.michaelschellenberger.aiprintstudio";
 let sessionOpenAiKey: string | null = null;
 const reliefJobs = new Map<string, { controller: AbortController; worker?: Worker }>();
+const approvedSourcePaths = new Set<string>();
 const previewDirectoryName = "AI Print Studio Preview";
 
 function previewDirectory(): string {
   return join(app.getPath("temp"), previewDirectoryName);
+}
+
+function allowedTempSourceDirectories(): string[] {
+  const tempRoot = app.getPath("temp");
+  return [
+    join(tempRoot, "AI Print Studio Projects"),
+    join(tempRoot, "AI Print Studio Recovery"),
+    join(tempRoot, "AI Print Studio Text")
+  ];
+}
+
+function approveSourcePath(filePath: string): string {
+  const normalized = resolve(filePath);
+  approvedSourcePaths.add(normalized);
+  return normalized;
 }
 
 function isPreviewExportPath(path: string): boolean {
@@ -91,17 +115,6 @@ async function appendReliefLog(entry: Record<string, unknown>): Promise<string> 
 
 function recoveryPath(): string {
   return join(app.getPath("userData"), "studio-recovery.json");
-}
-
-function isNewerVersion(candidate: string, current: string): boolean {
-  const candidateParts = candidate.split(".").map(Number);
-  const currentParts = current.split(".").map(Number);
-  for (let index = 0; index < Math.max(candidateParts.length, currentParts.length); index += 1) {
-    const next = candidateParts[index] ?? 0;
-    const installed = currentParts[index] ?? 0;
-    if (next !== installed) return next > installed;
-  }
-  return false;
 }
 
 async function ensureApplicationLocation(): Promise<boolean> {
@@ -542,24 +555,24 @@ app.whenReady().then(async () => {
     };
   });
   ipcMain.handle("app:checkUpdate", async () => {
-    const response = await fetch("https://api.github.com/repos/Schello805/aiprintstudio/releases/latest", {
-      headers: { Accept: "application/vnd.github+json", "User-Agent": "AI-Print-Studio" }
+    return fetchLatestUpdateInfo(app.getVersion());
+  });
+  ipcMain.handle("app:installUpdate", async (event, downloadUrl: string) => {
+    return downloadAndInstallDmgUpdate({
+      downloadUrl,
+      isPackaged: app.isPackaged,
+      onProgress: (progress) => {
+        if (!event.sender.isDestroyed()) {
+          event.sender.send("update:progress", progress);
+        }
+      },
+      onQuitForInstall: () => {
+        app.quit();
+      },
+      onFallbackOpenDmg: async (dmgPath) => {
+        await shell.openPath(dmgPath);
+      }
     });
-    if (!response.ok) throw new Error("Die Update-Informationen konnten nicht geladen werden.");
-    const release = await response.json() as {
-      tag_name?: string;
-      html_url?: string;
-      assets?: Array<{ name?: string; browser_download_url?: string }>;
-    };
-    const latestVersion = (release.tag_name ?? "").replace(/^v/, "");
-    const dmg = release.assets?.find((asset) => asset.name?.endsWith(".dmg"));
-    return {
-      currentVersion: app.getVersion(),
-      latestVersion,
-      available: Boolean(latestVersion && isNewerVersion(latestVersion, app.getVersion())),
-      url: dmg?.browser_download_url ?? release.html_url ?? "https://github.com/Schello805/aiprintstudio/releases",
-      directDownload: Boolean(dmg?.browser_download_url)
-    };
   });
   ipcMain.handle("settings:status", async () => {
     const settings = await readSettings();
@@ -627,23 +640,20 @@ app.whenReady().then(async () => {
     if (metadata.width * metadata.height > 40_000_000) {
       throw new Error("Das Bild besitzt zu viele Pixel. Bitte verwende höchstens etwa 40 Megapixel.");
     }
-    const { data: sample } = await sharp(bytes)
+    const { data: sample, info: sampleInfo } = await sharp(bytes)
       .rotate()
       .resize(64, 64, { fit: "inside" })
-      .removeAlpha()
+      .ensureAlpha()
       .raw()
       .toBuffer({ resolveWithObject: true });
-    const quantizedColors = new Set<string>();
-    for (let offset = 0; offset < sample.length; offset += 3) {
-      quantizedColors.add(`${sample[offset] >> 5}:${sample[offset + 1] >> 5}:${sample[offset + 2] >> 5}`);
-    }
-    const suggestedProfile = quantizedColors.size <= 160 ? "logo" : "photo";
+    const suggestedProfile = suggestImageProfile(sample, sampleInfo.width, sampleInfo.height, metadata.format);
     const extension = path.toLowerCase().split(".").pop();
     const previewBytes = extension === "svg" ? await sharp(bytes).png().toBuffer() : bytes;
     const mime = extension === "png" || extension === "svg" ? "image/png" : extension === "webp" ? "image/webp" : "image/jpeg";
+    const approvedPath = approveSourcePath(path);
     return {
-      path,
-      name: basename(path),
+      path: approvedPath,
+      name: basename(approvedPath),
       size: bytes.length,
       width: metadata.width,
       height: metadata.height,
@@ -699,7 +709,7 @@ app.whenReady().then(async () => {
     const directory = join(app.getPath("temp"), "AI Print Studio Projects");
     await mkdir(directory, { recursive: true });
     const extension = project.source.dataUrl?.startsWith("data:image/png") ? "png" : "jpg";
-    const restoredPath = join(directory, `project-${Date.now()}.${extension}`);
+    const restoredPath = approveSourcePath(join(directory, `project-${Date.now()}.${extension}`));
     await writeFile(restoredPath, Buffer.from(match[1], "base64"));
     project.source.path = restoredPath;
     return project;
@@ -730,7 +740,7 @@ app.whenReady().then(async () => {
       const directory = join(app.getPath("temp"), "AI Print Studio Recovery");
       await mkdir(directory, { recursive: true });
       const extension = project.source.dataUrl?.startsWith("data:image/png") ? "png" : "jpg";
-      const restoredPath = join(directory, `recovery-${Date.now()}.${extension}`);
+      const restoredPath = approveSourcePath(join(directory, `recovery-${Date.now()}.${extension}`));
       await writeFile(restoredPath, Buffer.from(match[1], "base64"));
       project.source.path = restoredPath;
       return project;
@@ -744,11 +754,12 @@ app.whenReady().then(async () => {
     await mkdir(directory, { recursive: true });
     return shell.openPath(directory);
   });
-  ipcMain.handle("text:createImage", async (_event, options: TextImageOptions) => {
+  ipcMain.handle("text:createImage", async (_event, rawOptions: unknown) => {
+    const options = validateIpcTextImageOptions(rawOptions);
     const { png, text, width, height } = await renderTextImage(options);
     const directory = join(app.getPath("temp"), "AI Print Studio Text");
     await mkdir(directory, { recursive: true });
-    const path = join(directory, `text-${Date.now()}.png`);
+    const path = approveSourcePath(join(directory, `text-${Date.now()}.png`));
     await writeFile(path, png);
     return {
       path,
@@ -846,9 +857,14 @@ app.whenReady().then(async () => {
     reliefJobs.delete(jobId);
     return true;
   });
-  ipcMain.handle("relief:create", async (event, jobId: string, imagePath: string, options: Partial<ReliefOptions>) => {
+  ipcMain.handle("relief:create", async (event, jobId: string, imagePath: string, rawOptions: unknown) => {
     if (!/^[a-f0-9-]{20,64}$/i.test(jobId)) throw new Error("Ungültige Job-ID.");
     if (reliefJobs.has(jobId)) throw new Error("Dieser Relief-Job läuft bereits.");
+    if (!isApprovedSourceImagePath(imagePath, approvedSourcePaths, allowedTempSourceDirectories())) {
+      throw new Error("Die angegebene Bilddatei wurde nicht über die Dateiauswahl freigegeben.");
+    }
+    const options = validateIpcReliefOptions(rawOptions);
+    const resolvedImagePath = resolve(imagePath);
     const outputDirectory = join(previewDirectory(), "relief", jobId);
     let depthMap: Awaited<ReturnType<typeof createDepthMap>> | undefined;
     const controller = new AbortController();
@@ -864,7 +880,7 @@ app.whenReady().then(async () => {
             progress: 10
           } satisfies ReliefProgress);
         }
-        depthMap = await createDepthMap(imagePath, controller.signal);
+        depthMap = await createDepthMap(resolvedImagePath, controller.signal);
         mapPath = depthMap.path;
       }
       if (controller.signal.aborted) throw new Error("Vorgang abgebrochen.");
@@ -901,7 +917,7 @@ app.whenReady().then(async () => {
           }
         });
         worker.postMessage({
-          imagePath,
+          imagePath: resolvedImagePath,
           outputDirectory,
           options,
           depthMapPath: mapPath
@@ -913,7 +929,7 @@ app.whenReady().then(async () => {
       await appendReliefLog({
         timestamp: new Date().toISOString(), id: diagnosticId, event: "failed",
         mode: options.processingMode ?? "auto", profile: options.profile ?? "balanced",
-        imageExtension: extname(imagePath).toLowerCase(), technicalCause: technicalError(error)
+        imageExtension: extname(resolvedImagePath).toLowerCase(), technicalCause: technicalError(error)
       }).catch(() => undefined);
       throw new Error(`Die Relief-Vorschau konnte nicht erstellt werden: ${message} Diagnose-ID: ${diagnosticId}`);
     } finally {
@@ -953,7 +969,12 @@ app.whenReady().then(async () => {
     await copyFile(sourcePath, selection.filePath);
     return selection.filePath;
   });
-  ipcMain.handle("shell:showItem", (_event, path: string) => shell.showItemInFolder(path));
+  ipcMain.handle("shell:showItem", (_event, path: string) => {
+    if (!isAllowedShowItemPath(path, app.getPath("logs"), previewDirectory(), approvedSourcePaths)) {
+      throw new Error("Dieser Dateipfad darf nicht im Finder angezeigt werden.");
+    }
+    shell.showItemInFolder(resolve(path));
+  });
   ipcMain.handle("shell:openExternal", (_event, url: string) => {
     const parsed = new URL(url);
     if (!["https:", "mailto:"].includes(parsed.protocol)) {

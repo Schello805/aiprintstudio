@@ -54,4 +54,26 @@ describe("text image", () => {
       await rm(directory, { recursive: true, force: true });
     }
   });
+
+  it("builds a smooth vector-extruded mesh when pipelineKind is text", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "ai-print-text-vector-"));
+    try {
+      const rendered = await renderTextImage({ text: "DRUCK", fontFamily: "Helvetica", bold: true, alignment: "center" });
+      const imagePath = join(directory, "text-vector.png");
+      await writeFile(imagePath, rendered.png);
+      const relief = await createRelief(imagePath, directory, {
+        widthMm: 100, baseMm: 1.6, reliefMm: 4, resolution: 256, invert: false,
+        profile: "logo", pipelineKind: "text", smoothing: 1, detail: 1, processingMode: "vector",
+        includeBackground: true, shape: "rounded", cornerRadiusMm: 6,
+        sourceColors: [], colors: [], sideColorIndex: 0
+      });
+      expect(relief.geometryValidation.valid).toBe(true);
+      expect(relief.geometryValidation.stats.degenerateTriangles).toBe(0);
+      expect(relief.geometryValidation.stats.boundaryEdges).toBe(0);
+      expect(relief.preview.positions.length).toBeGreaterThan(0);
+      expect(relief.preview.indices.length).toBe(relief.triangleCount * 3);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
 });

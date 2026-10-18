@@ -13,8 +13,11 @@ enum WorkerError: Error {
 }
 
 func writeGrayPNG(_ values: [Float], width: Int, height: Int, to url: URL) throws {
-    let minimum = values.min() ?? 0
-    let maximum = values.max() ?? 1
+    let sorted = values.filter(\.isFinite).sorted()
+    let lowIndex = max(0, min(sorted.count - 1, Int(Double(sorted.count) * 0.01)))
+    let highIndex = max(0, min(sorted.count - 1, Int(Double(sorted.count) * 0.99)))
+    let minimum = sorted.isEmpty ? 0 : sorted[lowIndex]
+    let maximum = sorted.isEmpty ? 1 : sorted[highIndex]
     let span = max(maximum - minimum, 0.000_001)
     let bytes = values.map { UInt8(max(0, min(255, (($0 - minimum) / span) * 255))) }
     guard let provider = CGDataProvider(data: Data(bytes) as CFData),
@@ -28,6 +31,39 @@ func writeGrayPNG(_ values: [Float], width: Int, height: Int, to url: URL) throw
     else { throw WorkerError.imageWriteFailed }
     CGImageDestinationAddImage(destination, image, nil)
     guard CGImageDestinationFinalize(destination) else { throw WorkerError.imageWriteFailed }
+}
+
+func extractPixelBufferFloats(_ pixelBuffer: CVPixelBuffer) -> (values: [Float], width: Int, height: Int)? {
+    CVPixelBufferLockBaseAddress(pixelBuffer, .readOnly)
+    defer { CVPixelBufferUnlockBaseAddress(pixelBuffer, .readOnly) }
+    guard let baseAddress = CVPixelBufferGetBaseAddress(pixelBuffer) else { return nil }
+    let width = CVPixelBufferGetWidth(pixelBuffer)
+    let height = CVPixelBufferGetHeight(pixelBuffer)
+    let bytesPerRow = CVPixelBufferGetBytesPerRow(pixelBuffer)
+    let format = CVPixelBufferGetPixelFormatType(pixelBuffer)
+    var values: [Float] = []
+    values.reserveCapacity(width * height)
+    if format == kCVPixelFormatType_OneComponent16Half || format == kCVPixelFormatType_DepthFloat16 || format == kCVPixelFormatType_DisparityFloat16 {
+        for y in 0..<height {
+            let row = baseAddress.advanced(by: y * bytesPerRow).assumingMemoryBound(to: UInt16.self)
+            for x in 0..<width {
+                let value = Float(Float16(bitPattern: row[x]))
+                values.append(value.isFinite ? value : 0)
+            }
+        }
+        return (values, width, height)
+    }
+    if format == kCVPixelFormatType_OneComponent32Float || format == kCVPixelFormatType_DepthFloat32 || format == kCVPixelFormatType_DisparityFloat32 {
+        for y in 0..<height {
+            let row = baseAddress.advanced(by: y * bytesPerRow).assumingMemoryBound(to: Float.self)
+            for x in 0..<width {
+                let value = row[x]
+                values.append(value.isFinite ? value : 0)
+            }
+        }
+        return (values, width, height)
+    }
+    return nil
 }
 
 func run() throws {
@@ -54,6 +90,10 @@ func run() throws {
             return
         }
         if let pixelResult = result as? VNPixelBufferObservation {
+            if let extracted = extractPixelBufferFloats(pixelResult.pixelBuffer) {
+                try writeGrayPNG(extracted.values, width: extracted.width, height: extracted.height, to: outputURL)
+                return
+            }
             let ciImage = CIImage(cvPixelBuffer: pixelResult.pixelBuffer)
             let context = CIContext()
             guard let colorSpace = CGColorSpace(name: CGColorSpace.linearGray),

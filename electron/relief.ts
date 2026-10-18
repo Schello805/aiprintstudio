@@ -1,15 +1,58 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { basename, extname, join } from "node:path";
-import JSZip from "jszip";
 import sharp from "sharp";
-import { contours } from "d3-contour";
-import ManifoldModule from "manifold-3d/manifold";
-import { DOMParser } from "@xmldom/xmldom";
-import { Color, ExtrudeGeometry, ShapeUtils, Vector2 } from "three";
-import { SVGLoader } from "./vendor/SVGLoader.js";
 import { validateGeneratedExportBuffer } from "./export-validation.js";
 import { analyseContourQuality, removeInvalidTriangles, validateMeshGeometry, type ContourQualityReport, type GeometryValidationReport } from "./mesh-quality.js";
 import { resolveReliefPipeline, type ReliefPipelineKind } from "./relief-pipelines.js";
+import {
+  encodeBinaryStl,
+  encodeThreeMf,
+  sanitizeStem,
+  type Mesh
+} from "./relief-export.js";
+import {
+  applyBoundaryRim,
+  buildCellMask,
+  buildSolidOuterSilhouette,
+  buildSubjectPixelMask,
+  buildWordmarkForegroundPixelMask,
+  buildWordmarkPixelMask,
+  cleanSubjectPixelMask,
+  expandPixelMask,
+  expandPixelMaskPreservingHoles,
+  hasUsefulTransparency,
+  suggestImageProfile
+} from "./relief-masks.js";
+import {
+  assignCanonicalTriangleMaterials,
+  buildBinaryCellHeights,
+  buildCanonicalMeshPreview,
+  buildColoredMeshes,
+  buildCompositeBoundaryPositions,
+  buildLayeredCellVectorRelief,
+  buildLayeredVectorRelief,
+  buildOuterEdgeCellMask,
+  buildPreviewSurface,
+  buildRaisedWordmarkCellHeights,
+  buildSmoothedBoundaryPositions,
+  buildSteppedCellMesh,
+  buildVectorColorMeshes,
+  buildVectorExtrudedMesh,
+  buildWatertightHeightMesh,
+  flattenSteppedOuterRim,
+  flattenSteppedOuterRimPreservingRaised,
+  mergeMeshes,
+  orientMeshLikePreview,
+  smoothVectorRing,
+  snapMeshZToLevels,
+  stabilizeEmblemOuterWallHeights
+} from "./relief-meshing.js";
+import {
+  createSvgPathRelief,
+  createTracedWordmarkSvg,
+  transformProductMesh,
+  wordmarkRasterTracePreset
+} from "./relief-vectorize.js";
 export type { ContourQualityReport, GeometryValidationReport } from "./mesh-quality.js";
 
 export type ReliefOptions = {
@@ -85,31 +128,6 @@ export type ReliefProgress = {
   detail: string;
   progress: number;
 };
-
-type Vec3 = readonly [number, number, number];
-type Triangle = readonly [number, number, number];
-type Mesh = { vertices: Vec3[]; triangles: Triangle[] };
-type ColoredMesh = { mesh: Mesh; color: string; name: string };
-type SvgReliefPart = { mesh: Mesh; color: string; area: number; bounds: { minX: number; minY: number; maxX: number; maxY: number } };
-
-const wordmarkRasterTracePreset = {
-  /**
-   * Festgezurrtes Qualitätsprofil für PNG/JPG → SVG im Modus "Logo mit Text".
-   * Diese Werte sind absichtlich keine UI-Regler: SVG bleibt der saubere
-   * Qualitätsweg, Rasterlogos sollen aber stabil und ohne zufällige
-   * Detail-/Artefaktänderungen konvertiert werden.
-   */
-  minimumTraceWidthPx: 256,
-  maximumTraceWidthPx: 1200,
-  resolutionScale: 2,
-  sampleTargetPixels: 20_000,
-  alphaCutoff: 24,
-  maximumColorClusters: 6,
-  kMeansIterations: 9,
-  minimumComponentAreaRatio: 0.00008,
-  backgroundTraceSmoothing: 2,
-  motifTraceSmoothing: 3
-} as const;
 
 const safeDefaults: ReliefOptions = {
   sourceName: "",
@@ -233,9 +251,11 @@ export async function createRelief(
     ? options.includeBackground
       ? Array(gridWidth * gridHeight).fill(true) as boolean[]
       : wordmarkPixels as boolean[]
-    : hasTransparency || preserveThinVectorStrokes
-      ? rawSubjectPixels
-    : cleanSubjectPixelMask(rawSubjectPixels, gridWidth, gridHeight);
+    : pipeline.kind === "photo" && !hasTransparency
+      ? Array(gridWidth * gridHeight).fill(true) as boolean[]
+      : hasTransparency || preserveThinVectorStrokes
+        ? rawSubjectPixels
+        : cleanSubjectPixelMask(rawSubjectPixels, gridWidth, gridHeight);
   if (pipeline.solidOuterSilhouette) {
     // Ein explizit ausgewähltes Wappen besitzt einen geschlossenen Tragkörper.
     // Dessen Außenwand darf nicht jede Antialias- oder Farbschwankung des
@@ -264,8 +284,34 @@ export async function createRelief(
     rawLevels = useWordmarkMask && options.includeBackground && wordmarkPixels
       ? wordmarkPixels.map((occupied) => Number(options.invert ? !occupied : occupied))
       : buildVectorLevels(rgba, subjectPixels, gridWidth, gridHeight, options.invert);
+  } else if (depthMapPath) {
+    const [{ data: depthData }, { data: photoData }] = await Promise.all([
+      sharp(depthMapPath)
+        .grayscale()
+        .resize(gridWidth, gridHeight, { fit: "fill" })
+        .blur(Math.max(1.8, profile.inputBlur))
+        .normalize({ lower: 1, upper: 99 })
+        .raw()
+        .toBuffer({ resolveWithObject: true }),
+      prepared.clone()
+        .flatten({ background: "#000000" })
+        .grayscale()
+        .resize(gridWidth, gridHeight, { fit: "fill" })
+        .normalize({ lower: 1, upper: 99 })
+        .raw()
+        .toBuffer({ resolveWithObject: true })
+    ]);
+    rawLevels = Array.from({ length: gridWidth * gridHeight }, (_, index) => {
+      const depthLevel = (depthData[index] ?? 0) / 255;
+      const detailLevel = (photoData[index] ?? 0) / 255;
+      const combined = depthLevel * 0.68 + detailLevel * 0.32;
+      const normalized = options.outputMode === "lithophane"
+        ? (options.invert ? combined : 1 - combined)
+        : (options.invert ? 1 - combined : combined);
+      return Math.max(0, Math.min(1, (Math.pow(normalized, profile.gamma) - 0.5) * profile.contrast + 0.5));
+    });
   } else {
-    const source = depthMapPath ? sharp(depthMapPath) : prepared.clone().flatten({ background: "#ffffff" }).grayscale();
+    const source = prepared.clone().flatten({ background: "#ffffff" }).grayscale();
     const { data } = await source
       .resize(gridWidth, gridHeight, { fit: "fill" })
       .blur(profile.inputBlur)
@@ -274,7 +320,9 @@ export async function createRelief(
       .toBuffer({ resolveWithObject: true });
     rawLevels = Array.from(data, (value) => {
       const luminance = value / 255;
-      const normalized = options.invert ? luminance : 1 - luminance;
+      const normalized = pipeline.kind === "photo" && options.outputMode !== "lithophane"
+        ? (options.invert ? 1 - luminance : luminance)
+        : (options.invert ? luminance : 1 - luminance);
       return Math.max(0, Math.min(1, (Math.pow(normalized, profile.gamma) - 0.5) * profile.contrast + 0.5));
     });
   }
@@ -383,21 +431,23 @@ export async function createRelief(
   // verwenden exakt dieses eine Mesh; AMS weist ihm anschließend nur Farben
   // zu und verändert die Geometrie nicht mehr.
   let planarMesh = pipeline.kind === "emblem" && options.pipelineKind === "emblem" && !steppedCellHeights
-    ? await buildLayeredVectorRelief(gridWidth, gridHeight, options.widthMm, heightMm, heights, cellMask, 8)
-    : steppedCellHeights && useWordmarkMask && options.includeBackground
-      ? await buildLayeredCellVectorRelief(
-        gridWidth,
-        gridHeight,
-        options.widthMm,
-        heightMm,
-        steppedCellHeights,
-        cellMask,
-        Math.max(3, options.smoothing),
-        false
-      )
-    : steppedCellHeights
-      ? buildSteppedCellMesh(gridWidth, gridHeight, options.widthMm, heightMm, steppedCellHeights, cellMask)
-      : buildWatertightHeightMesh(gridWidth, gridHeight, options.widthMm, heightMm, heights, cellMask, 0, emblemBoundary);
+    ? await buildLayeredVectorRelief(gridWidth, gridHeight, options.widthMm, heightMm, heights, cellMask, 8, true)
+    : pipeline.kind === "text" && options.pipelineKind === "text" && !steppedCellHeights
+      ? await buildLayeredVectorRelief(gridWidth, gridHeight, options.widthMm, heightMm, heights, cellMask, Math.max(4, options.smoothing), false)
+      : steppedCellHeights && useWordmarkMask && options.includeBackground
+        ? await buildLayeredCellVectorRelief(
+          gridWidth,
+          gridHeight,
+          options.widthMm,
+          heightMm,
+          steppedCellHeights,
+          cellMask,
+          Math.max(3, options.smoothing),
+          false
+        )
+      : steppedCellHeights
+        ? buildSteppedCellMesh(gridWidth, gridHeight, options.widthMm, heightMm, steppedCellHeights, cellMask)
+        : buildWatertightHeightMesh(gridWidth, gridHeight, options.widthMm, heightMm, heights, cellMask, 0, emblemBoundary);
   let mesh = transformProductMesh(planarMesh, options.widthMm, options.curveAngle, options.mirrorX);
   onProgress({ phase: "Mesh schließen", detail: "Boden, Außenwände und Übergänge werden verbunden …", progress: 58 });
   const detectedColorAssignments = options.colors.length
@@ -419,9 +469,9 @@ export async function createRelief(
   // Dreiecksanzahl besitzen.
   planarMesh = removeInvalidTriangles(planarMesh);
   mesh = transformProductMesh(planarMesh, options.widthMm, options.curveAngle, options.mirrorX);
-  const canonicalTriangleMaterials = colorAssignments && options.processingMode === "vector"
+  const canonicalTriangleMaterials = mappedColorAssignments && options.processingMode === "vector"
     ? assignCanonicalTriangleMaterials(
-      planarMesh, colorAssignments, gridWidth, gridHeight,
+      planarMesh, mappedColorAssignments, gridWidth, gridHeight,
       options.widthMm, heightMm, options.sideColorIndex
     )
     : undefined;
@@ -438,7 +488,10 @@ export async function createRelief(
     detail: colorAssignments ? "AMS-Flächen und einfarbiger Tragkörper werden erzeugt …" : "Das vollständige 3D-Mesh wird vorbereitet …",
     progress: 70
   });
-  const emblemPreviewMaterials = pipeline.kind === "emblem" && options.pipelineKind === "emblem"
+  const useCanonicalVectorPreview =
+    (pipeline.kind === "emblem" && options.pipelineKind === "emblem") ||
+    (pipeline.kind === "text" && options.pipelineKind === "text");
+  const emblemPreviewMaterials = useCanonicalVectorPreview
     ? canonicalTriangleMaterials ?? Array(planarMesh.triangles.length).fill(0)
     : undefined;
   const planarPreview = emblemPreviewMaterials
@@ -647,20 +700,6 @@ function applyRaisedBorder(
   }
 }
 
-function transformProductMesh(mesh: Mesh, widthMm: number, curveAngle: number, mirrorX: boolean): Mesh {
-  const radians = curveAngle * Math.PI / 180;
-  const radius = radians > 1e-6 ? widthMm / radians : 0;
-  return {
-    vertices: mesh.vertices.map(([x, y, z]) => {
-      const centered = (mirrorX ? widthMm - x : x) - widthMm / 2;
-      if (!radius) return [centered + widthMm / 2, y, z] as const;
-      const angle = centered / radius;
-      return [radius * Math.sin(angle) + widthMm / 2, y, z + radius * (1 - Math.cos(angle))] as const;
-    }),
-    triangles: mirrorX ? mesh.triangles.map(([a, b, c]) => [a, c, b] as const) : mesh.triangles.slice()
-  };
-}
-
 function transformProductPreview(
   preview: ReliefResult["preview"], widthMm: number, curveAngle: number, mirrorX: boolean
 ): ReliefResult["preview"] {
@@ -743,11 +782,13 @@ function buildVectorLevels(rgba: Buffer, mask: boolean[], width: number, height:
     const offset = index * 4;
     const red = rgba[offset], green = rgba[offset + 1], blue = rgba[offset + 2];
     const luminance = 0.2126 * red + 0.7152 * green + 0.0722 * blue;
-    return luminance < 150 && Math.max(red, green, blue) - Math.min(red, green, blue) < 85;
+    const maxChannel = Math.max(red, green, blue);
+    const chroma = maxChannel - Math.min(red, green, blue);
+    return maxChannel < 95 || (luminance < 85 && maxChannel < 125 && chroma < 95) || (luminance < 145 && chroma < 55);
   });
   // Antialiasing unterbricht schwarze Motivkonturen stellenweise mit einem
-  // einzelnen grauen Pixel. Solche echten Ein-Pixel-Lücken werden geschlossen,
-  // ohne die Kontur in die eingeschlossene Farbfläche hinein zu verbreitern.
+  // einzelnen grauen oder abgedunkelten Mischpixel. Solche echten Ein-Pixel-Lücken
+  // werden geschlossen, ohne die Kontur in die eingeschlossene Farbfläche hinein zu verbreitern.
   const dark = darkSeeds.slice();
   for (let y = 1; y < height - 1; y += 1) for (let x = 1; x < width - 1; x += 1) {
     const index = y * width + x;
@@ -757,14 +798,17 @@ function buildVectorLevels(rgba: Buffer, mask: boolean[], width: number, height:
     const offset = index * 4;
     const red = rgba[offset], green = rgba[offset + 1], blue = rgba[offset + 2];
     const luminance = 0.2126 * red + 0.7152 * green + 0.0722 * blue;
-    const neutralAntialias = luminance < 210 && Math.max(red, green, blue) - Math.min(red, green, blue) < 50;
-    if (neutralAntialias && (horizontalGap || verticalGap)) dark[index] = true;
+    const maxChannel = Math.max(red, green, blue);
+    const chroma = maxChannel - Math.min(red, green, blue);
+    const antialiasGap = (luminance < 210 && chroma < 55) || (luminance < 130 && maxChannel < 165);
+    if (antialiasGap && (horizontalGap || verticalGap)) dark[index] = true;
   }
   const visited = new Uint8Array(mask.length);
   const components: number[][] = [];
   for (let start = 0; start < mask.length; start += 1) {
     if (!mask[start] || dark[start] || visited[start]) continue;
     const component: number[] = [];
+    const startCenter = centers[cleaned[start]] ?? [255, 255, 255];
     const queue = [start];
     visited[start] = 1;
     for (let cursor = 0; cursor < queue.length; cursor += 1) {
@@ -777,103 +821,70 @@ function buildVectorLevels(rgba: Buffer, mask: boolean[], width: number, height:
         y + 1 < height ? index + width : -1
       ]) {
         if (neighbor >= 0 && mask[neighbor] && !dark[neighbor] && !visited[neighbor]) {
-          visited[neighbor] = 1; queue.push(neighbor);
+          const neighborCenter = centers[cleaned[neighbor]] ?? startCenter;
+          const centerDist = Math.hypot(
+            neighborCenter[0] - startCenter[0],
+            neighborCenter[1] - startCenter[1],
+            neighborCenter[2] - startCenter[2]
+          );
+          if (centerDist < 60) {
+            visited[neighbor] = 1;
+            queue.push(neighbor);
+          }
         }
       }
     }
     components.push(component);
   }
-  if (components.length < 3) return colorLevels;
+  if (components.length < 3 || suggestImageProfile(rgba, width, height) === "photo") return colorLevels;
   const subjectArea = Math.max(1, mask.filter(Boolean).length);
+  const clusterLuminance = new Map(luminances.map((entry) => [entry.index, entry.value]));
+  const largeFieldLuminances = components
+    .filter((component) => component.length / subjectArea > 0.08)
+    .map((component) => clusterLuminance.get(cleaned[component[0]]) ?? 255);
+  const maxLargeLuminance = largeFieldLuminances.length ? Math.max(...largeFieldLuminances) : 255;
   const semanticLevels: number[] = mask.map((occupied, index) => occupied && dark[index] ? 0.82 : 0);
+  const sliverComponents: number[][] = [];
   for (const component of components) {
     const ratio = component.length / subjectArea;
-    const level = ratio > 0.08 ? 0.12 : ratio > 0.006 ? 0.68 : ratio > 0.00015 ? 0.92 : 0.76;
+    let level: number;
+    if (subjectArea > 2_000) {
+      if (ratio <= 0.0008) {
+        sliverComponents.push(component);
+        continue;
+      }
+      const lum = clusterLuminance.get(cleaned[component[0]]) ?? 255;
+      level = ratio > 0.08
+        ? (maxLargeLuminance - lum > 40 ? 0.26 : 0.12)
+        : ratio > 0.006
+          ? 0.52
+          : 0.68;
+    } else {
+      level = ratio > 0.08 ? 0.12 : ratio > 0.006 ? 0.68 : ratio > 0.00015 ? 0.92 : 0.76;
+    }
     for (const index of component) semanticLevels[index] = level;
   }
+  for (const component of sliverComponents) {
+    let adjacentLevel = 0;
+    for (const index of component) {
+      const x = index % width, y = Math.floor(index / width);
+      for (const neighbor of [
+        x > 0 ? index - 1 : -1,
+        x + 1 < width ? index + 1 : -1,
+        y > 0 ? index - width : -1,
+        y + 1 < height ? index + width : -1
+      ]) {
+        if (neighbor >= 0 && !dark[neighbor] && semanticLevels[neighbor] > 0 && semanticLevels[neighbor] < 0.8) {
+          adjacentLevel = semanticLevels[neighbor];
+          break;
+        }
+      }
+      if (adjacentLevel > 0) break;
+    }
+    const resolvedLevel = adjacentLevel > 0 ? adjacentLevel : 0.82;
+    for (const index of component) semanticLevels[index] = resolvedLevel;
+  }
   return semanticLevels;
-}
-
-function buildSmoothedBoundaryPositions(
-  columns: number,
-  rows: number,
-  widthMm: number,
-  heightMm: number,
-  cells: boolean[],
-  passes = 36
-): Map<number, readonly [number, number]> {
-  const cellAt = (x: number, y: number) => x >= 0 && y >= 0 && x < columns - 1 && y < rows - 1 && cells[y * (columns - 1) + x];
-  const gridIndex = (x: number, y: number) => y * columns + x;
-  const neighbors = new Map<number, Set<number>>();
-  const connect = (a: number, b: number) => {
-    if (!neighbors.has(a)) neighbors.set(a, new Set());
-    if (!neighbors.has(b)) neighbors.set(b, new Set());
-    neighbors.get(a)?.add(b); neighbors.get(b)?.add(a);
-  };
-  for (let y = 0; y < rows - 1; y += 1) for (let x = 0; x < columns - 1; x += 1) {
-    if (!cellAt(x, y)) continue;
-    const a = gridIndex(x, y), b = gridIndex(x + 1, y), c = gridIndex(x, y + 1), d = gridIndex(x + 1, y + 1);
-    if (!cellAt(x, y - 1)) connect(a, b);
-    if (!cellAt(x + 1, y)) connect(b, d);
-    if (!cellAt(x, y + 1)) connect(d, c);
-    if (!cellAt(x - 1, y)) connect(c, a);
-  }
-  let positions = new Map<number, readonly [number, number]>();
-  for (const index of neighbors.keys()) {
-    const x = index % columns, y = Math.floor(index / columns);
-    positions.set(index, [x * widthMm / (columns - 1), y * heightMm / (rows - 1)]);
-  }
-  for (let pass = 0; pass < passes; pass += 1) {
-    const next = new Map(positions);
-    for (const [index, adjacent] of neighbors) {
-      const current = positions.get(index);
-      if (!current || adjacent.size < 2) continue;
-      const points = [...adjacent].map((neighbor) => positions.get(neighbor)).filter(Boolean) as Array<readonly [number, number]>;
-      if (!points.length) continue;
-      const averageX = points.reduce((sum, point) => sum + point[0], 0) / points.length;
-      const averageY = points.reduce((sum, point) => sum + point[1], 0) / points.length;
-      // Viele sanfte Durchgänge entfernen auch die längerwelligen Reste einer
-      // Pixelkontur. 20 Durchgänge glätteten einzelne Rasterzähne, ließen an
-      // großen Wappenkurven aber noch ein periodisches Wellenmuster stehen.
-      // 36 Durchgänge bleiben formtreu und beruhigen diese Außenkante.
-      next.set(index, [current[0] * 0.62 + averageX * 0.38, current[1] * 0.62 + averageY * 0.38]);
-    }
-    positions = next;
-  }
-  return positions;
-}
-
-function buildCompositeBoundaryPositions(
-  columns: number,
-  rows: number,
-  widthMm: number,
-  heightMm: number,
-  cellMask: boolean[],
-  assignments: number[],
-  colorCount: number,
-  outerBoundary = buildSmoothedBoundaryPositions(columns, rows, widthMm, heightMm, cellMask, 64)
-): Map<number, readonly [number, number]> {
-  const samples = new Map<number, Array<readonly [number, number]>>();
-  for (let colorIndex = 0; colorIndex < colorCount; colorIndex += 1) {
-    const colorCells = assignments.map((assignment, cell) => cellMask[cell] && assignment === colorIndex);
-    if (!colorCells.some(Boolean)) continue;
-    const boundary = buildSmoothedBoundaryPositions(columns, rows, widthMm, heightMm, colorCells, 14);
-    for (const [index, point] of boundary) {
-      if (outerBoundary.has(index)) continue;
-      const points = samples.get(index) ?? [];
-      points.push(point);
-      samples.set(index, points);
-    }
-  }
-  const result = new Map(outerBoundary);
-  for (const [index, points] of samples) {
-    const x = points.reduce((sum, point) => sum + point[0], 0) / points.length;
-    const y = points.reduce((sum, point) => sum + point[1], 0) / points.length;
-    // Farbgrenzen teilen sich dieselben Meshpunkte. Ihr Mittelwert glättet
-    // beide Seiten identisch und verhindert dadurch Spalten oder Überlappung.
-    result.set(index, [x, y]);
-  }
-  return result;
 }
 
 function profileSettings(profile: ReliefOptions["profile"]) {
@@ -881,7 +892,7 @@ function profileSettings(profile: ReliefOptions["profile"]) {
     fast: { inputBlur: 0.3, gamma: 1, contrast: 1.12, detail: 0.5, steps: 24 },
     balanced: { inputBlur: 0.45, gamma: 0.95, contrast: 1.16, detail: 0.8, steps: 48 },
     fine: { inputBlur: 0.35, gamma: 0.92, contrast: 1.12, detail: 1.1, steps: 0 },
-    photo: { inputBlur: 0.7, gamma: 0.82, contrast: 1.02, detail: 0.45, steps: 0 },
+    photo: { inputBlur: 0.55, gamma: 0.88, contrast: 1.16, detail: 0.75, steps: 0 },
     logo: { inputBlur: 0.3, gamma: 1, contrast: 1.35, detail: 1.25, steps: 16 }
   }[profile];
 }
@@ -984,61 +995,6 @@ function countNarrowCells(mask: boolean[], width: number): number {
   return count;
 }
 
-function buildWatertightHeightMesh(
-  columns: number,
-  rows: number,
-  widthMm: number,
-  heightMm: number,
-  heights: number[],
-  cellMask?: boolean[],
-  bottomHeight: number | number[] = 0,
-  boundaryPositionsOverride?: Map<number, readonly [number, number]>
-): Mesh {
-  const vertices: Vec3[] = [];
-  const triangles: Triangle[] = [];
-  const index = (x: number, y: number) => y * columns + x;
-  const cells = cellMask ?? Array((columns - 1) * (rows - 1)).fill(true);
-  const boundaryPositions = boundaryPositionsOverride ?? buildSmoothedBoundaryPositions(columns, rows, widthMm, heightMm, cells);
-  const isCell = (x: number, y: number) => x >= 0 && y >= 0 && x < columns - 1 && y < rows - 1 && cells[y * (columns - 1) + x];
-  const topVertices = new Map<number, number>();
-  const bottomVertices = new Map<number, number>();
-  const vertexFor = (gridIndex: number, bottom: boolean) => {
-    const map = bottom ? bottomVertices : topVertices;
-    const existing = map.get(gridIndex);
-    if (existing !== undefined) return existing;
-    const x = gridIndex % columns, y = Math.floor(gridIndex / columns);
-    const created = vertices.length;
-    const boundary = boundaryPositions.get(gridIndex);
-    vertices.push([
-      boundary?.[0] ?? x * widthMm / (columns - 1),
-      boundary?.[1] ?? y * heightMm / (rows - 1),
-      bottom ? (Array.isArray(bottomHeight) ? bottomHeight[gridIndex] : bottomHeight) : heights[gridIndex]
-    ]);
-    map.set(gridIndex, created);
-    return created;
-  };
-  const addWall = (gridA: number, gridB: number) => {
-    const topA = vertexFor(gridA, false), topB = vertexFor(gridB, false);
-    const bottomA = vertexFor(gridA, true), bottomB = vertexFor(gridB, true);
-    triangles.push([topA, bottomB, topB], [topA, bottomA, bottomB]);
-  };
-
-  for (let y = 0; y < rows - 1; y += 1) {
-    for (let x = 0; x < columns - 1; x += 1) {
-      if (!isCell(x, y)) continue;
-      const ga = index(x, y), gb = index(x + 1, y), gc = index(x, y + 1), gd = index(x + 1, y + 1);
-      const a = vertexFor(ga, false), b = vertexFor(gb, false), c = vertexFor(gc, false), d = vertexFor(gd, false);
-      const ba = vertexFor(ga, true), bb = vertexFor(gb, true), bc = vertexFor(gc, true), bd = vertexFor(gd, true);
-      triangles.push([a, b, d], [a, d, c], [ba, bd, bb], [ba, bc, bd]);
-      if (!isCell(x, y - 1)) addWall(ga, gb);
-      if (!isCell(x + 1, y)) addWall(gb, gd);
-      if (!isCell(x, y + 1)) addWall(gd, gc);
-      if (!isCell(x - 1, y)) addWall(gc, ga);
-    }
-  }
-  return { vertices, triangles };
-}
-
 function parseHexColor(color: string): readonly [number, number, number] {
   return [
     Number.parseInt(color.slice(1, 3), 16),
@@ -1055,31 +1011,49 @@ function buildColorCellAssignments(
   colors: string[],
   subjectPixels?: boolean[]
 ): number[] {
-  const palette = colors.map(parseHexColor);
+  const palette = colors.map((color) => {
+    const [r, g, b] = parseHexColor(color);
+    const chroma = Math.max(r, g, b) - Math.min(r, g, b);
+    return [r, g, b, chroma] as const;
+  });
+  const nearestPaletteIndex = (red: number, green: number, blue: number) => {
+    const chroma = Math.max(red, green, blue) - Math.min(red, green, blue);
+    let best = 0;
+    let bestDistance = Number.POSITIVE_INFINITY;
+    palette.forEach(([r, g, b, pc], index) => {
+      const distance = (red - r) ** 2 + (green - g) ** 2 + (blue - b) ** 2 + (chroma - pc) ** 2 * 1.5;
+      if (distance < bestDistance) {
+        best = index;
+        bestDistance = distance;
+      }
+    });
+    return best;
+  };
   return Array.from({ length: (width - 1) * (height - 1) }, (_, cell) => {
     if (!cellMask[cell]) return -1;
     const x = cell % (width - 1), y = Math.floor(cell / (width - 1));
     const pixel = y * width + x;
-    let red = 0, green = 0, blue = 0, weight = 0;
     const corners = [pixel, pixel + 1, pixel + width, pixel + width + 1];
     const motifSamples = subjectPixels ? corners.filter((sample) => subjectPixels[sample]) : corners;
     // Bei freigestellten Wortmarken dürfen weiße Hintergrundpixel nicht in
     // die Buchstabenfarbe einfließen. Gerade bei dünnen Schriften bestand
     // eine Zelle sonst überwiegend aus Hintergrund und wurde als Weiß exportiert.
     const samples = motifSamples.length ? motifSamples : corners;
+    const votes = new Float64Array(palette.length);
     for (const sample of samples) {
       const alpha = rgba[sample * 4 + 3] / 255;
-      red += rgba[sample * 4] * alpha;
-      green += rgba[sample * 4 + 1] * alpha;
-      blue += rgba[sample * 4 + 2] * alpha;
-      weight += alpha;
+      if (alpha <= 0) continue;
+      const colorIndex = nearestPaletteIndex(rgba[sample * 4], rgba[sample * 4 + 1], rgba[sample * 4 + 2]);
+      votes[colorIndex] += alpha;
     }
-    if (weight > 0) { red /= weight; green /= weight; blue /= weight; }
-    let best = 0, bestDistance = Number.POSITIVE_INFINITY;
-    palette.forEach(([r, g, b], index) => {
-      const distance = (red - r) ** 2 + (green - g) ** 2 + (blue - b) ** 2;
-      if (distance < bestDistance) { best = index; bestDistance = distance; }
-    });
+    let best = 0;
+    let bestVote = -1;
+    for (let index = 0; index < votes.length; index += 1) {
+      if (votes[index] > bestVote) {
+        bestVote = votes[index];
+        best = index;
+      }
+    }
     return best;
   });
 }
@@ -1113,1928 +1087,6 @@ function enforceUniformEdgeColor(
   return result;
 }
 
-function mergeMeshes(meshes: Mesh[]): Mesh {
-  const vertices: Vec3[] = [];
-  const triangles: Triangle[] = [];
-  for (const mesh of meshes) {
-    const offset = vertices.length;
-    for (const vertex of mesh.vertices) vertices.push(vertex);
-    for (const [a, b, c] of mesh.triangles) triangles.push([a + offset, b + offset, c + offset]);
-  }
-  return { vertices, triangles };
-}
-
-function meshFromExtrudeGeometry(geometry: ExtrudeGeometry, bottom: number): Mesh {
-  geometry.translate(0, 0, bottom);
-  const position = geometry.getAttribute("position");
-  const vertices: Vec3[] = [];
-  for (let index = 0; index < position.count; index += 1) {
-    vertices.push([position.getX(index), position.getY(index), position.getZ(index)]);
-  }
-  const triangles: Triangle[] = [];
-  const indexAttribute = geometry.getIndex();
-  if (indexAttribute) {
-    for (let offset = 0; offset < indexAttribute.count; offset += 3) {
-      triangles.push([indexAttribute.getX(offset), indexAttribute.getX(offset + 1), indexAttribute.getX(offset + 2)]);
-    }
-  } else {
-    for (let offset = 0; offset < vertices.length; offset += 3) triangles.push([offset, offset + 1, offset + 2]);
-  }
-  geometry.dispose();
-  return { vertices, triangles };
-}
-
-function normalizeSvgMesh(mesh: Mesh, bounds: { minX: number; minY: number; maxX: number; maxY: number }, widthMm: number): Mesh {
-  const svgWidth = Math.max(1e-6, bounds.maxX - bounds.minX);
-  const scale = widthMm / svgWidth;
-  return {
-    vertices: mesh.vertices.map(([x, y, z]) => [
-      (x - bounds.minX) * scale,
-      (bounds.maxY - y) * scale,
-      z
-    ] as const),
-    triangles: mesh.triangles.map(([a, b, c]) => [a, c, b] as const)
-  };
-}
-
-function colorFromSvgFill(fill: unknown): string {
-  if (typeof fill !== "string" || !fill || fill === "none") return "#111111";
-  try {
-    return `#${new Color(fill).getHexString().toUpperCase()}`;
-  } catch {
-    return "#111111";
-  }
-}
-
-function uniqueColorsInOrder(colors: string[]): string[] {
-  const result: string[] = [];
-  for (const color of colors) if (!result.includes(color)) result.push(color);
-  return result.length ? result : ["#B7F58A"];
-}
-
-function svgPointBounds(points: Array<{ x: number; y: number }>): SvgReliefPart["bounds"] {
-  let minX = Number.POSITIVE_INFINITY, minY = Number.POSITIVE_INFINITY;
-  let maxX = Number.NEGATIVE_INFINITY, maxY = Number.NEGATIVE_INFINITY;
-  for (const point of points) {
-    minX = Math.min(minX, point.x); minY = Math.min(minY, point.y);
-    maxX = Math.max(maxX, point.x); maxY = Math.max(maxY, point.y);
-  }
-  return { minX, minY, maxX, maxY };
-}
-
-function isNeedleLikeSvgArtifact(part: SvgReliefPart, scaleMm: number): boolean {
-  const widthMm = Math.max(0, (part.bounds.maxX - part.bounds.minX) * scaleMm);
-  const heightMm = Math.max(0, (part.bounds.maxY - part.bounds.minY) * scaleMm);
-  const minDimensionMm = Math.min(widthMm, heightMm);
-  const maxDimensionMm = Math.max(widthMm, heightMm);
-  const areaMm2 = part.area * scaleMm * scaleMm;
-  if (minDimensionMm <= 1e-6 || maxDimensionMm <= 1e-6) return true;
-  const aspect = maxDimensionMm / minDimensionMm;
-  // Entfernt isolierte Nadeln aus SVG-/Trace-Artefakten. Kleine Punkte,
-  // Umlautpunkte und echte kurze Details bleiben erhalten; gefiltert werden
-  // nur extrem langgezogene, sehr schmale Restflächen, die im Druck als
-  // ungewollte Spitzen erscheinen.
-  return aspect >= 14 && minDimensionMm < 0.32 && areaMm2 < 6;
-}
-
-async function createSvgPathRelief(
-  imagePath: string,
-  outputDirectory: string,
-  options: ReliefOptions,
-  onProgress: (update: ReliefProgress) => void
-): Promise<ReliefResult | null> {
-  onProgress({ phase: "SVG-Pfade lesen", detail: "Echte Vektorkurven werden geladen …", progress: 14 });
-  let svg: string;
-  try {
-    svg = await readFile(imagePath, "utf8");
-  } catch {
-    return null;
-  }
-  let parsed: ReturnType<SVGLoader["parse"]>;
-  try {
-    globalThis.DOMParser ??= DOMParser as typeof globalThis.DOMParser;
-    parsed = new SVGLoader().parse(svg);
-  } catch {
-    return null;
-  }
-  const rawParts: SvgReliefPart[] = [];
-  const pathSamplePoints = svgPathSamplePoints(options.resolution);
-  const curveSegments = svgCurveSegments(options.resolution);
-  let unsupportedVectorPaint = false;
-  for (const path of parsed.paths) {
-    const style = path.userData?.style as { fill?: string; fillOpacity?: number; opacity?: number } | undefined;
-    if (style?.fill === "none" || style?.fillOpacity === 0 || style?.opacity === 0) {
-      unsupportedVectorPaint = true;
-      continue;
-    }
-    if (typeof style?.fill === "string" && style.fill.startsWith("url(")) {
-      unsupportedVectorPaint = true;
-      continue;
-    }
-    const color = colorFromSvgFill(style?.fill ?? path.color?.getStyle());
-    const shapes = SVGLoader.createShapes(path);
-    for (const shape of shapes) {
-      const points = shape.getPoints(pathSamplePoints);
-      if (points.length < 3) continue;
-      const area = Math.abs(ShapeUtils.area(points));
-      if (area < 1e-3) continue;
-      // Die Höhe wird später pro Fläche entschieden. Die SVG-Kurven selbst
-      // bleiben hier als Bézier-Geometrie erhalten und werden nicht über ein
-      // Pixelraster zurückgerechnet.
-      const geometry = new ExtrudeGeometry(shape, { depth: 1, bevelEnabled: false, curveSegments, steps: 1 });
-      rawParts.push({ mesh: meshFromExtrudeGeometry(geometry, 0), color, area, bounds: svgPointBounds(points) });
-    }
-  }
-  if (!rawParts.length || (unsupportedVectorPaint && rawParts.length <= 1)) return null;
-  let minX = Number.POSITIVE_INFINITY, minY = Number.POSITIVE_INFINITY;
-  let maxX = Number.NEGATIVE_INFINITY, maxY = Number.NEGATIVE_INFINITY;
-  for (const part of rawParts) for (const [x, y] of part.mesh.vertices) {
-    minX = Math.min(minX, x); minY = Math.min(minY, y);
-    maxX = Math.max(maxX, x); maxY = Math.max(maxY, y);
-  }
-  if (!Number.isFinite(minX) || !Number.isFinite(maxX) || maxX <= minX || maxY <= minY) return null;
-  const heightMm = options.widthMm * (maxY - minY) / Math.max(1e-6, maxX - minX);
-  const scaleMm = options.widthMm / Math.max(1e-6, maxX - minX);
-  const printableParts = rawParts.filter((part) => !isNeedleLikeSvgArtifact(part, scaleMm));
-  if (!printableParts.length) return null;
-  const backgroundIndex = options.includeBackground
-    ? printableParts.reduce((best, part, index) => part.area > printableParts[best].area ? index : best, 0)
-    : -1;
-  const colors = uniqueColorsInOrder(printableParts.map((part) => part.color));
-  const normalizedParts = printableParts.map((part, index) => {
-    const isBackground = index === backgroundIndex;
-    const bottom = isBackground ? 0 : options.includeBackground ? options.baseMm : 0;
-    const top = isBackground ? options.baseMm : options.includeBackground ? options.baseMm + options.reliefMm : options.reliefMm;
-    const scaled = normalizeSvgMesh(part.mesh, { minX, minY, maxX, maxY }, options.widthMm);
-    const adjusted = {
-      vertices: scaled.vertices.map(([x, y, z]) => [x, y, bottom + z * (top - bottom)] as const),
-      triangles: scaled.triangles
-    };
-    return {
-      mesh: adjusted,
-      color: part.color,
-      name: `SVG ${colors.indexOf(part.color) + 1}`
-    };
-  });
-  const combined = removeInvalidTriangles(mergeMeshes(normalizedParts.map((part) => part.mesh)));
-  const exportMesh = orientMeshLikePreview(transformProductMesh(combined, options.widthMm, options.curveAngle, options.mirrorX), heightMm);
-  const geometryValidation = validateMeshGeometry(exportMesh);
-  if (!geometryValidation.valid) return null;
-  const stlBuffer = encodeBinaryStl(exportMesh, "AI Print Studio SVG Relief");
-  const exportColoredMeshes = normalizedParts.map((part) => ({
-    ...part,
-    mesh: orientMeshLikePreview(transformProductMesh(part.mesh, options.widthMm, options.curveAngle, options.mirrorX), heightMm)
-  }));
-  const threeMfBuffer = await encodeThreeMf(exportMesh, exportColoredMeshes);
-  const [stlValidation, threeMfValidation] = await Promise.all([
-    validateGeneratedExportBuffer(".stl", stlBuffer),
-    validateGeneratedExportBuffer(".3mf", threeMfBuffer)
-  ]);
-  if (!stlValidation.valid || !threeMfValidation.valid) {
-    throw new Error(`Die SVG-Exportdatei hat die Sicherheitsprüfung nicht bestanden: ${[
-      ...stlValidation.errors,
-      ...threeMfValidation.errors
-    ].join(" ")}`);
-  }
-  await mkdir(outputDirectory, { recursive: true });
-  const namingSource = options.sourceName.trim() || basename(imagePath);
-  const stem = sanitizeStem(basename(namingSource, extname(namingSource)));
-  const stlPath = join(outputDirectory, `${stem}-relief.stl`);
-  const threeMfPath = join(outputDirectory, `${stem}-relief.3mf`);
-  await Promise.all([writeFile(stlPath, stlBuffer), writeFile(threeMfPath, threeMfBuffer)]);
-  const layerHeightMm = 0.2;
-  const maximumHeight = options.includeBackground ? options.baseMm + options.reliefMm : options.reliefMm;
-  const layerCount = Math.max(1, Math.ceil(maximumHeight / layerHeightMm));
-  const printability: PrintabilityReport = {
-    score: 100,
-    status: "ready",
-    issues: ["SVG-Pfade direkt extrudiert – keine Raster-Vektorisierung nötig."],
-    estimatedVolumeCm3: estimateMeshVolume(exportMesh) / 1000,
-    checks: [
-      { label: "Exportprüfung", status: "ok", detail: "STL und 3MF wurden validiert." },
-      { label: "Grundplatte", status: "ok", detail: `${options.baseMm.toFixed(1)} mm sind stabil.` },
-      { label: "Konturen", status: "ok", detail: "SVG-Pfade werden direkt verwendet." },
-      { label: "Mindestbreite", status: "ok", detail: "Bitte im Slicer prüfen, falls die SVG sehr feine Linien enthält." }
-    ]
-  };
-  const preview = buildCanonicalMeshPreview(exportMesh, options.widthMm, heightMm, exportMesh.triangles.map((_, triangleIndex) => {
-    let accumulated = 0;
-    for (const part of exportColoredMeshes) {
-      const next = accumulated + part.mesh.triangles.length;
-      if (triangleIndex < next) return Math.max(0, colors.indexOf(part.color));
-      accumulated = next;
-    }
-    return 0;
-  }), colors);
-  const heightmapPng = await sharp(Buffer.from(svg)).resize(256, 256, { fit: "inside" }).png().toBuffer();
-  onProgress({ phase: "Fertig", detail: "SVG-Pfade wurden direkt als Druckmodell exportiert.", progress: 100 });
-  return {
-    stlPath,
-    threeMfPath,
-    vertexCount: exportMesh.vertices.length,
-    triangleCount: exportMesh.triangles.length,
-    widthMm: options.widthMm,
-    heightMm,
-    options,
-    printability,
-    geometryValidation,
-    contourQuality: analyseContourQuality(exportMesh, options.nozzleMm),
-    fileBytes: { stl: stlBuffer.length, threeMf: threeMfBuffer.length },
-    slicer: {
-      layerHeightMm,
-      layerCount,
-      estimatedMinutes: Math.max(1, Math.ceil(printability.estimatedVolumeCm3 * 2 + layerCount * 0.12 + Math.max(0, colors.length - 1) * layerCount * 0.12)),
-      filamentMeters: printability.estimatedVolumeCm3 * 1000 / 2.98 / 1000,
-      materialGrams: printability.estimatedVolumeCm3 * 1.24,
-      colorChanges: Math.max(0, colors.length - 1) * layerCount
-    },
-    heightmapDataUrl: `data:image/png;base64,${heightmapPng.toString("base64")}`,
-    preview,
-    colorRegions: colors.map((color) => ({ sourceColor: color, targetIndex: colors.indexOf(color), coveragePercent: 0 }))
-  };
-}
-
-async function createTracedWordmarkSvg(
-  imagePath: string,
-  outputDirectory: string,
-  options: ReliefOptions,
-  sourceWidth: number,
-  sourceHeight: number
-): Promise<string | null> {
-  const targetWidth = Math.min(
-    wordmarkRasterTracePreset.maximumTraceWidthPx,
-    Math.max(
-      wordmarkRasterTracePreset.minimumTraceWidthPx,
-      Math.min(sourceWidth, options.resolution * wordmarkRasterTracePreset.resolutionScale)
-    )
-  );
-  const targetHeight = Math.max(64, Math.round(targetWidth * sourceHeight / Math.max(1, sourceWidth)));
-  const { data } = await sharp(imagePath)
-    .rotate()
-    .resize(targetWidth, targetHeight, { fit: "fill" })
-    .ensureAlpha()
-    .raw()
-    .toBuffer({ resolveWithObject: true });
-  const pixels = targetWidth * targetHeight;
-  const hasAlpha = hasUsefulTransparency(data);
-  const colorSamples: Array<[number, number, number]> = [];
-  const sampleStep = Math.max(1, Math.floor(pixels / wordmarkRasterTracePreset.sampleTargetPixels));
-  for (let index = 0; index < pixels; index += sampleStep) {
-    const offset = index * 4;
-    if (data[offset + 3] < wordmarkRasterTracePreset.alphaCutoff) continue;
-    colorSamples.push([data[offset], data[offset + 1], data[offset + 2]]);
-  }
-  if (colorSamples.length < 16) return null;
-  const clusterCount = Math.max(
-    2,
-    Math.min(
-      wordmarkRasterTracePreset.maximumColorClusters,
-      new Set(colorSamples.map(([r, g, b]) => `${r >> 4}:${g >> 4}:${b >> 4}`)).size
-    )
-  );
-  let centers = seedColorCenters(colorSamples, clusterCount);
-  const assignments = new Int16Array(pixels);
-  for (let iteration = 0; iteration < wordmarkRasterTracePreset.kMeansIterations; iteration += 1) {
-    const sums = Array.from({ length: clusterCount }, () => [0, 0, 0, 0]);
-    for (let index = 0; index < pixels; index += 1) {
-      const offset = index * 4;
-      if (data[offset + 3] < wordmarkRasterTracePreset.alphaCutoff) { assignments[index] = -1; continue; }
-      const best = nearestColorCenter([data[offset], data[offset + 1], data[offset + 2]], centers);
-      assignments[index] = best;
-      sums[best][0] += data[offset]; sums[best][1] += data[offset + 1]; sums[best][2] += data[offset + 2]; sums[best][3] += 1;
-    }
-    centers = centers.map((center, index) => sums[index][3]
-      ? [sums[index][0] / sums[index][3], sums[index][1] / sums[index][3], sums[index][2] / sums[index][3]] as [number, number, number]
-      : center);
-  }
-  const rawCounts = Array(clusterCount).fill(0) as number[];
-  for (const assignment of assignments) if (assignment >= 0) rawCounts[assignment] += 1;
-  const rawBackgroundIndex = hasAlpha ? -1 : dominantCornerCluster(assignments, targetWidth, targetHeight, clusterCount);
-  const grouped = groupSimilarLogoClusters(centers, rawCounts, rawBackgroundIndex);
-  for (let index = 0; index < assignments.length; index += 1) {
-    const assignment = assignments[index];
-    if (assignment >= 0) assignments[index] = grouped.map[assignment] ?? assignment;
-  }
-  centers = grouped.centers;
-  const counts = grouped.counts;
-  const groupedClusterCount = centers.length;
-  const backgroundIndex = rawBackgroundIndex >= 0 ? grouped.map[rawBackgroundIndex] : -1;
-  const minArea = Math.max(14, Math.round(pixels * wordmarkRasterTracePreset.minimumComponentAreaRatio));
-  const paths: string[] = [];
-  for (let cluster = 0; cluster < groupedClusterCount; cluster += 1) {
-    if (counts[cluster] < minArea) continue;
-    if (!options.includeBackground && cluster === backgroundIndex) continue;
-    const mask = cleanTraceMask(
-      Array.from(assignments, (assignment) => assignment === cluster),
-      targetWidth,
-      targetHeight,
-      minArea,
-      true
-    );
-    const path = traceMaskToSvgPath(
-      mask,
-      targetWidth,
-      targetHeight,
-      options.includeBackground && cluster === backgroundIndex
-        ? wordmarkRasterTracePreset.backgroundTraceSmoothing
-        : wordmarkRasterTracePreset.motifTraceSmoothing
-    );
-    if (!path) continue;
-    const color = rgbToHex(centers[cluster]);
-    paths.push(`<path fill="${color}" d="${path}"/>`);
-  }
-  if (!paths.length) return null;
-  await mkdir(outputDirectory, { recursive: true });
-  const stem = sanitizeStem(basename(options.sourceName || basename(imagePath), extname(options.sourceName || imagePath)));
-  const svgPath = join(outputDirectory, `${stem}-vectorized-wordmark.svg`);
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${targetWidth}" height="${targetHeight}" viewBox="0 0 ${targetWidth} ${targetHeight}">${paths.join("")}</svg>`;
-  await writeFile(svgPath, svg, "utf8");
-  return svgPath;
-}
-
-function seedColorCenters(samples: Array<[number, number, number]>, count: number): Array<[number, number, number]> {
-  const centers: Array<[number, number, number]> = [samples[0]];
-  while (centers.length < count) {
-    let best = samples[0], bestDistance = -1;
-    for (const sample of samples) {
-      const distance = Math.min(...centers.map((center) => colorDistance(sample, center)));
-      if (distance > bestDistance) { best = sample; bestDistance = distance; }
-    }
-    centers.push(best);
-  }
-  return centers;
-}
-
-function nearestColorCenter(color: [number, number, number], centers: Array<[number, number, number]>): number {
-  let best = 0, bestDistance = Number.POSITIVE_INFINITY;
-  centers.forEach((center, index) => {
-    const distance = colorDistance(color, center);
-    if (distance < bestDistance) { best = index; bestDistance = distance; }
-  });
-  return best;
-}
-
-function colorDistance(left: [number, number, number], right: [number, number, number]) {
-  return (left[0] - right[0]) ** 2 + (left[1] - right[1]) ** 2 + (left[2] - right[2]) ** 2;
-}
-
-function groupSimilarLogoClusters(
-  centers: Array<[number, number, number]>,
-  counts: number[],
-  backgroundIndex: number
-): { centers: Array<[number, number, number]>; counts: number[]; map: number[] } {
-  const groups: Array<{ center: [number, number, number]; count: number; raw: number[] }> = [];
-  const ordered = centers.map((center, index) => ({ center, index, count: counts[index] ?? 0 }))
-    .sort((left, right) => {
-      if (left.index === backgroundIndex) return -1;
-      if (right.index === backgroundIndex) return 1;
-      return right.count - left.count;
-    });
-  for (const item of ordered) {
-    const target = groups.findIndex((group) => shouldMergeLogoCluster(item.center, group.center, item.index === backgroundIndex || group.raw.includes(backgroundIndex)));
-    if (target >= 0) {
-      const group = groups[target];
-      const total = group.count + item.count;
-      group.center = total > 0 ? [
-        (group.center[0] * group.count + item.center[0] * item.count) / total,
-        (group.center[1] * group.count + item.center[1] * item.count) / total,
-        (group.center[2] * group.count + item.center[2] * item.count) / total
-      ] : group.center;
-      group.count = total;
-      group.raw.push(item.index);
-    } else {
-      groups.push({ center: item.center, count: item.count, raw: [item.index] });
-    }
-  }
-  const map = Array(centers.length).fill(0) as number[];
-  groups.forEach((group, groupIndex) => group.raw.forEach((rawIndex) => { map[rawIndex] = groupIndex; }));
-  return { centers: groups.map((group) => group.center), counts: groups.map((group) => group.count), map };
-}
-
-function shouldMergeLogoCluster(left: [number, number, number], right: [number, number, number], touchesBackground: boolean): boolean {
-  if (colorDistance(left, right) < 900) return true;
-  const leftHsl = rgbToHsl(left), rightHsl = rgbToHsl(right);
-  const bothNeutral = leftHsl.s < 0.12 && rightHsl.s < 0.12;
-  if (bothNeutral && Math.abs(leftHsl.l - rightHsl.l) < 0.18) return true;
-  if (touchesBackground && bothNeutral) return Math.abs(leftHsl.l - rightHsl.l) < 0.28;
-  if (leftHsl.s < 0.16 || rightHsl.s < 0.16) return false;
-  const hueDelta = Math.min(Math.abs(leftHsl.h - rightHsl.h), 360 - Math.abs(leftHsl.h - rightHsl.h));
-  return hueDelta < 18 && Math.abs(leftHsl.l - rightHsl.l) < 0.42;
-}
-
-function rgbToHsl([r, g, b]: [number, number, number]): { h: number; s: number; l: number } {
-  const rn = r / 255, gn = g / 255, bn = b / 255;
-  const max = Math.max(rn, gn, bn), min = Math.min(rn, gn, bn);
-  const l = (max + min) / 2;
-  if (max === min) return { h: 0, s: 0, l };
-  const delta = max - min;
-  const s = l > 0.5 ? delta / (2 - max - min) : delta / (max + min);
-  const h = max === rn
-    ? ((gn - bn) / delta + (gn < bn ? 6 : 0)) * 60
-    : max === gn
-      ? ((bn - rn) / delta + 2) * 60
-      : ((rn - gn) / delta + 4) * 60;
-  return { h, s, l };
-}
-
-function dominantCornerCluster(assignments: Int16Array, width: number, height: number, count: number): number {
-  const votes = Array(count).fill(0) as number[];
-  const inset = Math.max(1, Math.round(Math.min(width, height) * 0.04));
-  const ranges = [
-    [0, inset, 0, inset],
-    [width - inset, width, 0, inset],
-    [0, inset, height - inset, height],
-    [width - inset, width, height - inset, height]
-  ] as const;
-  for (const [x0, x1, y0, y1] of ranges) {
-    for (let y = y0; y < y1; y += 1) for (let x = x0; x < x1; x += 1) {
-      const assignment = assignments[y * width + x];
-      if (assignment >= 0) votes[assignment] += 1;
-    }
-  }
-  return votes.reduce((best, value, index) => value > votes[best] ? index : best, 0);
-}
-
-function cleanTraceMask(mask: boolean[], width: number, height: number, minArea: number, preserveThinStrokes = false): boolean[] {
-  let cleaned = preserveThinStrokes ? mask.slice() : majorityFilter(mask, width, height);
-  cleaned = removeSmallComponents(cleaned, width, height, minArea);
-  return preserveThinStrokes ? cleaned : majorityFilter(cleaned, width, height);
-}
-
-function majorityFilter(mask: boolean[], width: number, height: number): boolean[] {
-  const output = mask.slice();
-  for (let y = 1; y < height - 1; y += 1) for (let x = 1; x < width - 1; x += 1) {
-    let filled = 0;
-    for (let oy = -1; oy <= 1; oy += 1) for (let ox = -1; ox <= 1; ox += 1) {
-      if (mask[(y + oy) * width + x + ox]) filled += 1;
-    }
-    if (filled >= 6) output[y * width + x] = true;
-    else if (filled <= 2) output[y * width + x] = false;
-  }
-  return output;
-}
-
-function removeSmallComponents(mask: boolean[], width: number, height: number, minArea: number): boolean[] {
-  return filterTraceComponentsByArea(mask, width, height, { minArea });
-}
-
-function filterTraceComponentsByArea(
-  mask: boolean[],
-  width: number,
-  height: number,
-  limits: { minArea: number; maxArea?: number }
-): boolean[] {
-  const output = mask.slice();
-  const seen = new Uint8Array(mask.length);
-  const queue: number[] = [];
-  for (let start = 0; start < mask.length; start += 1) {
-    if (!mask[start] || seen[start]) continue;
-    const component: number[] = [];
-    seen[start] = 1; queue.push(start);
-    while (queue.length) {
-      const current = queue.pop() as number;
-      component.push(current);
-      const x = current % width, y = Math.floor(current / width);
-      const neighbors = [
-        x > 0 ? current - 1 : -1,
-        x < width - 1 ? current + 1 : -1,
-        y > 0 ? current - width : -1,
-        y < height - 1 ? current + width : -1
-      ];
-      for (const neighbor of neighbors) {
-        if (neighbor >= 0 && mask[neighbor] && !seen[neighbor]) {
-          seen[neighbor] = 1; queue.push(neighbor);
-        }
-      }
-    }
-    if (component.length < limits.minArea || (limits.maxArea !== undefined && component.length > limits.maxArea)) {
-      component.forEach((index) => { output[index] = false; });
-    }
-  }
-  return output;
-}
-
-function traceMaskToSvgPath(mask: boolean[], width: number, height: number, smoothing: number): string {
-  if (!mask.some(Boolean)) return "";
-  const geometry = contours().size([width, height]).smooth(true).thresholds([0.5])(mask.map(Number))[0];
-  if (!geometry?.coordinates.length) return "";
-  const parts: string[] = [];
-  for (const polygon of geometry.coordinates) {
-    for (const ring of polygon) {
-      const points = smoothVectorRing(ring as Array<[number, number]>, smoothing);
-      if (points.length < 3) continue;
-      parts.push(`M${points.map(([x, y]) => `${roundPathNumber(x)},${roundPathNumber(y)}`).join("L")}Z`);
-    }
-  }
-  return parts.join("");
-}
-
-function svgPathSamplePoints(resolution: number): number {
-  // SVGLoader.createShapes gibt analytische Kurven zurück; getPoints wird nur
-  // für Flächen-, Bounds- und Artefaktprüfung genutzt. Bei automatischer
-  // Exportreduzierung muss dieser Wert mitfallen, sonst bleiben große SVGs
-  // trotz niedrigerer App-Auflösung über dem 250k-Limit.
-  return Math.max(12, Math.min(48, Math.round(resolution / 8)));
-}
-
-function svgCurveSegments(resolution: number): number {
-  // Der wichtigste Dreieckshebel für Logo/Text-SVGs. 512 bleibt hochwertig,
-  // reduzierte Durchläufe werden aber wirklich kleiner und erreichen die
-  // Exportgrenze zuverlässig.
-  return Math.max(6, Math.min(28, Math.round(resolution / 18)));
-}
-
-function roundPathNumber(value: number): string {
-  return Number(value.toFixed(2)).toString();
-}
-
-function rgbToHex([r, g, b]: [number, number, number]): string {
-  return `#${[r, g, b].map((value) => Math.max(0, Math.min(255, Math.round(value))).toString(16).padStart(2, "0")).join("")}`;
-}
-
-function orientMeshLikePreview(mesh: Mesh, heightMm: number): Mesh {
-  // Bildkoordinaten laufen von oben nach unten. STL/3MF beziehungsweise der
-  // Slicer stellen die Y-Achse dagegen von unten nach oben dar. Die Spiegelung
-  // an der horizontalen Bildachse lässt den Export so erscheinen wie die
-  // Vorschau. Durch Vertauschen von B und C bleibt die Dreiecksorientierung
-  // trotz der Spiegelung erhalten.
-  return {
-    vertices: mesh.vertices.map(([x, y, z]) => [x, heightMm - y, z] as const),
-    triangles: mesh.triangles.map(([a, b, c]) => [a, c, b] as const)
-  };
-}
-
-function assignCanonicalTriangleMaterials(
-  mesh: Mesh,
-  assignments: number[],
-  columns: number,
-  rows: number,
-  widthMm: number,
-  heightMm: number,
-  sideColorIndex: number
-): number[] {
-  const cellColumns = columns - 1;
-  const cellRows = rows - 1;
-  const materialAt = (xMm: number, yMm: number) => {
-    const x = Math.max(0, Math.min(cellColumns - 1, Math.floor(xMm / widthMm * cellColumns)));
-    const y = Math.max(0, Math.min(cellRows - 1, Math.floor(yMm / heightMm * cellRows)));
-    const material = assignments[y * cellColumns + x];
-    return material >= 0 ? material : sideColorIndex;
-  };
-  return mesh.triangles.map((triangle) => {
-    const a = mesh.vertices[triangle[0]], b = mesh.vertices[triangle[1]], c = mesh.vertices[triangle[2]];
-    // Nur nach oben gerichtete Deckflächen erhalten die erkannte Motivfarbe.
-    // Boden, Außenwand und senkrechte Höhenübergänge bleiben einheitlich in
-    // der gewählten Seitenfarbe.
-    if (normalOf(a, b, c)[2] <= 0.85) return sideColorIndex;
-    const samples = [
-      [1 / 3, 1 / 3, 1 / 3],
-      [0.6, 0.2, 0.2],
-      [0.2, 0.6, 0.2],
-      [0.2, 0.2, 0.6],
-      [0.45, 0.45, 0.1],
-      [0.45, 0.1, 0.45],
-      [0.1, 0.45, 0.45]
-    ] as const;
-    const counts = new Map<number, number>();
-    let centerMaterial = sideColorIndex;
-    samples.forEach(([wa, wb, wc], index) => {
-      const material = materialAt(
-        a[0] * wa + b[0] * wb + c[0] * wc,
-        a[1] * wa + b[1] * wb + c[1] * wc
-      );
-      if (index === 0) centerMaterial = material;
-      counts.set(material, (counts.get(material) ?? 0) + 1);
-    });
-    return [...counts.entries()].sort((left, right) =>
-      right[1] - left[1] || Number(right[0] === centerMaterial) - Number(left[0] === centerMaterial)
-    )[0]?.[0] ?? sideColorIndex;
-  });
-}
-
-function buildCanonicalMeshPreview(
-  mesh: Mesh,
-  widthMm: number,
-  heightMm: number,
-  materials: number[],
-  colors: string[]
-): ReliefResult["preview"] {
-  const positions = mesh.vertices.flatMap(([x, y, z]) => [x - widthMm / 2, z, y - heightMm / 2]);
-  const colorParts = colors.map((color) => ({ color, indices: [] as number[] }));
-  const indices: number[] = [];
-  mesh.triangles.forEach(([a, b, c], triangleIndex) => {
-    const oriented = [a, c, b];
-    indices.push(...oriented);
-    const material = Math.max(0, Math.min(colorParts.length - 1, materials[triangleIndex] ?? 0));
-    colorParts[material]?.indices.push(...oriented);
-  });
-  return { positions, indices, colorParts: colorParts.filter((part) => part.indices.length) };
-}
-
-function buildColoredMeshes(
-  columns: number,
-  rows: number,
-  widthMm: number,
-  heightMm: number,
-  heights: number[],
-  cellMask: boolean[],
-  assignments: number[],
-  colors: string[],
-  sideColorIndex: number,
-  stepped = false,
-  vectorized = false,
-  vectorSmoothing = 2,
-  steppedCellHeightsOverride?: number[]
-): ColoredMesh[] {
-  if (vectorized && colors.length) {
-    return buildVectorColorMeshes(
-      columns, rows, widthMm, heightMm, heights, cellMask,
-      assignments, colors, sideColorIndex, vectorSmoothing
-    );
-  }
-  const outerBoundary = buildSmoothedBoundaryPositions(columns, rows, widthMm, heightMm, cellMask);
-  // Zwei typische 0,2-mm-Schichten sind in allen gängigen Slicern als
-  // druckbarer Körper erkennbar. Die frühere 0,04-mm-Haut wurde von Anycubic
-  // als vermutlich falsch skalierte Datei bewertet.
-  const colorSkinMm = 0.4;
-  // Die Farbdecklage gehört in die eingestellte Gesamthöhe. Früher wurde sie
-  // zusätzlich aufgesetzt (z. B. 4,4 statt 4,0 mm). Der Tragkörper endet nun
-  // 0,4 mm tiefer, die jeweilige Farbe schließt exakt auf Sollhöhe ab.
-  const structureHeights = heights.map((height) => Math.max(0, height - colorSkinMm));
-  const topCellHeights = steppedCellHeightsOverride
-    ?? (stepped
-      ? flattenSteppedOuterRim(buildBinaryCellHeights(heights, columns, rows), cellMask, columns, rows)
-      : undefined);
-  const structureCellHeights = topCellHeights?.map((height) => Math.max(0, height - colorSkinMm));
-  const structure = structureCellHeights
-    ? buildSteppedCellMesh(columns, rows, widthMm, heightMm, structureCellHeights, cellMask)
-    : buildWatertightHeightMesh(columns, rows, widthMm, heightMm, structureHeights, cellMask, 0, outerBoundary);
-  return colors.map((color, colorIndex) => {
-    const mask = assignments.map((assignment) => assignment === colorIndex);
-    // Jede Farbfläche besitzt eine eigene Kontur. Bisher erhielten alle
-    // Farbkörper nur die geglättete Außenkontur des Gesamtmodells; innere
-    // Schwarz-, Weiß- oder Rotflächen blieben deshalb exakt auf dem
-    // Pixelraster und erschienen im Slicer als Treppen. Die Farbmaske wird
-    // nun selbst geglättet und für Oberseite, Boden und Seiten gemeinsam
-    // verwendet, damit der Körper geschlossen bleibt.
-    const colorBoundary = buildSmoothedBoundaryPositions(columns, rows, widthMm, heightMm, mask);
-    const top = topCellHeights && structureCellHeights
-      ? buildSteppedCellMesh(columns, rows, widthMm, heightMm, topCellHeights, mask, structureCellHeights)
-      : buildWatertightHeightMesh(columns, rows, widthMm, heightMm, heights.slice(), mask, structureHeights, colorBoundary);
-    return {
-      mesh: colorIndex === sideColorIndex ? mergeMeshes([structure, top]) : top,
-      color,
-      name: `AMS ${colorIndex + 1}`
-    };
-  }).filter(({ mesh }) => mesh.triangles.length > 0);
-}
-
-function buildVectorColorMeshes(
-  columns: number,
-  rows: number,
-  widthMm: number,
-  heightMm: number,
-  heights: number[],
-  cellMask: boolean[],
-  assignments: number[],
-  colors: string[],
-  sideColorIndex: number,
-  smoothing = 2
-): ColoredMesh[] {
-  const cellColumns = columns - 1;
-  const cellHeight = (cell: number) => {
-    const x = cell % cellColumns, y = Math.floor(cell / cellColumns);
-    const vertex = y * columns + x;
-    return (heights[vertex] + heights[vertex + 1] + heights[vertex + columns] + heights[vertex + columns + 1]) / 4;
-  };
-  const masks = colors.map((_, colorIndex) => assignments.map((assignment, cell) => cellMask[cell] && assignment === colorIndex));
-  // Eine Farbe kann in einem Wappen auf mehreren echten Höhen vorkommen:
-  // Schwarz liegt beispielsweise sowohl am niedrigen Außenrand als auch auf
-  // den erhabenen Walzen. Die frühere Medianhöhe pro AMS-Farbe zog deshalb
-  // alle schwarzen Walzendetails auf die Höhe des Randes herunter. Farben
-  // dürfen die bereits berechnete STL-Geometrie niemals verändern. Deshalb
-  // wird jede Farbe zusätzlich nach lokalen 0,2-mm-Druckschichten getrennt.
-  const heightBands = masks.map((mask) => {
-    const bands = new Map<number, boolean[]>();
-    mask.forEach((occupied, cell) => {
-      if (!occupied) return;
-      const top = Math.round(cellHeight(cell) / 0.2) * 0.2;
-      const band = bands.get(top) ?? Array(mask.length).fill(false) as boolean[];
-      band[cell] = true;
-      bands.set(top, band);
-    });
-    return [...bands].map(([top, bandMask]) => ({ top, mask: bandMask }));
-  });
-  const colorSkinMm = 0.4;
-  const positiveBottoms = heightBands.flatMap((bands) => bands.map(({ top }) => Math.max(0, top - colorSkinMm))).filter((height) => height > 0);
-  const baseTop = positiveBottoms.length ? Math.min(...positiveBottoms) : 0;
-  const structureParts: Mesh[] = [buildVectorExtrudedMesh(cellMask, columns, rows, widthMm, heightMm, 0, baseTop, smoothing)];
-  heightBands.forEach((bands) => {
-    bands.forEach(({ top, mask }) => {
-      const bottom = Math.max(0, top - colorSkinMm);
-      if (bottom > baseTop + 1e-6) {
-        structureParts.push(buildVectorExtrudedMesh(mask, columns, rows, widthMm, heightMm, baseTop, bottom, smoothing));
-      }
-    });
-  });
-  const structure = mergeMeshes(structureParts.filter((mesh) => mesh.triangles.length));
-  return colors.map((color, colorIndex) => {
-    const top = mergeMeshes(heightBands[colorIndex].map((band) => buildVectorExtrudedMesh(
-      band.mask, columns, rows, widthMm, heightMm,
-      Math.max(0, band.top - colorSkinMm), band.top, smoothing
-    )).filter((mesh) => mesh.triangles.length));
-    return {
-      mesh: colorIndex === sideColorIndex ? mergeMeshes([structure, top]) : top,
-      color,
-      name: `AMS ${colorIndex + 1}`
-    };
-  }).filter(({ mesh }) => mesh.triangles.length > 0);
-}
-
-function buildVectorExtrudedMesh(
-  cellMask: boolean[], columns: number, rows: number,
-  widthMm: number, heightMm: number, bottom: number, top: number, smoothing = 2
-): Mesh {
-  if (top <= bottom + 1e-6 || !cellMask.some(Boolean)) return { vertices: [], triangles: [] };
-  const cellColumns = columns - 1, cellRows = rows - 1;
-  const geometry = contours()
-    .size([cellColumns, cellRows])
-    .smooth(true)
-    .thresholds([0.5])(cellMask.map(Number))[0];
-  const vertices: Vec3[] = [];
-  const triangles: Triangle[] = [];
-  for (const polygon of geometry.coordinates) {
-    const rings = polygon.map((ring) => smoothVectorRing(ring as Array<[number, number]>, smoothing).map(([x, y]) => new Vector2(
-      x * widthMm / cellColumns,
-      y * heightMm / cellRows
-    ))).filter((ring) => ring.length >= 3);
-    if (!rings.length) continue;
-    const [outer, ...holes] = rings;
-    const points = [...outer, ...holes.flat()];
-    const faces = ShapeUtils.triangulateShape(outer, holes);
-    const offset = vertices.length, count = points.length;
-    points.forEach(({ x, y }) => vertices.push([x, y, bottom]));
-    points.forEach(({ x, y }) => vertices.push([x, y, top]));
-    for (const [a, b, c] of faces) {
-      triangles.push([offset + count + a, offset + count + b, offset + count + c]);
-      triangles.push([offset + c, offset + b, offset + a]);
-    }
-    let ringOffset = 0;
-    for (const ring of rings) {
-      for (let index = 0; index < ring.length; index += 1) {
-        const next = (index + 1) % ring.length;
-        const a = offset + ringOffset + index, b = offset + ringOffset + next;
-        triangles.push([a + count, b, b + count], [a + count, a, b]);
-      }
-      ringOffset += ring.length;
-    }
-  }
-  return { vertices, triangles };
-}
-
-let manifoldModulePromise: ReturnType<typeof ManifoldModule> | undefined;
-
-async function buildLayeredVectorRelief(
-  columns: number,
-  rows: number,
-  widthMm: number,
-  heightMm: number,
-  heights: number[],
-  cellMask: boolean[],
-  smoothing = 8
-): Promise<Mesh> {
-  const cellColumns = columns - 1;
-  const cellHeights = cellMask.map((occupied, cell) => {
-    if (!occupied) return 0;
-    const x = cell % cellColumns;
-    const y = Math.floor(cell / cellColumns);
-    const vertex = y * columns + x;
-    const average = (
-      heights[vertex]
-      + heights[vertex + 1]
-      + heights[vertex + columns]
-      + heights[vertex + columns + 1]
-    ) / 4;
-    // Eine 0,2-mm-Schicht ist die kleinste relevante Reliefstufe. Das entfernt
-    // Antialias-Zwischenwerte, ohne druckbare Details zu verlieren.
-    return Math.max(0.2, Math.round(average / 0.2) * 0.2);
-  });
-  return buildLayeredCellVectorRelief(columns, rows, widthMm, heightMm, cellHeights, cellMask, smoothing, true);
-}
-
-async function buildLayeredCellVectorRelief(
-  columns: number,
-  rows: number,
-  widthMm: number,
-  heightMm: number,
-  cellHeights: number[],
-  cellMask: boolean[],
-  smoothing = 8,
-  stabilizeOuterWall = true
-): Promise<Mesh> {
-  const cellColumns = columns - 1;
-  if (stabilizeOuterWall) stabilizeEmblemOuterWallHeights(cellHeights, cellMask, columns, rows, 3);
-  const levels = [...new Set(cellHeights.filter((height) => height > 0).map((height) => Number(height.toFixed(4))))]
-    .sort((a, b) => a - b);
-  if (!levels.length) return { vertices: [], triangles: [] };
-
-  manifoldModulePromise ??= ManifoldModule();
-  const manifoldModule = await manifoldModulePromise;
-  manifoldModule.setup();
-  const solids: InstanceType<typeof manifoldModule.Manifold>[] = [];
-  const pushSolid = (mask: boolean[], bottom: number, top: number) => {
-    if (!mask.some(Boolean) || top <= bottom + 1e-6) return;
-    const paddedColumns = cellColumns + 2;
-    const paddedRows = rows + 1;
-    const padded = Array(paddedColumns * paddedRows).fill(0) as number[];
-    for (let y = 0; y < rows - 1; y += 1) for (let x = 0; x < cellColumns; x += 1) {
-      padded[(y + 1) * paddedColumns + x + 1] = Number(mask[y * cellColumns + x]);
-    }
-    const geometry = contours().size([paddedColumns, paddedRows]).smooth(true).thresholds([0.5])(padded)[0];
-    const polygons = geometry.coordinates.flatMap((polygon) => polygon.map((ring) =>
-      smoothVectorRing(ring as Array<[number, number]>, smoothing).map(([x, y]) => [
-        (x - 1) * widthMm / cellColumns,
-        (y - 1) * heightMm / (rows - 1)
-      ] as [number, number])
-    )).filter((ring) => ring.length >= 3);
-    if (!polygons.length) return;
-    const overlap = bottom > 0 ? 0.01 : 0;
-    const solid = new manifoldModule.CrossSection(polygons, "EvenOdd")
-      // Nur minimal vereinfachen: stärkere Vereinfachung erzeugt bei
-      // Wappen sichtbar abgeflachte Außenwände, auch wenn die Kontur oben
-      // korrekt wirkt.
-      .simplify(0.012)
-      .extrude(top - bottom + overlap)
-      .translate([0, 0, bottom - overlap]);
-    if (!solid.isEmpty()) solids.push(solid);
-  };
-
-  // Wappen werden als echte, nicht überlappende Höhenkörper gebaut. Der alte
-  // additive Aufbau extrudierte für jede Stufe erneut die komplette Maske
-  // "alle Zellen ab dieser Höhe". Im Slicer/Tinkercad sah das wie übereinander
-  // liegende Platten mit horizontalen Linien aus. Jetzt bekommt jede erkannte
-  // Fläche genau einen Körper von der Unterseite bis zu ihrer Zielhöhe.
-  for (const top of levels) {
-    const mask = cellHeights.map((height, cell) => cellMask[cell] && Math.abs(height - top) < 1e-6);
-    pushSolid(mask, 0, top);
-  }
-  if (!solids.length) return { vertices: [], triangles: [] };
-  const unified = manifoldModule.Manifold.union(solids);
-  const output = unified.getMesh();
-  const vertices: Vec3[] = [];
-  for (let offset = 0; offset < output.vertProperties.length; offset += output.numProp) {
-    vertices.push([
-      output.vertProperties[offset],
-      output.vertProperties[offset + 1],
-      output.vertProperties[offset + 2]
-    ]);
-  }
-  const triangles: Triangle[] = [];
-  for (let offset = 0; offset < output.triVerts.length; offset += 3) {
-    triangles.push([output.triVerts[offset], output.triVerts[offset + 1], output.triVerts[offset + 2]]);
-  }
-  unified.delete();
-  solids.forEach((solid) => solid.delete());
-  return weldMeshVertices(snapMeshZToLevels({ vertices, triangles }, [0, ...levels]), 5);
-}
-
-function snapMeshZToLevels(mesh: Mesh, levels: number[], epsilon = 0.035): Mesh {
-  const sorted = [...new Set(levels.map((level) => Number(level.toFixed(4))))].sort((a, b) => a - b);
-  return {
-    vertices: mesh.vertices.map(([x, y, z]) => {
-      let nearest = z;
-      let distance = Number.POSITIVE_INFINITY;
-      for (const level of sorted) {
-        const candidateDistance = Math.abs(z - level);
-        if (candidateDistance < distance) {
-          distance = candidateDistance;
-          nearest = level;
-        }
-      }
-      return [x, y, distance <= epsilon ? nearest : z] as const;
-    }),
-    triangles: mesh.triangles
-  };
-}
-
-function buildOuterEdgeCellMask(
-  cellMask: boolean[],
-  columns: number,
-  rows: number,
-  radius = 4
-): boolean[] {
-  const cellColumns = columns - 1;
-  const cellRows = rows - 1;
-  const result = Array(cellMask.length).fill(false) as boolean[];
-  const occupiedAt = (x: number, y: number) =>
-    x >= 0 && y >= 0 && x < cellColumns && y < cellRows && Boolean(cellMask[y * cellColumns + x]);
-  for (let y = 0; y < cellRows; y += 1) for (let x = 0; x < cellColumns; x += 1) {
-    const index = y * cellColumns + x;
-    if (!cellMask[index]) continue;
-    let nearOuterEdge = false;
-    for (let offsetY = -radius; offsetY <= radius && !nearOuterEdge; offsetY += 1) {
-      for (let offsetX = -radius; offsetX <= radius; offsetX += 1) {
-        if (!occupiedAt(x + offsetX, y + offsetY)) {
-          nearOuterEdge = true;
-          break;
-        }
-      }
-    }
-    result[index] = nearOuterEdge;
-  }
-  return result;
-}
-
-function stabilizeEmblemOuterWallHeights(
-  cellHeights: number[],
-  cellMask: boolean[],
-  columns: number,
-  rows: number,
-  radius = 3
-): void {
-  const cellColumns = columns - 1;
-  const cellRows = rows - 1;
-  let maximum = 0;
-  for (let index = 0; index < cellHeights.length; index += 1) {
-    if (cellMask[index]) maximum = Math.max(maximum, cellHeights[index]);
-  }
-  if (maximum <= 0) return;
-  const occupiedAt = (x: number, y: number) =>
-    x >= 0 && y >= 0 && x < cellColumns && y < cellRows && Boolean(cellMask[y * cellColumns + x]);
-  for (let y = 0; y < cellRows; y += 1) for (let x = 0; x < cellColumns; x += 1) {
-    const index = y * cellColumns + x;
-    if (!cellMask[index]) continue;
-    let nearOuterEdge = false;
-    for (let offsetY = -radius; offsetY <= radius && !nearOuterEdge; offsetY += 1) {
-      for (let offsetX = -radius; offsetX <= radius; offsetX += 1) {
-        if (!occupiedAt(x + offsetX, y + offsetY)) {
-          nearOuterEdge = true;
-          break;
-        }
-      }
-    }
-    if (nearOuterEdge) cellHeights[index] = maximum;
-  }
-}
-
-function weldMeshVertices(mesh: Mesh, precision = 6): Mesh {
-  const vertices: Vec3[] = [];
-  const remap = new Uint32Array(mesh.vertices.length);
-  const byPosition = new Map<string, number>();
-  mesh.vertices.forEach((vertex, index) => {
-    const key = vertex.map((value) => value.toFixed(precision)).join(":");
-    let target = byPosition.get(key);
-    if (target === undefined) {
-      target = vertices.length;
-      vertices.push(vertex);
-      byPosition.set(key, target);
-    }
-    remap[index] = target;
-  });
-  return {
-    vertices,
-    triangles: mesh.triangles.map(([a, b, c]) => [remap[a], remap[b], remap[c]])
-  };
-}
-
-function ringPerimeter(ring: Array<[number, number]>): number {
-  return ring.reduce((sum, point, index) => {
-    const next = ring[(index + 1) % ring.length];
-    return sum + Math.hypot(next[0] - point[0], next[1] - point[1]);
-  }, 0);
-}
-
-function ringBounds(ring: Array<[number, number]>): { width: number; height: number } {
-  let minX = Number.POSITIVE_INFINITY, maxX = Number.NEGATIVE_INFINITY;
-  let minY = Number.POSITIVE_INFINITY, maxY = Number.NEGATIVE_INFINITY;
-  for (const [x, y] of ring) {
-    minX = Math.min(minX, x);
-    maxX = Math.max(maxX, x);
-    minY = Math.min(minY, y);
-    maxY = Math.max(maxY, y);
-  }
-  return { width: maxX - minX, height: maxY - minY };
-}
-
-function resampleClosedRing(source: Array<[number, number]>, spacing: number): Array<[number, number]> {
-  if (source.length < 4) return source;
-  const perimeter = ringPerimeter(source);
-  const targetCount = Math.max(source.length, Math.min(4096, Math.ceil(perimeter / Math.max(0.25, spacing))));
-  const result: Array<[number, number]> = [];
-  let edgeIndex = 0;
-  let edgeStart = source[0];
-  let edgeEnd = source[1];
-  let edgeLength = Math.hypot(edgeEnd[0] - edgeStart[0], edgeEnd[1] - edgeStart[1]);
-  let walkedBeforeEdge = 0;
-  for (let sample = 0; sample < targetCount; sample += 1) {
-    const targetDistance = sample * perimeter / targetCount;
-    while (walkedBeforeEdge + edgeLength < targetDistance && edgeIndex < source.length - 1) {
-      walkedBeforeEdge += edgeLength;
-      edgeIndex += 1;
-      edgeStart = source[edgeIndex];
-      edgeEnd = source[(edgeIndex + 1) % source.length];
-      edgeLength = Math.hypot(edgeEnd[0] - edgeStart[0], edgeEnd[1] - edgeStart[1]);
-    }
-    const local = edgeLength > 1e-6 ? (targetDistance - walkedBeforeEdge) / edgeLength : 0;
-    result.push([
-      edgeStart[0] + (edgeEnd[0] - edgeStart[0]) * local,
-      edgeStart[1] + (edgeEnd[1] - edgeStart[1]) * local
-    ]);
-  }
-  return result;
-}
-
-function smoothVectorRing(source: Array<[number, number]>, smoothing = 2): Array<[number, number]> {
-  let ring = source.slice(0, -1);
-  if (ring.length < 4) return ring;
-  ring = ring.filter((point, index) => {
-    const previous = ring[(index - 1 + ring.length) % ring.length];
-    return Math.hypot(point[0] - previous[0], point[1] - previous[1]) > 1e-3;
-  });
-  if (ring.length < 4) return ring;
-  const initialPerimeter = ringPerimeter(ring);
-  const bounds = ringBounds(ring);
-  const isLargeEmblemContour = initialPerimeter > 180 || Math.max(bounds.width, bounds.height) > 72;
-  const reduced: Array<[number, number]> = [];
-  const minimumPointDistance = isLargeEmblemContour ? 2.2 : 1.15;
-  for (const point of ring) {
-    const previous = reduced.at(-1);
-    // Lange Kanten werden vor der Kurvenglättung leicht ausgedünnt. Zwei
-    // Chaikin-Schritte unterteilen die resultierenden Sehnen anschließend bis
-    // deutlich unter Düsenauflösung; damit verschwinden auch die im Slicer
-    // sichtbaren senkrechten Facetten an runden Wappenrändern.
-    if (!previous || Math.hypot(point[0] - previous[0], point[1] - previous[1]) >= minimumPointDistance) reduced.push(point);
-  }
-  ring = reduced.length >= 4 ? reduced : ring;
-  const chaikinPasses = Math.min(isLargeEmblemContour ? 3 : 2, Math.max(0, Math.round(smoothing)));
-  for (let pass = 0; pass < chaikinPasses; pass += 1) {
-    const next: Array<[number, number]> = [];
-    for (let index = 0; index < ring.length; index += 1) {
-      const current = ring[index], following = ring[(index + 1) % ring.length];
-      next.push(
-        [current[0] * 0.75 + following[0] * 0.25, current[1] * 0.75 + following[1] * 0.25],
-        [current[0] * 0.25 + following[0] * 0.75, current[1] * 0.25 + following[1] * 0.75]
-      );
-    }
-    ring = next;
-  }
-  if (isLargeEmblemContour) ring = resampleClosedRing(ring, 0.75);
-  // Stärken oberhalb von 2 beruhigen die bereits fein unterteilte Kontur.
-  // Mehrere kleine Laplace-Schritte entfernen gezielt die kurzen
-  // Links-rechts-Oszillationen des Pixelrasters. Nur mehr Polygone würden
-  // diese Zacken lediglich feiner abbilden und zugleich die Exportgrenze von
-  // 250.000 Dreiecken gefährden.
-  const laplacePasses = Math.round(smoothing) + (isLargeEmblemContour ? 6 : 0);
-  for (let pass = 2; pass < laplacePasses; pass += 1) {
-    ring = ring.map((current, index) => {
-      const previous = ring[(index - 1 + ring.length) % ring.length];
-      const following = ring[(index + 1) % ring.length];
-      return [
-        previous[0] * 0.125 + current[0] * 0.75 + following[0] * 0.125,
-        previous[1] * 0.125 + current[1] * 0.75 + following[1] * 0.125
-      ];
-    });
-  }
-  if (isLargeEmblemContour) ring = resampleClosedRing(ring, 0.85);
-  return ring;
-}
-
-function buildBinaryCellHeights(heights: number[], columns: number, rows: number): number[] {
-  let minimum = Number.POSITIVE_INFINITY, maximum = Number.NEGATIVE_INFINITY;
-  for (const height of heights) {
-    minimum = Math.min(minimum, height);
-    maximum = Math.max(maximum, height);
-  }
-  const split = (minimum + maximum) / 2;
-  const result: number[] = [];
-  for (let y = 0; y < rows - 1; y += 1) for (let x = 0; x < columns - 1; x += 1) {
-    const index = y * columns + x;
-    const values = [heights[index], heights[index + 1], heights[index + columns], heights[index + columns + 1]];
-    result.push(values.filter((height) => height > split).length >= 2 ? maximum : minimum);
-  }
-  return result;
-}
-
-function flattenSteppedOuterRim(
-  cellHeights: number[],
-  cellMask: boolean[],
-  columns: number,
-  rows: number,
-  radius = 2
-): number[] {
-  const cellColumns = columns - 1, cellRows = rows - 1;
-  let minimum = Number.POSITIVE_INFINITY;
-  for (let index = 0; index < cellHeights.length; index += 1) {
-    if (cellMask[index]) minimum = Math.min(minimum, cellHeights[index]);
-  }
-  if (!Number.isFinite(minimum)) return cellHeights.slice();
-
-  const result = cellHeights.slice();
-  const occupiedAt = (x: number, y: number) =>
-    x >= 0 && y >= 0 && x < cellColumns && y < cellRows && Boolean(cellMask[y * cellColumns + x]);
-  for (let y = 0; y < cellRows; y += 1) for (let x = 0; x < cellColumns; x += 1) {
-    const index = y * cellColumns + x;
-    if (!cellMask[index]) continue;
-    let nearOuterEdge = false;
-    for (let offsetY = -radius; offsetY <= radius && !nearOuterEdge; offsetY += 1) {
-      for (let offsetX = -radius; offsetX <= radius; offsetX += 1) {
-        if (!occupiedAt(x + offsetX, y + offsetY)) {
-          nearOuterEdge = true;
-          break;
-        }
-      }
-    }
-    if (nearOuterEdge) result[index] = minimum;
-  }
-  return result;
-}
-
-function buildRaisedWordmarkCellHeights(
-  wordmarkPixels: boolean[],
-  cellMask: boolean[],
-  columns: number,
-  rows: number,
-  baseHeight: number,
-  raisedHeight: number
-): { heights: number[]; raisedCells: boolean[] } {
-  const cellColumns = columns - 1, cellRows = rows - 1;
-  const heights = Array(cellColumns * cellRows).fill(baseHeight) as number[];
-  const raisedCells = Array(cellColumns * cellRows).fill(false) as boolean[];
-  for (let y = 0; y < cellRows; y += 1) {
-    for (let x = 0; x < cellColumns; x += 1) {
-      const cell = y * cellColumns + x;
-      if (!cellMask[cell]) continue;
-      const vertex = y * columns + x;
-      const occupied =
-        Number(wordmarkPixels[vertex])
-        + Number(wordmarkPixels[vertex + 1])
-        + Number(wordmarkPixels[vertex + columns])
-        + Number(wordmarkPixels[vertex + columns + 1]);
-      // Bei Logos mit Text ist die Semantik eindeutig: Hintergrund/Träger
-      // bleibt unten, erkannte Schrift und Signet liegen separat darüber.
-      // Mindestens zwei berührte Zellpunkte ergeben eine ruhigere Kontur.
-      // Ein einzelner Antialias-Pixel erzeugte bei kleinen Rundschriften
-      // schnell klumpige oder scheinbar verschmierte Buchstaben.
-      if (occupied >= 2) {
-        heights[cell] = raisedHeight;
-        raisedCells[cell] = true;
-      }
-    }
-  }
-  return { heights, raisedCells };
-}
-
-function flattenSteppedOuterRimPreservingRaised(
-  cellHeights: number[],
-  cellMask: boolean[],
-  raisedCells: boolean[],
-  columns: number,
-  rows: number,
-  radius = 2
-): number[] {
-  const flattened = flattenSteppedOuterRim(cellHeights, cellMask, columns, rows, radius);
-  for (let index = 0; index < flattened.length; index += 1) {
-    if (raisedCells[index]) flattened[index] = cellHeights[index];
-  }
-  return flattened;
-}
-
-function buildSteppedCellMesh(
-  columns: number,
-  rows: number,
-  widthMm: number,
-  heightMm: number,
-  topHeights: number[],
-  cellMask: boolean[],
-  bottomHeights: number[] | number = 0
-): Mesh {
-  const cellColumns = columns - 1, cellRows = rows - 1;
-  const vertices: Vec3[] = [];
-  const triangles: Triangle[] = [];
-  const vertexMap = new Map<string, number>();
-  const vertex = (x: number, y: number, z: number) => {
-    const key = `${x}:${y}:${z.toFixed(6)}`;
-    const existing = vertexMap.get(key);
-    if (existing !== undefined) return existing;
-    const created = vertices.length;
-    vertices.push([x * widthMm / cellColumns, y * heightMm / cellRows, z]);
-    vertexMap.set(key, created);
-    return created;
-  };
-  const bottomAt = (cell: number) => typeof bottomHeights === "number" ? bottomHeights : bottomHeights[cell];
-  const cellAt = (x: number, y: number) => x < 0 || y < 0 || x >= cellColumns || y >= cellRows ? -1 : y * cellColumns + x;
-  const wall = (ax: number, ay: number, bx: number, by: number, low: number, high: number) => {
-    if (high <= low + 1e-6) return;
-    const a0 = vertex(ax, ay, low), b0 = vertex(bx, by, low);
-    const a1 = vertex(ax, ay, high), b1 = vertex(bx, by, high);
-    triangles.push([a1, b0, b1], [a1, a0, b0]);
-  };
-  for (let y = 0; y < cellRows; y += 1) for (let x = 0; x < cellColumns; x += 1) {
-    const cell = y * cellColumns + x;
-    if (!cellMask[cell]) continue;
-    const top = topHeights[cell], bottom = bottomAt(cell);
-    const a = vertex(x, y, top), b = vertex(x + 1, y, top);
-    const c = vertex(x, y + 1, top), d = vertex(x + 1, y + 1, top);
-    const ba = vertex(x, y, bottom), bb = vertex(x + 1, y, bottom);
-    const bc = vertex(x, y + 1, bottom), bd = vertex(x + 1, y + 1, bottom);
-    triangles.push([a, b, d], [a, d, c], [ba, bd, bb], [ba, bc, bd]);
-    const neighbors = [
-      { cell: cellAt(x, y - 1), ax: x, ay: y, bx: x + 1, by: y },
-      { cell: cellAt(x + 1, y), ax: x + 1, ay: y, bx: x + 1, by: y + 1 },
-      { cell: cellAt(x, y + 1), ax: x + 1, ay: y + 1, bx: x, by: y + 1 },
-      { cell: cellAt(x - 1, y), ax: x, ay: y + 1, bx: x, by: y }
-    ];
-    for (const edge of neighbors) {
-      const neighborTop = edge.cell >= 0 && cellMask[edge.cell] ? topHeights[edge.cell] : bottom;
-      wall(edge.ax, edge.ay, edge.bx, edge.by, Math.max(bottom, neighborTop), top);
-    }
-  }
-  return { vertices, triangles };
-}
-
-function buildSubjectPixelMask(rgba: Buffer, width: number, height: number): boolean[] {
-  const pixelCount = width * height;
-  let hasTransparency = false;
-  for (let i = 0; i < pixelCount; i += 1) {
-    if (rgba[i * 4 + 3] < 245) { hasTransparency = true; break; }
-  }
-  if (hasTransparency) {
-    return Array.from({ length: pixelCount }, (_, i) => rgba[i * 4 + 3] >= 64);
-  }
-
-  const corners = [0, width - 1, (height - 1) * width, pixelCount - 1];
-  const background = [0, 1, 2].map((channel) =>
-    corners.reduce((sum, pixel) => sum + rgba[pixel * 4 + channel], 0) / corners.length
-  );
-  const closeToBackground = (pixel: number) => {
-    const offset = pixel * 4;
-    return Math.hypot(
-      rgba[offset] - background[0],
-      rgba[offset + 1] - background[1],
-      rgba[offset + 2] - background[2]
-    ) < 52;
-  };
-  const outside = new Uint8Array(pixelCount);
-  const queue: number[] = [];
-  const enqueue = (pixel: number) => {
-    if (!outside[pixel] && closeToBackground(pixel)) {
-      outside[pixel] = 1;
-      queue.push(pixel);
-    }
-  };
-  for (let x = 0; x < width; x += 1) { enqueue(x); enqueue((height - 1) * width + x); }
-  for (let y = 0; y < height; y += 1) { enqueue(y * width); enqueue(y * width + width - 1); }
-  for (let cursor = 0; cursor < queue.length; cursor += 1) {
-    const pixel = queue[cursor], x = pixel % width, y = Math.floor(pixel / width);
-    if (x > 0) enqueue(pixel - 1);
-    if (x + 1 < width) enqueue(pixel + 1);
-    if (y > 0) enqueue(pixel - width);
-    if (y + 1 < height) enqueue(pixel + width);
-  }
-  return Array.from({ length: pixelCount }, (_, i) => outside[i] === 0);
-}
-
-function buildWordmarkPixelMask(rgba: Buffer, width: number, height: number): boolean[] {
-  const pixelCount = width * height;
-  if (hasUsefulTransparency(rgba)) {
-    return Array.from({ length: pixelCount }, (_, index) => rgba[index * 4 + 3] >= 64);
-  }
-
-  // Anders als beim Wappen wird nicht nur der von außen erreichbare
-  // Hintergrund entfernt. Auch eingeschlossene, hintergrundfarbene Bereiche
-  // in a, e, d, o oder ö bleiben echte Löcher. Ein robust angepasstes
-  // quadratisches Flächenmodell bildet auch radiale Lichtverläufe und
-  // Vignetten ab. Die frühere Interpolation aus nur vier Ecken konnte solche
-  // Hintergründe in der Bildmitte nicht erklären und hob sie fälschlich an.
-  const background = fitSmoothBackground(rgba, width, height);
-  return Array.from({ length: pixelCount }, (_, index) => {
-    const x = index % width, y = Math.floor(index / width);
-    const expected = background.at(x, y);
-    const offset = index * 4;
-    return Math.hypot(
-      rgba[offset] - expected[0],
-      rgba[offset + 1] - expected[1],
-      rgba[offset + 2] - expected[2]
-    ) >= background.threshold;
-  });
-}
-
-function buildWordmarkForegroundPixelMask(rgba: Buffer, width: number, height: number): boolean[] {
-  const pixelCount = width * height;
-
-  const result = Array(pixelCount).fill(false) as boolean[];
-  const visited = new Uint8Array(pixelCount);
-  const colorKeyAt = (index: number) => {
-    const offset = index * 4;
-    if (rgba[offset + 3] < 64) return "transparent";
-    // 32er-Farbklassen verbinden antialiaste Buchstaben noch ausreichend,
-    // trennen aber große Logo-Flächen, Text und Signets robust genug für die
-    // anschließende Komponentenbewertung.
-    return `${rgba[offset] >> 5}:${rgba[offset + 1] >> 5}:${rgba[offset + 2] >> 5}`;
-  };
-  const maxComponentArea = Math.max(24, pixelCount * 0.065);
-  const maxFullWidth = width * 0.82;
-  const maxFullHeight = height * 0.82;
-  const queue: number[] = [];
-  for (let start = 0; start < pixelCount; start += 1) {
-    if (visited[start]) continue;
-    visited[start] = 1;
-    queue.length = 0;
-    queue.push(start);
-    const key = colorKeyAt(start);
-    let cursor = 0, minX = width, maxX = 0, minY = height, maxY = 0, touchesBorder = false;
-    while (cursor < queue.length) {
-      const pixel = queue[cursor++];
-      const x = pixel % width, y = Math.floor(pixel / width);
-      minX = Math.min(minX, x); maxX = Math.max(maxX, x);
-      minY = Math.min(minY, y); maxY = Math.max(maxY, y);
-      touchesBorder ||= x === 0 || y === 0 || x === width - 1 || y === height - 1;
-      const neighbors = [
-        pixel - 1, pixel + 1,
-        pixel - width, pixel + width
-      ];
-      for (const next of neighbors) {
-        if (next < 0 || next >= pixelCount || visited[next]) continue;
-        if ((next === pixel - 1 && x === 0) || (next === pixel + 1 && x === width - 1)) continue;
-        if (colorKeyAt(next) !== key) continue;
-        visited[next] = 1;
-        queue.push(next);
-      }
-    }
-    const area = queue.length;
-    const boxWidth = maxX - minX + 1, boxHeight = maxY - minY + 1;
-    const boxArea = Math.max(1, boxWidth * boxHeight);
-    const fillRatio = area / boxArea;
-    const slender = fillRatio <= 0.68 || boxWidth / Math.max(1, boxHeight) >= 2.2 || boxHeight / Math.max(1, boxWidth) >= 2.2;
-    const compactMotif = area <= maxComponentArea && boxWidth <= maxFullWidth && boxHeight <= maxFullHeight;
-    const likelyBackground = touchesBorder && (area > pixelCount * 0.015 || boxWidth > width * 0.35 || boxHeight > height * 0.35);
-    const likelyOuterRingSegment = area > pixelCount * 0.015
-      && boxHeight > height * 0.45
-      && boxWidth < width * 0.24;
-    if (area >= 3 && compactMotif && slender && !likelyBackground && !likelyOuterRingSegment) {
-      for (const pixel of queue) result[pixel] = true;
-    }
-  }
-  // Keine pauschale Verbreiterung an dieser Stelle: Bei runden Badges mit
-  // Textfarben, die auch im Hintergrund vorkommen, verteilt eine Expansion
-  // kleine Antialias-Komponenten über große Flächen. Die druckbare
-  // Mindestbreite wird später kontrolliert und deutlich vorsichtiger
-  // angewendet.
-  return result;
-}
-
-function fitSmoothBackground(rgba: Buffer, width: number, height: number): {
-  at: (x: number, y: number) => readonly [number, number, number];
-  threshold: number;
-} {
-  const basisAt = (x: number, y: number) => {
-    const nx = x / Math.max(1, width - 1) * 2 - 1;
-    const ny = y / Math.max(1, height - 1) * 2 - 1;
-    return [1, nx, ny, nx * nx, nx * ny, ny * ny];
-  };
-  const bandX = Math.max(2, Math.round(width * 0.12));
-  const bandY = Math.max(2, Math.round(height * 0.12));
-  const stride = Math.max(1, Math.floor(Math.max(width, height) / 140));
-  let samples: { basis: number[]; rgb: readonly [number, number, number] }[] = [];
-  for (let y = 0; y < height; y += stride) {
-    for (let x = 0; x < width; x += stride) {
-      if (x >= bandX && x < width - bandX && y >= bandY && y < height - bandY) continue;
-      const offset = (y * width + x) * 4;
-      samples.push({ basis: basisAt(x, y), rgb: [rgba[offset], rgba[offset + 1], rgba[offset + 2]] });
-    }
-  }
-  const fit = (channel: number) => {
-    const matrix = Array.from({ length: 6 }, () => Array(6).fill(0));
-    const vector = Array(6).fill(0);
-    for (const sample of samples) for (let row = 0; row < 6; row += 1) {
-      vector[row] += sample.basis[row] * sample.rgb[channel];
-      for (let column = 0; column < 6; column += 1) matrix[row][column] += sample.basis[row] * sample.basis[column];
-    }
-    return solveLinearSystem(matrix, vector);
-  };
-  let coefficients = [fit(0), fit(1), fit(2)];
-  // Helle oder dunkle Motivpixel, die bis an den Rand reichen, werden nach
-  // zwei Anpassungsrunden aus den Stützpunkten entfernt.
-  for (let pass = 0; pass < 2; pass += 1) {
-    const residuals = samples.map((sample) => Math.hypot(...sample.rgb.map((value, channel) =>
-      value - sample.basis.reduce((sum, basis, index) => sum + basis * coefficients[channel][index], 0)
-    )));
-    const sorted = residuals.slice().sort((a, b) => a - b);
-    const median = sorted[Math.floor(sorted.length / 2)] ?? 0;
-    const keepBelow = Math.max(18, median * 2.8);
-    const filtered = samples.filter((_, index) => residuals[index] <= keepBelow);
-    if (filtered.length < 24 || filtered.length === samples.length) break;
-    samples = filtered;
-    coefficients = [fit(0), fit(1), fit(2)];
-  }
-  const borderResiduals = samples.map((sample) => Math.hypot(...sample.rgb.map((value, channel) =>
-    value - sample.basis.reduce((sum, basis, index) => sum + basis * coefficients[channel][index], 0)
-  ))).sort((a, b) => a - b);
-  const residual95 = borderResiduals[Math.floor(borderResiduals.length * 0.95)] ?? 0;
-  const threshold = Math.max(38, Math.min(58, residual95 * 1.8 + 12));
-  return {
-    at: (x, y) => {
-      const basis = basisAt(x, y);
-      return coefficients.map((channel) => Math.max(0, Math.min(255,
-        channel.reduce((sum, value, index) => sum + value * basis[index], 0)
-      ))) as [number, number, number];
-    },
-    threshold
-  };
-}
-
-function solveLinearSystem(matrix: number[][], vector: number[]): number[] {
-  const size = vector.length;
-  const rows = matrix.map((row, index) => [...row, vector[index]]);
-  for (let pivot = 0; pivot < size; pivot += 1) {
-    let best = pivot;
-    for (let row = pivot + 1; row < size; row += 1) if (Math.abs(rows[row][pivot]) > Math.abs(rows[best][pivot])) best = row;
-    [rows[pivot], rows[best]] = [rows[best], rows[pivot]];
-    const divisor = rows[pivot][pivot];
-    if (Math.abs(divisor) < 1e-8) return [0, 0, 0, 0, 0, 0];
-    for (let column = pivot; column <= size; column += 1) rows[pivot][column] /= divisor;
-    for (let row = 0; row < size; row += 1) {
-      if (row === pivot) continue;
-      const factor = rows[row][pivot];
-      for (let column = pivot; column <= size; column += 1) rows[row][column] -= factor * rows[pivot][column];
-    }
-  }
-  return rows.map((row) => row[size]);
-}
-
-function buildCellMask(pixels: boolean[], columns: number, rows: number, threshold = 2): boolean[] {
-  const cells: boolean[] = [];
-  for (let y = 0; y < rows - 1; y += 1) {
-    for (let x = 0; x < columns - 1; x += 1) {
-      const a = y * columns + x;
-      const occupied = Number(pixels[a]) + Number(pixels[a + 1]) + Number(pixels[a + columns]) + Number(pixels[a + columns + 1]);
-      cells.push(occupied >= threshold);
-    }
-  }
-  return cells;
-}
-
-function hasUsefulTransparency(rgba: Buffer): boolean {
-  let transparent = 0;
-  for (let index = 0; index < rgba.length; index += 4) if (rgba[index + 3] < 245) transparent += 1;
-  return transparent > rgba.length / 4 * 0.01;
-}
-
-function cleanSubjectPixelMask(pixels: boolean[], width: number, height: number): boolean[] {
-  let current = pixels.slice();
-  for (let pass = 0; pass < 2; pass += 1) {
-    const next = current.slice();
-    for (let y = 0; y < height; y += 1) {
-      for (let x = 0; x < width; x += 1) {
-        let occupied = 0;
-        for (let oy = -1; oy <= 1; oy += 1) for (let ox = -1; ox <= 1; ox += 1) {
-          const nx = x + ox, ny = y + oy;
-          if (nx >= 0 && ny >= 0 && nx < width && ny < height && current[ny * width + nx]) occupied += 1;
-        }
-        next[y * width + x] = occupied >= 5;
-      }
-    }
-    current = next;
-  }
-  return current;
-}
-
-function buildSolidOuterSilhouette(pixels: boolean[], width: number, height: number): boolean[] {
-  const left = Array(height).fill(Number.POSITIVE_INFINITY) as number[];
-  const right = Array(height).fill(Number.NEGATIVE_INFINITY) as number[];
-  for (let y = 0; y < height; y += 1) for (let x = 0; x < width; x += 1) {
-    if (!pixels[y * width + x]) continue;
-    left[y] = Math.min(left[y], x);
-    right[y] = Math.max(right[y], x);
-  }
-  const radius = Math.max(2, Math.min(12, Math.round(height / 70)));
-  const smooth = (values: number[], fallback: number) => values.map((value, y) => {
-    if (!Number.isFinite(value)) return fallback;
-    let weighted = 0, weight = 0;
-    for (let offset = -radius; offset <= radius; offset += 1) {
-      const row = y + offset;
-      if (row < 0 || row >= height || !Number.isFinite(values[row])) continue;
-      const sampleWeight = radius + 1 - Math.abs(offset);
-      weighted += values[row] * sampleWeight;
-      weight += sampleWeight;
-    }
-    return weight ? weighted / weight : value;
-  });
-  const smoothLeft = smooth(left, 0);
-  const smoothRight = smooth(right, width - 1);
-  const result = Array(width * height).fill(false) as boolean[];
-  for (let y = 0; y < height; y += 1) {
-    if (!Number.isFinite(left[y]) || !Number.isFinite(right[y])) continue;
-    const from = Math.max(0, Math.floor(smoothLeft[y]));
-    const to = Math.min(width - 1, Math.ceil(smoothRight[y]));
-    for (let x = from; x <= to; x += 1) result[y * width + x] = true;
-  }
-  return result;
-}
-
-function expandPixelMask(pixels: boolean[], width: number, height: number, radius: number): boolean[] {
-  if (radius <= 0) return pixels.slice();
-  const expanded = pixels.slice();
-  for (let y = 0; y < height; y += 1) for (let x = 0; x < width; x += 1) {
-    if (!pixels[y * width + x]) continue;
-    for (let offsetY = -radius; offsetY <= radius; offsetY += 1) {
-      for (let offsetX = -radius; offsetX <= radius; offsetX += 1) {
-        if (offsetX * offsetX + offsetY * offsetY > radius * radius) continue;
-        const targetX = x + offsetX, targetY = y + offsetY;
-        if (targetX >= 0 && targetY >= 0 && targetX < width && targetY < height) {
-          expanded[targetY * width + targetX] = true;
-        }
-      }
-    }
-  }
-  return expanded;
-}
-
-function expandPixelMaskPreservingHoles(pixels: boolean[], width: number, height: number, radius: number): boolean[] {
-  const expanded = expandPixelMask(pixels, width, height, radius);
-  if (radius <= 0) return expanded;
-
-  // Hintergrund, der vom Bildrand erreichbar ist, darf durch die
-  // Mindestbreitenkorrektur enger werden. Eingeschlossene Innenräume wie in
-  // a, e, o, ö oder R werden dagegen aus der Originalmaske zurückgeschnitten.
-  const outside = new Uint8Array(width * height);
-  const queue: number[] = [];
-  const enqueue = (index: number) => {
-    if (index < 0 || index >= pixels.length || pixels[index] || outside[index]) return;
-    outside[index] = 1;
-    queue.push(index);
-  };
-  for (let x = 0; x < width; x += 1) {
-    enqueue(x);
-    enqueue((height - 1) * width + x);
-  }
-  for (let y = 0; y < height; y += 1) {
-    enqueue(y * width);
-    enqueue(y * width + width - 1);
-  }
-  for (let cursor = 0; cursor < queue.length; cursor += 1) {
-    const index = queue[cursor], x = index % width, y = Math.floor(index / width);
-    if (x > 0) enqueue(index - 1);
-    if (x + 1 < width) enqueue(index + 1);
-    if (y > 0) enqueue(index - width);
-    if (y + 1 < height) enqueue(index + width);
-  }
-  for (let index = 0; index < pixels.length; index += 1) {
-    if (!pixels[index] && !outside[index]) expanded[index] = false;
-  }
-  return expanded;
-}
-
-function applyBoundaryRim(levels: number[], mask: boolean[], width: number, height: number, radius: number): number[] {
-  const next = levels.slice();
-  for (let y = 0; y < height; y += 1) {
-    for (let x = 0; x < width; x += 1) {
-      const index = y * width + x;
-      if (!mask[index]) { next[index] = 0; continue; }
-      let boundary = false;
-      for (let oy = -radius; oy <= radius && !boundary; oy += 1) {
-        for (let ox = -radius; ox <= radius; ox += 1) {
-          const nx = x + ox, ny = y + oy;
-          if (nx < 0 || ny < 0 || nx >= width || ny >= height || !mask[ny * width + nx]) {
-            boundary = true; break;
-          }
-        }
-      }
-      if (boundary) next[index] = 0;
-    }
-  }
-  return next;
-}
-
-function encodeBinaryStl(mesh: Mesh, title: string): Buffer {
-  const buffer = Buffer.alloc(84 + mesh.triangles.length * 50);
-  buffer.write(title.slice(0, 80), 0, "ascii");
-  buffer.writeUInt32LE(mesh.triangles.length, 80);
-  let offset = 84;
-  for (const triangle of mesh.triangles) {
-    const a = mesh.vertices[triangle[0]], b = mesh.vertices[triangle[1]], c = mesh.vertices[triangle[2]];
-    const normal = normalOf(a, b, c);
-    for (const value of [...normal, ...a, ...b, ...c]) {
-      buffer.writeFloatLE(value, offset);
-      offset += 4;
-    }
-    buffer.writeUInt16LE(0, offset);
-    offset += 2;
-  }
-  return buffer;
-}
-
-async function encodeThreeMf(
-  mesh: Mesh,
-  coloredMeshes?: ColoredMesh[],
-  canonicalMaterials?: number[],
-  canonicalColors?: string[]
-): Promise<Buffer> {
-  const zip = new JSZip();
-  zip.file("[Content_Types].xml", `<?xml version="1.0" encoding="UTF-8"?>
-<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
-<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
-<Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/>
-</Types>`);
-  zip.folder("_rels")?.file(".rels", `<?xml version="1.0" encoding="UTF-8"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-<Relationship Target="/3D/3dmodel.model" Id="rel0" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/>
-</Relationships>`);
-  const parts = (canonicalMaterials?.length && canonicalColors?.length
-    ? canonicalColors.map((color, index) => ({ mesh: { vertices: [], triangles: [] }, color, name: `AMS ${index + 1}` }))
-    : coloredMeshes?.length ? coloredMeshes : [{ mesh, color: "#B7F58A", name: "Relief" }])
-    .map((part) => ({ ...part, mesh: removeInvalidTriangles(part.mesh) }));
-  const materialXml = parts.map(({ color, name }) =>
-    `<base name="${escapeXml(name)}" displaycolor="${color.toUpperCase()}FF"/>`
-  ).join("");
-  // Ein einziges Core-3MF-Mesh ist kompatibler als ein Komponenten-Assembly:
-  // Geometrie, Maßstab und Lage entsprechen damit exakt der zusammengeführten
-  // STL. Die Farbe bleibt über pid/p1 pro Dreieck eindeutig erhalten.
-  const vertices: Vec3[] = [];
-  const coloredTriangles: Array<{ triangle: Triangle; material: number }> = [];
-  if (canonicalMaterials?.length === mesh.triangles.length && canonicalColors?.length) {
-    for (const vertex of mesh.vertices) vertices.push(vertex);
-    mesh.triangles.forEach((triangle, index) => coloredTriangles.push({
-      triangle,
-      material: Math.max(0, Math.min(canonicalColors.length - 1, canonicalMaterials[index] ?? 0))
-    }));
-  } else {
-    for (let material = 0; material < parts.length; material += 1) {
-      const offset = vertices.length;
-      // Kein Spread bei großen Meshes: Schon etwa 100.000 Eckpunkte können
-      // sonst die maximale JavaScript-Argumentzahl überschreiten.
-      for (const vertex of parts[material].mesh.vertices) vertices.push(vertex);
-      for (const [a, b, c] of parts[material].mesh.triangles) {
-        coloredTriangles.push({ triangle: [a + offset, b + offset, c + offset], material });
-      }
-    }
-  }
-  const vertexXml = vertices.map(([x, y, z]) => `<vertex x="${x.toFixed(5)}" y="${y.toFixed(5)}" z="${z.toFixed(5)}"/>`).join("");
-  const triangleXml = coloredTriangles.map(({ triangle: [v1, v2, v3], material }) =>
-    `<triangle v1="${v1}" v2="${v2}" v3="${v3}" pid="2" p1="${material}"/>`
-  ).join("");
-  const objectId = 3;
-  const objectXml = `<object id="${objectId}" type="model" name="AI Print Studio"><mesh><vertices>${vertexXml}</vertices><triangles>${triangleXml}</triangles></mesh></object>`;
-  const buildXml = `<item objectid="${objectId}"/>`;
-  zip.folder("3D")?.file("3dmodel.model", `<?xml version="1.0" encoding="UTF-8"?>
-<model unit="millimeter" xml:lang="de-DE" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
-<metadata name="Title">AI Print Studio</metadata>
-<metadata name="Description">Druckoptimiert für eine 0,4-mm-Düse</metadata>
-<resources><basematerials id="2">${materialXml}</basematerials>${objectXml}</resources>
-<build>${buildXml}</build></model>`);
-  if (coloredMeshes?.length || canonicalMaterials?.length) {
-    zip.folder("Metadata")?.file("model_settings.config", `<?xml version="1.0" encoding="UTF-8"?>
-<config>
-  <object id="${objectId}">
-    <metadata key="name" value="AI Print Studio"/>
-    <metadata key="extruder" value="1"/>
-    <mesh_stat edges_fixed="0" degenerate_facets="0" facets_removed="0" facets_reversed="0" backwards_edges="0"/>
-  </object>
-</config>`);
-    zip.folder("Metadata")?.file("project_settings.config", JSON.stringify({
-      print_settings_id: "AI Print Studio",
-      filament_colour: parts.map(({ color }) => color.toUpperCase()),
-      filament_type: parts.map(() => "PLA"),
-      filament_settings_id: parts.map(() => "AI Print Studio"),
-      nozzle_diameter: ["0.4"],
-      printer_settings_id: "AI Print Studio · 0.4 mm"
-    }, null, 2));
-  }
-  return zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE", compressionOptions: { level: 6 } });
-}
-
-function escapeXml(value: string): string {
-  return value.replace(/[&<>"']/g, (character) => ({
-    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;"
-  })[character] ?? character);
-}
-
-function normalOf(a: Vec3, b: Vec3, c: Vec3): Vec3 {
-  const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2];
-  const vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2];
-  const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
-  const length = Math.hypot(nx, ny, nz) || 1;
-  return [nx / length, ny / length, nz / length];
-}
-
-function estimateMeshVolume(mesh: Mesh): number {
-  let signed = 0;
-  for (const [aIndex, bIndex, cIndex] of mesh.triangles) {
-    const a = mesh.vertices[aIndex], b = mesh.vertices[bIndex], c = mesh.vertices[cIndex];
-    signed += (
-      a[0] * (b[1] * c[2] - b[2] * c[1])
-      - a[1] * (b[0] * c[2] - b[2] * c[0])
-      + a[2] * (b[0] * c[1] - b[1] * c[0])
-    ) / 6;
-  }
-  return Math.abs(signed);
-}
-
-function sanitizeStem(stem: string): string {
-  return stem.normalize("NFKD").replace(/[^a-zA-Z0-9_-]+/g, "-").replace(/^-|-$/g, "").slice(0, 80) || "modell";
-}
-
-function buildPreviewSurface(
-  columns: number,
-  rows: number,
-  widthMm: number,
-  heightMm: number,
-  heights: number[],
-  cellMask?: boolean[],
-  colorAssignments?: number[],
-  colors: string[] = [],
-  sideColorIndex = 0,
-  preserveBoundaryHeights = false,
-  stepped = false,
-  vectorized = false,
-  vectorSmoothing = 2,
-  steppedCellHeightsOverride?: number[]
-): { positions: number[]; indices: number[]; colorParts: Array<{ color: string; indices: number[] }> } {
-  if (stepped && cellMask && (!colorAssignments || !colors.length)) {
-    const mesh = buildSteppedCellMesh(
-      columns, rows, widthMm, heightMm,
-      steppedCellHeightsOverride ?? flattenSteppedOuterRim(buildBinaryCellHeights(heights, columns, rows), cellMask, columns, rows),
-      cellMask
-    );
-    const positions = mesh.vertices.flatMap(([x, y, z]) => [x - widthMm / 2, z, y - heightMm / 2]);
-    const indices = mesh.triangles.flatMap(([a, b, c]) => [a, c, b]);
-    return { positions, indices, colorParts: [] };
-  }
-  // Der Vektorpfad muss unabhängig von der Höhenklassifikation verwendet
-  // werden. Zuvor landete ein mehrfarbiges Wappen mit mehreren Helligkeiten
-  // in der Vorschau wieder im alten Rasterpfad, während nur der Export bereits
-  // vektorisiert war.
-  if ((preserveBoundaryHeights || vectorized) && cellMask && colorAssignments && colors.length) {
-    const solids = buildColoredMeshes(
-      columns,
-      rows,
-      widthMm,
-      heightMm,
-      heights,
-      cellMask,
-      colorAssignments,
-      colors,
-      sideColorIndex,
-      stepped,
-      vectorized,
-      vectorSmoothing,
-      steppedCellHeightsOverride
-    );
-    const positions: number[] = [];
-    const indices: number[] = [];
-    const colorParts: Array<{ color: string; indices: number[] }> = [];
-    for (const part of solids) {
-      const offset = positions.length / 3;
-      const highestVertexByPosition = new Map<string, number>();
-      for (const [x, y, z] of part.mesh.vertices) {
-        const key = `${x.toFixed(6)}:${y.toFixed(6)}`;
-        highestVertexByPosition.set(key, Math.max(highestVertexByPosition.get(key) ?? Number.NEGATIVE_INFINITY, z));
-      }
-      for (const [x, y, z] of part.mesh.vertices) {
-        positions.push(x - widthMm / 2, z, y - heightMm / 2);
-      }
-      const partIndices: number[] = [];
-      for (const [a, b, c] of part.mesh.triangles) {
-        partIndices.push(a + offset, c + offset, b + offset);
-        indices.push(a + offset, c + offset, b + offset);
-      }
-      // Nicht-Trägerfarben zeigen in der Vorschau ausschließlich ihre echte
-      // Deckfläche. Boden und Seiten der geschlossenen 0,4-mm-Farbkörper sind
-      // für den 3MF-Export nötig, würden von unten aber als farbige Löcher und
-      // Streifen durch den einheitlichen Tragkörper scheinen.
-      const visiblePartIndices: number[] = [];
-      for (const triangle of part.mesh.triangles) {
-        const visible = part.color === colors[sideColorIndex] || triangle.every((vertexIndex) => {
-          const [x, y, z] = part.mesh.vertices[vertexIndex];
-          return Math.abs(z - (highestVertexByPosition.get(`${x.toFixed(6)}:${y.toFixed(6)}`) ?? z)) < 1e-6;
-        });
-        if (visible) visiblePartIndices.push(
-          triangle[0] + offset,
-          triangle[2] + offset,
-          triangle[1] + offset
-        );
-      }
-      colorParts.push({ color: part.color, indices: visiblePartIndices });
-    }
-    return { positions, indices, colorParts };
-  }
-
-  // Flache einfarbige Wort-/Schriftlogos benötigen in der Vorschau nicht nur
-  // ihre Deckfläche, sondern auch Boden und Seitenwände. Andernfalls liegt die
-  // einzige sichtbare Fläche auf ihrer Z-Höhe über dem Raster und wirkt
-  // fälschlich schwebend.
-  if (preserveBoundaryHeights && cellMask && !colors.length) {
-    const solid = buildWatertightHeightMesh(columns, rows, widthMm, heightMm, heights, cellMask);
-    return {
-      positions: solid.vertices.flatMap(([x, y, z]) => [
-        x - widthMm / 2,
-        z,
-        y - heightMm / 2
-      ]),
-      indices: solid.triangles.flatMap(([a, b, c]) => [a, c, b]),
-      colorParts: []
-    };
-  }
-
-  // Die Vorschau darf die geglättete Exportkontur nicht durch erneutes grobes
-  // Downsampling wieder gezackt darstellen.
-  // Logo-Modelle werden mit bis zu 512 Rasterpunkten erzeugt. Die frühere
-  // Vorschaugrenze von 480 setzte solche Modelle trotzdem auf ungefähr die
-  // halbe Auflösung zurück (stride 2). Besonders an runden Außenkonturen waren
-  // dadurch deutlich sichtbare Polygonsegmente zu sehen, obwohl der Export
-  // feiner war. Bis 720 Punkte bleibt die Originalauflösung jetzt erhalten.
-  const stride = Math.max(1, Math.ceil(Math.max(columns, rows) / 720));
-  const xs = Array.from(new Set([...Array(Math.ceil((columns - 1) / stride) + 1)].map((_, i) => Math.min(i * stride, columns - 1))));
-  const ys = Array.from(new Set([...Array(Math.ceil((rows - 1) / stride) + 1)].map((_, i) => Math.min(i * stride, rows - 1))));
-  const previewColumns = xs.length;
-  const previewRows = ys.length;
-  const previewCells = Array.from({ length: (previewColumns - 1) * (previewRows - 1) }, (_, index) => {
-    if (!cellMask) return true;
-    const previewX = index % (previewColumns - 1), previewY = Math.floor(index / (previewColumns - 1));
-    let occupied = 0, total = 0;
-    for (let y = ys[previewY]; y < ys[previewY + 1]; y += 1) {
-      for (let x = xs[previewX]; x < xs[previewX + 1]; x += 1) {
-        occupied += Number(cellMask[y * (columns - 1) + x]);
-        total += 1;
-      }
-    }
-    return occupied >= Math.max(1, total * 0.5);
-  });
-  const boundaryPositions = buildSmoothedBoundaryPositions(previewColumns, previewRows, widthMm, heightMm, previewCells);
-  const previewColorAssignments = Array((previewColumns - 1) * (previewRows - 1)).fill(-1) as number[];
-  if (colorAssignments && colors.length) {
-    for (let y = 0; y < previewRows - 1; y += 1) {
-      for (let x = 0; x < previewColumns - 1; x += 1) {
-        const previewIndex = y * (previewColumns - 1) + x;
-        if (!previewCells[previewIndex]) continue;
-        const votes = new Map<number, number>();
-        for (let sourceY = ys[y]; sourceY < ys[y + 1]; sourceY += 1) {
-          for (let sourceX = xs[x]; sourceX < xs[x + 1]; sourceX += 1) {
-            const assignment = colorAssignments[sourceY * (columns - 1) + sourceX];
-            if (assignment >= 0) votes.set(assignment, (votes.get(assignment) ?? 0) + 1);
-          }
-        }
-        previewColorAssignments[previewIndex] = [...votes].sort((a, b) => b[1] - a[1])[0]?.[0] ?? sideColorIndex;
-      }
-    }
-    const detectedPreviewColors = previewColorAssignments.slice();
-    const colorAt = (x: number, y: number) =>
-      x < 0 || y < 0 || x >= previewColumns - 1 || y >= previewRows - 1
-        ? -1
-        : detectedPreviewColors[y * (previewColumns - 1) + x];
-    for (let y = 0; y < previewRows - 1; y += 1) {
-      for (let x = 0; x < previewColumns - 1; x += 1) {
-        const previewIndex = y * (previewColumns - 1) + x;
-        const color = detectedPreviewColors[previewIndex];
-        if (!previewCells[previewIndex] || color < 0 || color === sideColorIndex) continue;
-        const neighbors = [
-          colorAt(x - 1, y - 1), colorAt(x, y - 1), colorAt(x + 1, y - 1),
-          colorAt(x - 1, y),                           colorAt(x + 1, y),
-          colorAt(x - 1, y + 1), colorAt(x, y + 1), colorAt(x + 1, y + 1)
-        ];
-        if (neighbors.some((neighbor) => neighbor !== color)) previewColorAssignments[previewIndex] = sideColorIndex;
-      }
-    }
-  }
-  let baseHeight = Number.POSITIVE_INFINITY;
-  for (const height of heights) if (height < baseHeight) baseHeight = height;
-  if (!Number.isFinite(baseHeight)) baseHeight = 0;
-  const positions: number[] = [];
-  const indices: number[] = [];
-  const colorPartIndices = colors.map(() => [] as number[]);
-  for (let previewY = 0; previewY < previewRows; previewY += 1) {
-    for (let previewX = 0; previewX < previewColumns; previewX += 1) {
-      const x = xs[previewX], y = ys[previewY];
-      const boundary = boundaryPositions.get(previewY * previewColumns + previewX);
-      positions.push(
-        (boundary?.[0] ?? x * widthMm / (columns - 1)) - widthMm / 2,
-        boundary && !preserveBoundaryHeights ? baseHeight : heights[y * columns + x],
-        (boundary?.[1] ?? y * heightMm / (rows - 1)) - heightMm / 2
-      );
-    }
-  }
-  for (let y = 0; y < previewRows - 1; y += 1) {
-    for (let x = 0; x < previewColumns - 1; x += 1) {
-      if (!previewCells[y * (previewColumns - 1) + x]) continue;
-      const a = y * previewColumns + x;
-      const b = a + 1;
-      const c = a + previewColumns;
-      const d = c + 1;
-      const triangles = [a, d, b, a, c, d];
-      indices.push(...triangles);
-      if (colorAssignments && colors.length) {
-        const colorIndex = previewColorAssignments[y * (previewColumns - 1) + x];
-        colorPartIndices[colorIndex]?.push(...triangles);
-      }
-    }
-  }
-  return {
-    positions,
-    indices,
-    colorParts: colors.map((color, index) => ({ color, indices: colorPartIndices[index] })).filter((part) => part.indices.length)
-  };
-}
-
 export const reliefInternals = {
   buildCellMask, buildSubjectPixelMask, buildWordmarkPixelMask, buildWordmarkForegroundPixelMask, cleanSubjectPixelMask, applyBoundaryRim,
   expandPixelMask, expandPixelMaskPreservingHoles,
@@ -3048,5 +1100,5 @@ export const reliefInternals = {
   buildRaisedWordmarkCellHeights, flattenSteppedOuterRimPreservingRaised,
   smoothHeightField, analysePrintability, profileSettings, buildProductPixelMask, applyRaisedBorder,
   transformProductMesh, transformProductPreview, buildSolidOuterSilhouette,
-  wordmarkRasterTracePreset
+  wordmarkRasterTracePreset, suggestImageProfile
 };

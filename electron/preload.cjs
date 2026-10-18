@@ -4,6 +4,12 @@ contextBridge.exposeInMainWorld("desktop", Object.freeze({
   getVersion: () => ipcRenderer.invoke("app:version"),
   getAppMetrics: () => ipcRenderer.invoke("app:metrics"),
   checkForUpdate: () => ipcRenderer.invoke("app:checkUpdate"),
+  installUpdate: (downloadUrl) => ipcRenderer.invoke("app:installUpdate", downloadUrl),
+  onUpdateProgress: (callback) => {
+    const listener = (_event, progress) => callback(progress);
+    ipcRenderer.on("update:progress", listener);
+    return () => ipcRenderer.removeListener("update:progress", listener);
+  },
   getSettingsStatus: () => ipcRenderer.invoke("settings:status"),
   saveOpenAiKey: (apiKey, password) => ipcRenderer.invoke("settings:saveOpenAiKey", apiKey, password),
   unlockOpenAiKey: (password) => ipcRenderer.invoke("settings:unlockOpenAiKey", password),
