@@ -447,17 +447,15 @@ export async function createRelief(
           Math.max(4, options.smoothing),
           false,
           true,
-          options.includeBackground
-            ? {
-                enabled: true,
-                baseMm: options.baseMm,
-                reliefMm: options.reliefMm,
-                shape: options.shape,
-                cornerRadiusMm: 4,
-                borderMm: options.borderMm,
-                borderHeightMm: options.borderHeightMm
-              }
-            : undefined
+          {
+            enabled: options.includeBackground,
+            baseMm: options.baseMm,
+            reliefMm: options.reliefMm,
+            shape: options.shape,
+            cornerRadiusMm: 4,
+            borderMm: options.borderMm,
+            borderHeightMm: options.borderHeightMm
+          }
         )
       : steppedCellHeights && useWordmarkMask && options.includeBackground
         ? await buildLayeredCellVectorRelief(
