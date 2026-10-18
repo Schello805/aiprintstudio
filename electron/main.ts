@@ -30,6 +30,7 @@ const execFileAsync = promisify(execFile);
 
 type StoredSettings = {
   schemaVersion?: number;
+  openAiApiKey?: string;
   encryptedOpenAiKey?: string;
   openAiVault?: EncryptedApiKey;
   modelSetupAccepted?: boolean;
@@ -528,6 +529,10 @@ app.whenReady().then(async () => {
   await rm(previewDirectory(), { recursive: true, force: true });
   await mkdir(previewDirectory(), { recursive: true });
   await removeLegacyStoredOpenAiKey();
+  const initialSettings = await readSettings();
+  if (initialSettings.openAiApiKey) {
+    sessionOpenAiKey = initialSettings.openAiApiKey;
+  }
   // Frühere Versionen konnten ein optionales Modell laden, dessen öffentliche
   // Lizenz die Nutzung in der EU ausschließt. Das Update entfernt diese
   // Gewichte einschließlich abgebrochener Downloads automatisch.
@@ -576,30 +581,40 @@ app.whenReady().then(async () => {
   });
   ipcMain.handle("settings:status", async () => {
     const settings = await readSettings();
+    const isConfigured = Boolean(sessionOpenAiKey || settings.openAiApiKey);
     return {
-      openAiConfigured: Boolean(sessionOpenAiKey),
-      openAiStored: Boolean(settings.openAiVault),
+      openAiConfigured: isConfigured,
+      openAiStored: isConfigured || Boolean(settings.openAiVault),
       modelSetupAccepted: Boolean(settings.modelSetupAccepted),
-      storageVersion: settings.schemaVersion ?? 0
-      ,depthModelAvailable: depthModelAvailable()
+      storageVersion: settings.schemaVersion ?? 0,
+      depthModelAvailable: depthModelAvailable()
     };
   });
-  ipcMain.handle("settings:saveOpenAiKey", async (_event, apiKey: string, password: string) => {
-    const normalized = apiKey.trim();
-    const vault = await encryptApiKey(normalized, password);
+  ipcMain.handle("settings:saveOpenAiKey", async (_event, apiKey: string) => {
+    const normalized = (apiKey || "").trim();
+    if (!normalized) throw new Error("Der API-Schlüssel darf nicht leer sein.");
     const settings = await readSettings();
-    settings.openAiVault = vault;
+    settings.openAiApiKey = normalized;
+    delete settings.openAiVault;
+    delete settings.encryptedOpenAiKey;
     await writeSettings(settings);
     sessionOpenAiKey = normalized;
   });
-  ipcMain.handle("settings:unlockOpenAiKey", async (_event, password: string) => {
+  ipcMain.handle("settings:unlockOpenAiKey", async (_event, password?: string) => {
     const settings = await readSettings();
-    if (!settings.openAiVault) throw new Error("Es ist kein verschlüsselter OpenAI-Schlüssel gespeichert.");
-    sessionOpenAiKey = await decryptApiKey(settings.openAiVault, password);
+    if (sessionOpenAiKey) return;
+    if (settings.openAiApiKey) {
+      sessionOpenAiKey = settings.openAiApiKey;
+      return;
+    }
+    if (settings.openAiVault && password) {
+      sessionOpenAiKey = await decryptApiKey(settings.openAiVault, password);
+    }
   });
   ipcMain.handle("settings:removeOpenAiKey", async () => {
     sessionOpenAiKey = null;
     const settings = await readSettings();
+    delete settings.openAiApiKey;
     delete settings.openAiVault;
     delete settings.encryptedOpenAiKey;
     await writeSettings(settings);

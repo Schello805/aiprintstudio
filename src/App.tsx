@@ -274,6 +274,7 @@ export function App() {
     const selected = await window.desktop.createTextImage(options);
     applySelectedImage(selected);
     setStudioTool("text");
+    setProductShape((current) => current === "source" ? "rounded" : current);
     setTextDialogOpen(false);
   }
 
@@ -289,8 +290,9 @@ export function App() {
       // Eine Reparatur darf niemals das vom Nutzer gewählte Verfahren ändern.
       // Insbesondere bleibt ein Wappen im Vektormodus und wird nicht mehr
       // stillschweigend als Wortlogo neu interpretiert.
+      const textWithBaseplate = studioTool === "text" && includeLogoBackground;
       const effectiveMode = resolveReliefMode(processingMode, file.suggestedProfile);
-      const wordmarkWithBackground = effectiveMode === "wordmark" && (repair || includeLogoBackground);
+      const wordmarkWithBackground = (effectiveMode === "wordmark" && (repair || includeLogoBackground)) || textWithBaseplate;
       const effectiveResolution = wordmarkWithBackground
         // Feine Logo-Schriften enthalten oft Antialias-Rauschen. 512px erkennt
         // dieses Rauschen als echte Mikro-Konturen; 256px liefert sichtbar
@@ -314,7 +316,9 @@ export function App() {
                 : "auto";
       const request: Parameters<NonNullable<typeof window.desktop>["createRelief"]>[2] = {
         sourceName: file.name,
-        widthMm, baseMm: studioTool === "lithophane" ? baseMm : 1.6, reliefMm,
+        widthMm,
+        baseMm: (studioTool === "lithophane" || textWithBaseplate) ? baseMm : 1.6,
+        reliefMm,
         resolution: effectiveResolution,
         invert: false, profile, smoothing: automaticSmoothing, detail: automaticDetail,
         processingMode: effectiveMode,
@@ -329,8 +333,8 @@ export function App() {
         colorMapping: multicolorEnabled ? colorMapping : [],
         sideColorIndex: multicolorEnabled ? sideColorIndex : 0,
         outputMode: studioTool === "lithophane" ? "lithophane" : "relief",
-        shape: productShape,
-        borderMm,
+        shape: (studioTool === "lithophane" || textWithBaseplate) ? productShape : "source",
+        borderMm: textWithBaseplate ? borderMm : (studioTool === "lithophane" ? borderMm : 0),
         borderHeightMm: borderMm > 0 ? reliefMm : 0,
         holeDiameterMm: studioTool === "lithophane" ? holeDiameterMm : 0,
         holePosition: "top-center",
@@ -704,9 +708,50 @@ export function App() {
               <>
                   <div className="parameter-grid essential-parameters">
                     <NumberField label="BREITE" tooltip={parameterTooltips.width} value={widthMm} unit="mm" min={20} max={300} step={5} setValue={setWidthMm} />
-                    {studioTool === "lithophane" && <NumberField label="MATERIALBASIS" tooltip={parameterTooltips.base} value={baseMm} unit="mm" min={0.8} max={10} step={0.2} setValue={setBaseMm} />}
-                    <NumberField label="RELIEF" tooltip={parameterTooltips.relief} value={reliefMm} unit="mm" min={0.5} max={20} step={0.5} setValue={setReliefMm} />
+                    {(studioTool === "lithophane" || (studioTool === "text" && includeLogoBackground)) && (
+                      <NumberField label="PLATTENSTÄRKE" tooltip="Stärke der Grundplatte unter dem Schriftzug." value={baseMm} unit="mm" min={0.8} max={10} step={0.2} setValue={setBaseMm} />
+                    )}
+                    <NumberField label="RELIEFHÖHE" tooltip={parameterTooltips.relief} value={reliefMm} unit="mm" min={0.5} max={20} step={0.5} setValue={setReliefMm} />
                   </div>
+                  {studioTool === "text" && (
+                    <div className="text-baseplate-card" style={{ marginBottom: 12 }}>
+                      <button
+                        className={includeLogoBackground ? "background-toggle selected" : "background-toggle"}
+                        onClick={() => {
+                          setIncludeLogoBackground((current) => {
+                            const next = !current;
+                            if (next && productShape === "source") setProductShape("rounded");
+                            return next;
+                          });
+                        }}
+                        aria-pressed={includeLogoBackground}
+                      >
+                        <Layers3 />
+                        <div>
+                          <strong>Platte unter dem Text</strong>
+                          <span>{includeLogoBackground ? "Geschlossene Grundplatte als Schild unter den Buchstaben" : "Freistehende Buchstaben ohne Grundplatte"}</span>
+                        </div>
+                        <SettingTooltip text={"Erzeugt eine durchgehende Grundplatte unter dem Text (z. B. für Türschilder, Namensschilder oder mehrfarbigen AMS-Druck mit andersfarbiger Unterlage).\nDeaktiviert: Die Buchstaben werden als einzelne, freistehende Körper gedruckt."} />
+                        <span className="toggle-track"><span /></span>
+                      </button>
+                      {includeLogoBackground && (
+                        <div className="product-shape-row" style={{ marginTop: 8 }}>
+                          <span>PLATTENFORM</span>
+                          <div>
+                            {(["rounded", "rectangle", "circle"] as ProductShape[]).map((shape) => (
+                              <button
+                                className={productShape === shape ? "selected" : ""}
+                                onClick={() => setProductShape(shape)}
+                                key={shape}
+                              >
+                                {({ rectangle: "Rechteck", rounded: "Abgerundet", circle: "Oval / Kreis", shield: "Wappen", hexagon: "Sechseck", heart: "Herz", source: "Motiv" })[shape] ?? shape}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                   {studioTool === "lithophane" && <div className="product-options">
                     <div className="product-shape-row">
                       <span>AUSSENFORM</span>

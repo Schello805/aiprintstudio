@@ -22,7 +22,7 @@ export function Settings() {
   return (
     <>
       <section className="settings-grid">
-        <article><div className="setting-icon"><Sparkles /></div><div><h3>OpenAI · Prompt zu 3D</h3><p>{status.openAiConfigured ? "Der lokal verschlüsselte API-Schlüssel ist für diese Sitzung entsperrt." : status.openAiStored ? "Der API-Schlüssel ist lokal verschlüsselt und aktuell gesperrt." : "Speichert den API-Schlüssel lokal verschlüsselt – ohne macOS-Schlüsselbund."}</p></div><div className="setting-action">{status.openAiConfigured ? <span className="tag"><CheckCircle2 /> Entsperrt</span> : status.openAiStored ? <span className="tag neutral">Gesperrt</span> : <span className="tag neutral">Nicht eingerichtet</span>}<button onClick={() => setDialog("openai")}>{status.openAiStored ? "Verwalten" : "Einrichten"}</button></div></article>
+        <article><div className="setting-icon"><Sparkles /></div><div><h3>OpenAI · Prompt zu 3D</h3><p>{status.openAiConfigured ? "Der API-Schlüssel ist lokal gespeichert und direkt ohne Passwort einsatzbereit." : "Speichert deinen OpenAI API-Schlüssel lokal auf deinem Mac – ohne Passwort-Abfrage."}</p></div><div className="setting-action">{status.openAiConfigured ? <span className="tag"><CheckCircle2 /> Bereit</span> : <span className="tag neutral">Nicht eingerichtet</span>}<button onClick={() => setDialog("openai")}>{status.openAiConfigured ? "Verwalten" : "Einrichten"}</button></div></article>
         <article><div className="setting-icon"><Layers3 /></div><div><h3>Lokale Relief-Engine</h3><p>Integriert · erzeugt wasserdichte STL- und 3MF-Dateien vollständig offline.</p></div><button onClick={() => setDialog("model")}>Details</button></article>
         <article><div className="setting-icon"><Box /></div><div><h3>Tiefenerkennung für Fotos</h3><p>Erzeugt räumliche Tiefe direkt auf deinem Mac · keine Cloud.</p></div><span className={status.depthModelAvailable ? "tag" : "tag neutral"}>{status.depthModelAvailable ? "Bereit" : "Aktuelles Update nötig"}</span></article>
         <UpdateSettings />
@@ -113,49 +113,33 @@ function UpdateSettings() {
 
 function OpenAiDialog({ status, close, refresh }: { status: SettingsStatus; close: () => void; refresh: () => Promise<void> }) {
   const [key, setKey] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmation, setConfirmation] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   async function save() {
     setBusy(true); setMessage(null);
     try {
-      if (!window.desktop) throw new Error("Die Desktop-Verbindung ist nicht verfügbar. Bitte installiere das aktuelle Update und starte die App neu.");
-      if (password !== confirmation) throw new Error("Die beiden Passwörter stimmen nicht überein.");
-      await window.desktop.saveOpenAiKey(key, password);
+      if (!window.desktop) throw new Error("Die Desktop-Verbindung ist nicht verfügbar.");
+      await window.desktop.saveOpenAiKey(key);
       await refresh();
-      setMessage("Der API-Schlüssel wurde lokal verschlüsselt gespeichert und für diese Sitzung entsperrt.");
+      setMessage("Der API-Schlüssel wurde gespeichert und steht dauerhaft ohne Passwort zur Verfügung.");
       setKey("");
-      setPassword("");
-      setConfirmation("");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Der Schlüssel konnte nicht gespeichert werden.");
     } finally { setBusy(false); }
   }
 
-  async function unlock() {
-    setBusy(true); setMessage(null);
-    try {
-      if (!window.desktop) throw new Error("Die Desktop-Verbindung ist nicht verfügbar.");
-      await window.desktop.unlockOpenAiKey(password);
-      await refresh();
-      setMessage("Der API-Schlüssel ist für diese Sitzung entsperrt.");
-      setPassword("");
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Der Schlüssel konnte nicht entsperrt werden.");
-    } finally { setBusy(false); }
-  }
-
   async function remove() {
+    setBusy(true); setMessage(null);
     try {
       if (!window.desktop) throw new Error("Die Desktop-Verbindung ist nicht verfügbar.");
       await window.desktop.removeOpenAiKey();
       await refresh();
-      setMessage("Der Sitzungsschlüssel wurde entfernt.");
+      setMessage("Der gespeicherte API-Schlüssel wurde entfernt.");
+      setKey("");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Der Schlüssel konnte nicht entfernt werden.");
-    }
+    } finally { setBusy(false); }
   }
 
   return (
@@ -164,29 +148,26 @@ function OpenAiDialog({ status, close, refresh }: { status: SettingsStatus; clos
         <button className="modal-close" onClick={close} aria-label="Dialog schließen"><X /></button>
         <div className="modal-icon"><Sparkles /></div>
         <p className="eyebrow">PROMPT ZU 3D</p>
-        <h2 id="openai-title">{status.openAiConfigured ? "OpenAI-Schlüssel ist entsperrt" : status.openAiStored ? "OpenAI-Schlüssel entsperren" : "OpenAI-Schlüssel sicher speichern"}</h2>
-        <p>Du legst ein eigenes AI-Print-Studio-Passwort fest. Damit wird dein API-Schlüssel lokal verschlüsselt. Weder dein Mac-Passwort noch der macOS-Schlüsselbund werden verwendet.</p>
-        <div className="notice"><strong>Wichtig:</strong> Das App-Passwort wird nicht gespeichert und kann nicht wiederhergestellt werden. Wenn du es vergisst, musst du den gespeicherten Eintrag löschen und den OpenAI-Key erneut hinterlegen.</div>
-        {!status.openAiStored && <>
-          <label htmlFor="openai-key">OpenAI API-Schlüssel</label>
-          <input id="openai-key" type="password" value={key} onChange={(event) => setKey(event.target.value)} placeholder="sk-••••••••••••••••••••" autoComplete="off" spellCheck={false} />
-        </>}
-        {!status.openAiConfigured && <>
-          <label htmlFor="vault-password">AI-Print-Studio-Passwort</label>
-          <input id="vault-password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Mindestens 10 Zeichen" autoComplete="off" spellCheck={false} />
-        </>}
-        {!status.openAiStored && <>
-          <label htmlFor="vault-password-confirmation">App-Passwort wiederholen</label>
-          <input id="vault-password-confirmation" type="password" value={confirmation} onChange={(event) => setConfirmation(event.target.value)} placeholder="Passwort erneut eingeben" autoComplete="off" spellCheck={false} />
-        </>}
-        {status.openAiConfigured && <div className="notice">Der entschlüsselte Schlüssel ist nur während der laufenden App-Sitzung verfügbar. Zum Ersetzen lösche den Tresor und richte ihn neu ein.</div>}
+        <h2 id="openai-title">{status.openAiConfigured ? "OpenAI-Schlüssel verwalten" : "OpenAI-Schlüssel hinterlegen"}</h2>
+        <p>Der API-Schlüssel wird lokal auf deinem Mac gespeichert und steht dir direkt ohne Passwort-Eingabe zur Verfügung.</p>
+        {status.openAiConfigured && (
+          <div className="notice"><CheckCircle2 /> Ein OpenAI API-Schlüssel ist aktuell hinterlegt und einsatzbereit.</div>
+        )}
+        <label htmlFor="openai-key">{status.openAiConfigured ? "Neuen Schlüssel eingeben (ersetzt bisherigen)" : "OpenAI API-Schlüssel"}</label>
+        <input
+          id="openai-key"
+          type="password"
+          value={key}
+          onChange={(event) => setKey(event.target.value)}
+          placeholder="sk-••••••••••••••••••••"
+          autoComplete="off"
+          spellCheck={false}
+        />
         {message && <div className="notice">{message}</div>}
         <div className="modal-actions">
-          {status.openAiStored && <button className="danger-button" onClick={() => void remove()}>Verschlüsselten Schlüssel löschen</button>}
-          <button className="secondary-button" onClick={close}>Abbrechen</button>
-          {status.openAiStored && !status.openAiConfigured
-            ? <button className="primary-button" onClick={() => void unlock()} disabled={busy || password.length < 10}>{busy ? "Entsperrt …" : "Schlüssel entsperren"}</button>
-            : !status.openAiStored && <button className="primary-button" onClick={() => void save()} disabled={busy || key.length < 20 || password.length < 10 || confirmation.length < 10}>{busy ? "Verschlüsselt …" : "Verschlüsselt speichern"}</button>}
+          {status.openAiConfigured && <button className="danger-button" onClick={() => void remove()} disabled={busy}>Schlüssel löschen</button>}
+          <button className="secondary-button" onClick={close}>Schließen</button>
+          <button className="primary-button" onClick={() => void save()} disabled={busy || key.trim().length < 10}>{busy ? "Speichert …" : "Schlüssel speichern"}</button>
         </div>
       </section>
     </div>

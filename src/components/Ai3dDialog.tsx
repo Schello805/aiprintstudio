@@ -23,8 +23,6 @@ export function Ai3dDialog({ close }: { close: () => void }) {
   const [result, setResult] = useState<Ai3dResult | null>(null);
   const [previousResults, setPreviousResults] = useState<Ai3dResult[]>([]);
   const [apiStatus, setApiStatus] = useState<SettingsStatus | null>(null);
-  const [unlockPassword, setUnlockPassword] = useState("");
-  const [unlockBusy, setUnlockBusy] = useState(false);
   const [models, setModels] = useState<Ai3dModel[]>([]);
   const [selectedModel, setSelectedModel] = useState<Ai3dModel["id"]>(() => {
     const saved = localStorage.getItem("ai-print-studio.ai3d-model");
@@ -51,16 +49,19 @@ export function Ai3dDialog({ close }: { close: () => void }) {
   useEffect(() => window.desktop?.onAi3dProgress((nextProgress) => setProgress(nextProgress)), []);
   useEffect(() => localStorage.setItem("ai-print-studio.ai3d-model", selectedModel), [selectedModel]);
 
-  async function unlockApiKey() {
-    setUnlockBusy(true); setError(null);
+  const [inlineApiKey, setInlineApiKey] = useState("");
+  const [inlineBusy, setInlineBusy] = useState(false);
+
+  async function saveInlineKey() {
+    setInlineBusy(true); setError(null);
     try {
       if (!window.desktop) throw new Error("Die Desktop-Verbindung ist nicht verfügbar.");
-      await window.desktop.unlockOpenAiKey(unlockPassword);
+      await window.desktop.saveOpenAiKey(inlineApiKey);
       await refreshApiStatus();
-      setUnlockPassword("");
+      setInlineApiKey("");
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "Der API-Schlüssel konnte nicht entsperrt werden.");
-    } finally { setUnlockBusy(false); }
+      setError(nextError instanceof Error ? nextError.message : "Der API-Schlüssel konnte nicht gespeichert werden.");
+    } finally { setInlineBusy(false); }
   }
   async function submit(instruction: string, existing?: Ai3dResult) {
     setProgress({
@@ -100,35 +101,34 @@ export function Ai3dDialog({ close }: { close: () => void }) {
         <div className="modal-icon"><Sparkles /></div>
         <p className="eyebrow">KI · VOLLSTÄNDIGES 3D-OBJEKT</p>
         <h2 id="ai3d-title">{result ? "3D-Modell prüfen und weiterentwickeln" : "Prompt zu druckbarer STL"} <span className="beta-badge">BETA</span></h2>
-        {apiStatus?.openAiStored && !apiStatus.openAiConfigured && (
-          <div className="ai-unlock-panel">
-            <ShieldCheck />
-            <div>
-              <strong>API-Schlüssel für diese Sitzung entsperren</strong>
-              <p>Der Schlüssel ist verschlüsselt gespeichert. Dein App-Passwort entschlüsselt ausschließlich diesen OpenAI-Schlüssel im Arbeitsspeicher; es wird nicht gespeichert.</p>
-              <label htmlFor="ai3d-vault-password">AI-Print-Studio-Passwort</label>
-              <div className="ai-unlock-actions">
+        {!apiStatus?.openAiConfigured && (
+          <div className="ai-key-inline-panel notice">
+            <Sparkles />
+            <div style={{ flex: 1 }}>
+              <strong>OpenAI API-Schlüssel hinterlegen</strong>
+              <p>Für Prompt zu 3D wird ein OpenAI API-Schlüssel benötigt. Er wird lokal gespeichert und steht dir direkt ohne Passwort zur Verfügung.</p>
+              <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
                 <input
-                  id="ai3d-vault-password"
                   type="password"
-                  value={unlockPassword}
-                  onChange={(event) => setUnlockPassword(event.target.value)}
-                  onKeyDown={(event) => event.key === "Enter" && unlockPassword.length >= 10 && void unlockApiKey()}
-                  placeholder="Mindestens 10 Zeichen"
+                  value={inlineApiKey}
+                  onChange={(event) => setInlineApiKey(event.target.value)}
+                  placeholder="sk-••••••••••••••••••••"
                   autoComplete="off"
-                  disabled={unlockBusy}
+                  spellCheck={false}
+                  style={{ flex: 1, padding: "8px 12px", borderRadius: 8, background: "#1c222b", border: "1px solid #333d4b", color: "#f3f4f6" }}
                 />
-                <button className="primary-button" onClick={() => void unlockApiKey()} disabled={unlockBusy || unlockPassword.length < 10}>
-                  {unlockBusy ? "Entsperrt …" : "Entsperren"}
+                <button
+                  className="primary-button"
+                  onClick={() => void saveInlineKey()}
+                  disabled={inlineBusy || inlineApiKey.trim().length < 10}
+                >
+                  {inlineBusy ? "Speichert …" : "Schlüssel speichern"}
                 </button>
               </div>
             </div>
           </div>
         )}
-        {apiStatus && !apiStatus.openAiStored && (
-          <div className="notice error">Es ist noch kein OpenAI API-Schlüssel gespeichert. Hinterlege ihn einmal unter Einstellungen → OpenAI.</div>
-        )}
-        {apiStatus?.openAiConfigured && !result && <div className="notice"><CheckCircle2 /> Der gespeicherte OpenAI API-Schlüssel ist für diese Sitzung entsperrt.</div>}
+        {apiStatus?.openAiConfigured && !result && <div className="notice"><CheckCircle2 /> Der gespeicherte OpenAI API-Schlüssel ist einsatzbereit.</div>}
         {!result && <>
           <p>OpenAI erstellt einen validierten CAD-Bauplan aus druckbaren Grundkörpern; Vorschau, Geometrie und STL erzeugt die App anschließend lokal.</p>
           <div className="ai-model-picker">

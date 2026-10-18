@@ -25,8 +25,8 @@ interface Window {
       storageVersion: number;
       depthModelAvailable: boolean;
     }>;
-    saveOpenAiKey: (apiKey: string, password: string) => Promise<void>;
-    unlockOpenAiKey: (password: string) => Promise<void>;
+    saveOpenAiKey: (apiKey: string, password?: string) => Promise<void>;
+    unlockOpenAiKey: (password?: string) => Promise<void>;
     removeOpenAiKey: () => Promise<void>;
     acceptModelSetup: () => Promise<void>;
     selectImage: () => Promise<{

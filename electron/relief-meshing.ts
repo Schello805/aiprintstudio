@@ -417,6 +417,68 @@ export function buildVectorExtrudedMesh(
   return { vertices, triangles };
 }
 
+export type LayeredBaseplateOptions = {
+  enabled: boolean;
+  baseMm: number;
+  reliefMm: number;
+  shape?: "rectangle" | "rounded" | "circle" | "shield" | "hexagon" | "heart" | "source";
+  cornerRadiusMm?: number;
+  borderMm?: number;
+  borderHeightMm?: number;
+};
+
+export function buildRoundedRectPolygon(
+  widthMm: number,
+  heightMm: number,
+  radiusMm = 4
+): Array<[number, number]> {
+  const r = Math.max(0, Math.min(radiusMm, widthMm / 2, heightMm / 2));
+  if (r <= 0.1) {
+    return [
+      [0, 0],
+      [widthMm, 0],
+      [widthMm, heightMm],
+      [0, heightMm],
+      [0, 0]
+    ];
+  }
+  const points: Array<[number, number]> = [];
+  const segmentsPerCorner = 8;
+  const corners: Array<{ cx: number; cy: number; startAngle: number }> = [
+    { cx: widthMm - r, cy: r, startAngle: -Math.PI / 2 },
+    { cx: widthMm - r, cy: heightMm - r, startAngle: 0 },
+    { cx: r, cy: heightMm - r, startAngle: Math.PI / 2 },
+    { cx: r, cy: r, startAngle: Math.PI }
+  ];
+  for (const corner of corners) {
+    for (let step = 0; step <= segmentsPerCorner; step += 1) {
+      const angle = corner.startAngle + (step / segmentsPerCorner) * (Math.PI / 2);
+      points.push([
+        corner.cx + Math.cos(angle) * r,
+        corner.cy + Math.sin(angle) * r
+      ]);
+    }
+  }
+  points.push([points[0][0], points[0][1]]);
+  return points;
+}
+
+export function buildEllipsePolygon(
+  widthMm: number,
+  heightMm: number,
+  segments = 48
+): Array<[number, number]> {
+  const points: Array<[number, number]> = [];
+  const rx = widthMm / 2;
+  const ry = heightMm / 2;
+  for (let step = 0; step < segments; step += 1) {
+    const angle = (step / segments) * 2 * Math.PI;
+    points.push([rx + Math.cos(angle) * rx, ry + Math.sin(angle) * ry]);
+  }
+  points.push([points[0][0], points[0][1]]);
+  return points;
+}
+
 let manifoldModulePromise: ReturnType<typeof ManifoldModule> | undefined;
 
 export async function buildLayeredVectorRelief(
@@ -427,7 +489,9 @@ export async function buildLayeredVectorRelief(
   heights: number[],
   cellMask: boolean[],
   smoothing = 8,
-  stabilizeOuterWall = true
+  stabilizeOuterWall = true,
+  isText = false,
+  baseplate?: LayeredBaseplateOptions
 ): Promise<Mesh> {
   const cellColumns = columns - 1;
   const cellHeights = cellMask.map((occupied, cell) => {
@@ -452,7 +516,7 @@ export async function buildLayeredVectorRelief(
     }
     return bestHeight;
   });
-  return buildLayeredCellVectorRelief(columns, rows, widthMm, heightMm, cellHeights, cellMask, smoothing, stabilizeOuterWall);
+  return buildLayeredCellVectorRelief(columns, rows, widthMm, heightMm, cellHeights, cellMask, smoothing, stabilizeOuterWall, isText, baseplate);
 }
 
 export async function buildLayeredCellVectorRelief(
@@ -463,18 +527,23 @@ export async function buildLayeredCellVectorRelief(
   cellHeights: number[],
   cellMask: boolean[],
   smoothing = 8,
-  stabilizeOuterWall = true
+  stabilizeOuterWall = true,
+  isText = false,
+  baseplate?: LayeredBaseplateOptions
 ): Promise<Mesh> {
   const cellColumns = columns - 1;
-  if (stabilizeOuterWall) stabilizeEmblemOuterWallHeights(cellHeights, cellMask, columns, rows, 1);
+  if (stabilizeOuterWall && !isText) stabilizeEmblemOuterWallHeights(cellHeights, cellMask, columns, rows, 1);
   const levels = [...new Set(cellHeights.filter((height) => height > 0).map((height) => Number(height.toFixed(4))))]
     .sort((a, b) => a - b);
-  if (!levels.length) return { vertices: [], triangles: [] };
+  if (!levels.length && !baseplate?.enabled) return { vertices: [], triangles: [] };
 
   manifoldModulePromise ??= ManifoldModule();
   const manifoldModule = await manifoldModulePromise;
   manifoldModule.setup();
   const solids: InstanceType<typeof manifoldModule.Manifold>[] = [];
+
+  const effectiveBottom = baseplate?.enabled && baseplate.baseMm > 0 ? baseplate.baseMm : 0;
+
   const pushSolid = (mask: boolean[], bottom: number, top: number) => {
     if (!mask.some(Boolean) || top <= bottom + 1e-6) return;
     const paddedColumns = cellColumns + 2;
@@ -485,31 +554,61 @@ export async function buildLayeredCellVectorRelief(
     }
     const geometry = contours().size([paddedColumns, paddedRows]).smooth(true).thresholds([0.5])(padded)[0];
     const polygons = geometry.coordinates.flatMap((polygon) => polygon.map((ring) =>
-      smoothVectorRing(ring as Array<[number, number]>, smoothing).map(([x, y]) => [
+      (isText ? simplifyTextRing(ring as Array<[number, number]>) : smoothVectorRing(ring as Array<[number, number]>, smoothing)).map(([x, y]) => [
         (x - 1) * widthMm / cellColumns,
         (y - 1) * heightMm / (rows - 1)
       ] as [number, number])
     )).filter((ring) => ring.length >= 3);
     if (!polygons.length) return;
-    const overlap = bottom > 0 ? 0.01 : 0;
+    const overlap = bottom > 0 ? 0.02 : 0;
     const solid = new manifoldModule.CrossSection(polygons, "EvenOdd")
-      // Nur minimal vereinfachen: stärkere Vereinfachung erzeugt bei
-      // Wappen sichtbar abgeflachte Außenwände, auch wenn die Kontur oben
-      // korrekt wirkt.
-      .simplify(0.012)
+      // Für Text minimalere Vereinfachung, damit Konturen und scharfe Ecken messerscharf bleiben
+      .simplify(isText ? 0.005 : 0.012)
       .extrude(top - bottom + overlap)
       .translate([0, 0, bottom - overlap]);
     if (!solid.isEmpty()) solids.push(solid);
   };
 
-  // Wappen werden als echte, nicht überlappende Höhenkörper gebaut. Der alte
-  // additive Aufbau extrudierte für jede Stufe erneut die komplette Maske
-  // "alle Zellen ab dieser Höhe". Im Slicer/Tinkercad sah das wie übereinander
-  // liegende Platten mit horizontalen Linien aus. Jetzt bekommt jede erkannte
-  // Fläche genau einen Körper von der Unterseite bis zu ihrer Zielhöhe.
+  // Wenn eine Grundplatte unter dem Text gewünscht ist, wird sie als massiver Körper
+  // von z = 0 bis z = baseMm extrudiert und über Manifold-CSG nahtlos mit den Buchstaben verschmolzen.
+  if (baseplate?.enabled && baseplate.baseMm > 0) {
+    const basePolygon = baseplate.shape === "circle"
+      ? buildEllipsePolygon(widthMm, heightMm)
+      : baseplate.shape === "rounded"
+        ? buildRoundedRectPolygon(widthMm, heightMm, baseplate.cornerRadiusMm ?? 4)
+        : buildRoundedRectPolygon(widthMm, heightMm, 0);
+    const baseSolid = new manifoldModule.CrossSection([basePolygon], "EvenOdd")
+      .extrude(baseplate.baseMm);
+    if (!baseSolid.isEmpty()) solids.push(baseSolid);
+
+    if (baseplate.borderMm && baseplate.borderMm > 0) {
+      const borderHeight = (baseplate.borderHeightMm && baseplate.borderHeightMm > 0)
+        ? baseplate.borderHeightMm
+        : baseplate.reliefMm;
+      if (borderHeight > 0) {
+        const outerCross = new manifoldModule.CrossSection([basePolygon], "EvenOdd");
+        const b = Math.min(baseplate.borderMm, widthMm * 0.2, heightMm * 0.2);
+        const innerPolygon = baseplate.shape === "circle"
+          ? buildEllipsePolygon(Math.max(1, widthMm - b * 2), Math.max(1, heightMm - b * 2))
+              .map(([x, y]) => [x + b, y + b] as [number, number])
+          : baseplate.shape === "rounded"
+            ? buildRoundedRectPolygon(Math.max(1, widthMm - b * 2), Math.max(1, heightMm - b * 2), Math.max(0, (baseplate.cornerRadiusMm ?? 4) - b))
+                .map(([x, y]) => [x + b, y + b] as [number, number])
+            : buildRoundedRectPolygon(Math.max(1, widthMm - b * 2), Math.max(1, heightMm - b * 2), 0)
+                .map(([x, y]) => [x + b, y + b] as [number, number]);
+        const innerCross = new manifoldModule.CrossSection([innerPolygon], "EvenOdd");
+        const borderCross = outerCross.subtract(innerCross);
+        const borderSolid = borderCross
+          .extrude(borderHeight + 0.02)
+          .translate([0, 0, baseplate.baseMm - 0.02]);
+        if (!borderSolid.isEmpty()) solids.push(borderSolid);
+      }
+    }
+  }
+
   for (const top of levels) {
     const mask = cellHeights.map((height, cell) => cellMask[cell] && height >= top - 1e-6);
-    pushSolid(mask, 0, top);
+    pushSolid(mask, effectiveBottom, top);
   }
   if (!solids.length) return { vertices: [], triangles: [] };
   const unified = manifoldModule.Manifold.union(solids);
@@ -528,7 +627,12 @@ export async function buildLayeredCellVectorRelief(
   }
   unified.delete();
   solids.forEach((solid) => solid.delete());
-  return weldMeshVertices(snapMeshZToLevels({ vertices, triangles }, [0, ...levels]), 5);
+  const snapLevels = [
+    0,
+    ...(baseplate?.enabled && baseplate.baseMm > 0 ? [baseplate.baseMm] : []),
+    ...levels
+  ];
+  return weldMeshVertices(snapMeshZToLevels({ vertices, triangles }, snapLevels), 5);
 }
 
 export function snapMeshZToLevels(mesh: Mesh, levels: number[], epsilon = 0.035): Mesh {
@@ -752,6 +856,118 @@ export function smoothVectorRing(source: Array<[number, number]>, smoothing = 2)
     ring = resampleClosedRing(ring, 0.85);
   }
   return ring;
+}
+
+function perpendicularDistance(
+  point: [number, number],
+  lineStart: [number, number],
+  lineEnd: [number, number]
+): number {
+  const dx = lineEnd[0] - lineStart[0];
+  const dy = lineEnd[1] - lineStart[1];
+  const magSq = dx * dx + dy * dy;
+  if (magSq < 1e-10) {
+    return Math.hypot(point[0] - lineStart[0], point[1] - lineStart[1]);
+  }
+  const u = Math.max(0, Math.min(1, ((point[0] - lineStart[0]) * dx + (point[1] - lineStart[1]) * dy) / magSq));
+  const projX = lineStart[0] + u * dx;
+  const projY = lineStart[1] + u * dy;
+  return Math.hypot(point[0] - projX, point[1] - projY);
+}
+
+function rdpSimplify(
+  points: Array<[number, number]>,
+  epsilon: number
+): Array<[number, number]> {
+  if (points.length <= 2) return points;
+  let maxDist = 0;
+  let maxIdx = 0;
+  const start = points[0];
+  const end = points[points.length - 1];
+
+  for (let i = 1; i < points.length - 1; i += 1) {
+    const d = perpendicularDistance(points[i], start, end);
+    if (d > maxDist) {
+      maxDist = d;
+      maxIdx = i;
+    }
+  }
+
+  if (maxDist > epsilon) {
+    const left = rdpSimplify(points.slice(0, maxIdx + 1), epsilon);
+    const right = rdpSimplify(points.slice(maxIdx), epsilon);
+    return [...left.slice(0, -1), ...right];
+  }
+  return [start, end];
+}
+
+export function simplifyTextRing(
+  source: Array<[number, number]>,
+  epsilon = 0.36
+): Array<[number, number]> {
+  let ring = source.slice(0, -1);
+  if (ring.length < 4) return source;
+
+  ring = ring.filter((point, index) => {
+    const previous = ring[(index - 1 + ring.length) % ring.length];
+    return Math.hypot(point[0] - previous[0], point[1] - previous[1]) > 1e-4;
+  });
+  if (ring.length < 4) return source;
+
+  // Suche den Punkt mit der schärfsten Richtungsänderung als Start-/Endpunkt für RDP,
+  // damit keine scharfen Schrift-Ecken (z. B. 90°-Kanten von T, L, E, H) abgeschnitten werden.
+  let bestIdx = 0;
+  let minCosAngle = 1;
+  for (let i = 0; i < ring.length; i += 1) {
+    const prev = ring[(i - 1 + ring.length) % ring.length];
+    const curr = ring[i];
+    const next = ring[(i + 1) % ring.length];
+    const v1x = curr[0] - prev[0], v1y = curr[1] - prev[1];
+    const v2x = next[0] - curr[0], v2y = next[1] - curr[1];
+    const len1 = Math.hypot(v1x, v1y), len2 = Math.hypot(v2x, v2y);
+    if (len1 > 1e-3 && len2 > 1e-3) {
+      const cosAngle = (v1x * v2x + v1y * v2y) / (len1 * len2);
+      if (cosAngle < minCosAngle) {
+        minCosAngle = cosAngle;
+        bestIdx = i;
+      }
+    }
+  }
+
+  const reordered: Array<[number, number]> = [
+    ...ring.slice(bestIdx),
+    ...ring.slice(0, bestIdx + 1)
+  ];
+  let simplified = rdpSimplify(reordered, epsilon);
+  if (simplified.length < 4) return source;
+
+  // Achsenbegradigung: Fast senkrechte oder fast waagerechte gerade Strecken
+  // werden auf exakte Achsen ausgerichtet. Dadurch verschwinden Mikro-Rasterwellen
+  // auf geraden Buchstabenschäften vollständig.
+  for (let i = 0; i < simplified.length - 1; i += 1) {
+    const p0 = simplified[i];
+    const p1 = simplified[i + 1];
+    const dx = Math.abs(p1[0] - p0[0]);
+    const dy = Math.abs(p1[1] - p0[1]);
+    if (dx < 0.28 && dy > 1.8) {
+      const avgX = (p0[0] + p1[0]) / 2;
+      p0[0] = avgX;
+      p1[0] = avgX;
+    }
+    if (dy < 0.28 && dx > 1.8) {
+      const avgY = (p0[1] + p1[1]) / 2;
+      p0[1] = avgY;
+      p1[1] = avgY;
+    }
+  }
+
+  if (
+    simplified[0][0] !== simplified[simplified.length - 1][0] ||
+    simplified[0][1] !== simplified[simplified.length - 1][1]
+  ) {
+    simplified.push([simplified[0][0], simplified[0][1]]);
+  }
+  return simplified;
 }
 
 export function buildBinaryCellHeights(heights: number[], columns: number, rows: number): number[] {

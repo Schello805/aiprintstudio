@@ -198,8 +198,11 @@ export async function createRelief(
   }
 
   const aspect = metadata.height / metadata.width;
-  const gridWidth = options.resolution;
-  const gridHeight = Math.max(16, Math.round(options.resolution * aspect));
+  const isText = pipeline.kind === "text" || options.pipelineKind === "text";
+  const gridWidth = isText
+    ? Math.max(options.resolution, Math.min(1024, Math.round(options.resolution * 2)))
+    : options.resolution;
+  const gridHeight = Math.max(isText ? 160 : 16, Math.round(gridWidth * aspect));
   const prepared = sharp(imagePath)
     .rotate()
     .resize(gridWidth, gridHeight, { fit: "fill" })
@@ -265,7 +268,7 @@ export async function createRelief(
     // vollständig erhalten.
     subjectPixels = buildSolidOuterSilhouette(subjectPixels, gridWidth, gridHeight);
   }
-  if (options.outputMode === "lithophane" || options.outputMode === "stamp" || options.shape !== "source") {
+  if ((options.outputMode === "lithophane" || options.outputMode === "stamp" || options.shape !== "source") && !isText) {
     const shape = options.shape === "source" ? "rectangle" : options.shape;
     subjectPixels = buildProductPixelMask(
       gridWidth, gridHeight, options.widthMm, options.widthMm * gridHeight / gridWidth,
@@ -391,8 +394,8 @@ export async function createRelief(
   if (flatVectorSurface) {
     // Ein freigestelltes Textlogo besitzt keine durchgehende Grundplatte.
     // Deshalb entspricht seine gesamte Körperhöhe exakt der eingestellten
-    // Reliefhöhe. Wappen behalten weiterhin Grundplatte + Relief.
-    const flatHeight = useWordmarkMask
+    // Reliefhöhe. Wappen und Text mit Grundplatte behalten Grundplatte + Relief.
+    const flatHeight = (useWordmarkMask || (isText && !options.includeBackground))
       ? options.reliefMm
       : options.baseMm + options.reliefMm;
     for (let y = 0; y < gridHeight - 1; y += 1) {
@@ -433,7 +436,28 @@ export async function createRelief(
   let planarMesh = pipeline.kind === "emblem" && options.pipelineKind === "emblem" && !steppedCellHeights
     ? await buildLayeredVectorRelief(gridWidth, gridHeight, options.widthMm, heightMm, heights, cellMask, 8, true)
     : pipeline.kind === "text" && options.pipelineKind === "text" && !steppedCellHeights
-      ? await buildLayeredVectorRelief(gridWidth, gridHeight, options.widthMm, heightMm, heights, cellMask, Math.max(4, options.smoothing), false)
+      ? await buildLayeredVectorRelief(
+          gridWidth,
+          gridHeight,
+          options.widthMm,
+          heightMm,
+          heights,
+          cellMask,
+          Math.max(4, options.smoothing),
+          false,
+          true,
+          options.includeBackground
+            ? {
+                enabled: true,
+                baseMm: options.baseMm,
+                reliefMm: options.reliefMm,
+                shape: options.shape,
+                cornerRadiusMm: 4,
+                borderMm: options.borderMm,
+                borderHeightMm: options.borderHeightMm
+              }
+            : undefined
+        )
       : steppedCellHeights && useWordmarkMask && options.includeBackground
         ? await buildLayeredCellVectorRelief(
           gridWidth,
