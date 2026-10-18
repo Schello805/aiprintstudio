@@ -99,12 +99,17 @@ describe("text image", () => {
       expect(relief.geometryValidation.valid).toBe(true);
       expect(relief.geometryValidation.stats.degenerateTriangles).toBe(0);
       expect(relief.geometryValidation.stats.boundaryEdges).toBe(0);
-      let maxZ = 0;
+      // Die gesamte Oberseite der Buchstaben muss 100% plan sein (keine Kissen- oder Kuppelwölbung)
+      const topZValues: number[] = [];
       for (let i = 1; i < relief.preview.positions.length; i += 3) {
-        maxZ = Math.max(maxZ, relief.preview.positions[i]);
+        if (relief.preview.positions[i] > 1.0) {
+          topZValues.push(relief.preview.positions[i]);
+        }
       }
-      // Freistehende Buchstaben: Höhe entspricht exakt der Reliefhöhe (3 mm)
-      expect(maxZ).toBeCloseTo(3.0, 1);
+      expect(topZValues.length).toBeGreaterThan(0);
+      const uniqueTopLevels = new Set(topZValues.map((z) => Number(z.toFixed(2))));
+      expect(uniqueTopLevels.size).toBe(1);
+      expect([...uniqueTopLevels][0]).toBe(3.0);
     } finally {
       await rm(directory, { recursive: true, force: true });
     }

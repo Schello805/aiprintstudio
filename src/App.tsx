@@ -659,7 +659,7 @@ export function App() {
             )}
             {studioTool !== "prompt" && (
               <>
-            <div className={result ? "preview-stage sticky" : "preview-stage"}>
+            <div className={result || busy ? "preview-stage sticky" : "preview-stage"}>
             <div className="comparison-grid">
               <div
                 className={preview ? "upload-card has-preview" : "upload-card"}
@@ -680,13 +680,13 @@ export function App() {
                   ? <ReliefPreview result={result} />
                   : <ReliefPreviewPlaceholder />}
             </div>
+            </div>
             {fileError && <div className="error-banner" role="alert"><strong>Verarbeitung fehlgeschlagen</strong><span>{fileError}</span><button className="diagnostic-log-button" onClick={() => void window.desktop?.showDiagnosticLogs()}>Lokale Diagnose</button><button onClick={() => setFileError(null)} aria-label="Fehlermeldung schließen"><X /></button></div>}
             {uploadStatus && !fileError && <div className="upload-status"><CheckCircle2 /> {uploadStatus}</div>}
             {result && !busy && <>
               <ReliefResultCard result={result} optimize={() => void repairAndRegenerate()} />
               <SlicerAnalysisCard result={result} />
             </>}
-            </div>
             <div className="conversion-options">
               {studioTool === "image" ? <div className="option-group">
                 <div className="option-heading"><span className="option-label">ERGEBNISART</span><span className="quality-pill">Optimale Qualität automatisch aktiv</span></div>

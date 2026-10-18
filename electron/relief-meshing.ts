@@ -494,8 +494,12 @@ export async function buildLayeredVectorRelief(
   baseplate?: LayeredBaseplateOptions
 ): Promise<Mesh> {
   const cellColumns = columns - 1;
+  const targetTextHeight = isText
+    ? (baseplate?.enabled && baseplate.baseMm > 0 ? baseplate.baseMm + baseplate.reliefMm : (baseplate?.reliefMm ?? Math.max(...heights)))
+    : 0;
   const cellHeights = cellMask.map((occupied, cell) => {
     if (!occupied) return 0;
+    if (isText) return targetTextHeight;
     const x = cell % cellColumns;
     const y = Math.floor(cell / cellColumns);
     const vertex = y * columns + x;

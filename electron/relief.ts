@@ -359,7 +359,8 @@ export async function createRelief(
       / Math.max(1, subjectPixels.length);
     if (options.profile === "logo" && !options.includeBackground && (useWordmarkMask || subjectCoverage < 0.42)) flatVectorSurface = true;
   }
-  const semanticEmblemLevels = pipeline.kind === "emblem" && activeMode === "vector";
+  if (isText || pipeline.flattenMotifSurface) flatVectorSurface = true;
+  const semanticEmblemLevels = (pipeline.kind === "emblem" || isText) && activeMode === "vector";
   const smoothed = semanticEmblemLevels || (useWordmarkMask && options.includeBackground)
     ? rawLevels
     : smoothHeightField(rawLevels, gridWidth, gridHeight, activeMode === "vector" ? Math.min(1, options.smoothing) : options.smoothing);
