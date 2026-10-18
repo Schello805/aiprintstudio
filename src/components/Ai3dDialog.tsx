@@ -1,6 +1,6 @@
 import { OrbitControls } from "@react-three/drei";
 import { Canvas } from "@react-three/fiber";
-import { CheckCircle2, ChevronRight, ShieldCheck, Sparkles, X } from "lucide-react";
+import { CheckCircle2, ChevronRight, Sparkles, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import * as THREE from "three";
 import {

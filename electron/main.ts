@@ -13,7 +13,7 @@ import { exportFitsLimits, validateGeneratedExportBuffer } from "./export-valida
 import { renderTextImage } from "./text-image.js";
 import { buildCadPlanningRequest, encodeCadStl, validateCadPlan, type CadPlan } from "./cad.js";
 import { checkSystemCompatibility } from "./system-check.js";
-import { decryptApiKey, encryptApiKey, type EncryptedApiKey } from "./api-key-vault.js";
+import { decryptApiKey, type EncryptedApiKey } from "./api-key-vault.js";
 import { calculateAiCost, defaultOpenAiModel, estimateTokens, getOpenAiModel, listOpenAiModels, type OpenAiModelId } from "./openai-usage.js";
 import {
   isAllowedShowItemPath,

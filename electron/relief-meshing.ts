@@ -938,7 +938,7 @@ export function simplifyTextRing(
     ...ring.slice(bestIdx),
     ...ring.slice(0, bestIdx + 1)
   ];
-  let simplified = rdpSimplify(reordered, epsilon);
+  const simplified = rdpSimplify(reordered, epsilon);
   if (simplified.length < 4) return source;
 
   // Achsenbegradigung: Fast senkrechte oder fast waagerechte gerade Strecken
