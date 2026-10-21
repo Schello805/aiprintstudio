@@ -13,3 +13,6 @@ vite.config.d.ts
 models/
 workspace/
 tmp/
+
+# Local repaired user exports
+output/

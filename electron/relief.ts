@@ -492,7 +492,7 @@ export async function createRelief(
   // Dreiecksanzahl besitzen.
   planarMesh = removeInvalidTriangles(planarMesh);
   mesh = transformProductMesh(planarMesh, options.widthMm, options.curveAngle, options.mirrorX);
-  const canonicalTriangleMaterials = mappedColorAssignments && options.processingMode === "vector"
+  const canonicalTriangleMaterials = mappedColorAssignments
     ? assignCanonicalTriangleMaterials(
       planarMesh, mappedColorAssignments, gridWidth, gridHeight,
       options.widthMm, heightMm, options.sideColorIndex
@@ -589,7 +589,8 @@ export async function createRelief(
     exportMesh,
     exportColoredMeshes,
     canonicalTriangleMaterials,
-    canonicalTriangleMaterials ? options.colors : undefined
+    canonicalTriangleMaterials ? options.colors : undefined,
+    options.sideColorIndex
   );
   const [stlValidation, threeMfValidation] = await Promise.all([
     validateGeneratedExportBuffer(".stl", stlBuffer),

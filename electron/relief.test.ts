@@ -277,14 +277,9 @@ describe("relief mesh", () => {
     expect(model?.match(/<triangle /g)).toHaveLength(first.triangles.length);
     expect(model).toContain('name="AI Print Studio"');
     expect(model).toContain('<metadata name="Title">AI Print Studio</metadata>');
-    expect(modelSettings).toContain('<metadata key="name" value="AI Print Studio"/>');
-    expect(modelSettings).toContain('<metadata key="extruder" value="1"/>');
-    expect(modelSettings).not.toContain('<part ');
-    expect(JSON.parse(projectSettings ?? "{}").filament_colour).toEqual(["#FF0000", "#0000FF"]);
-    expect(JSON.parse(projectSettings ?? "{}").filament_settings_id).toEqual(["AI Print Studio", "AI Print Studio"]);
-    expect(JSON.parse(projectSettings ?? "{}").print_settings_id).toBe("AI Print Studio");
-    expect(JSON.parse(projectSettings ?? "{}").nozzle_diameter).toEqual(["0.4"]);
-    expect(JSON.parse(projectSettings ?? "{}").printer_settings_id).toBe("AI Print Studio · 0.4 mm");
+    expect(modelSettings).toContain('<part id="3" subtype="normal_part">');
+    expect(model).toContain('paint_color="8"');
+    expect(JSON.parse(projectSettings ?? "{}")).toEqual({ filament_colour: ["#FF0000", "#0000FF"] });
   });
 
   it("colors an emblem without adding or overlapping geometry", () => {

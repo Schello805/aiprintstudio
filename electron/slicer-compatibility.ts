@@ -39,11 +39,17 @@ export async function inspectSlicerCompatibility(
     },
     assembly: { label: "Zusammengehöriges Modell", passed: itemCount === 1 && (expected.colorCount < 2 || componentCount >= expected.colorCount || triangleMaterials >= expected.colorCount), detail: `${itemCount} Build-Objekt, ${triangleMaterials} direkt zugewiesene Materialien.` },
     colors: { label: "Materialfarben", passed: expected.colorCount < 2 || materialCount >= expected.colorCount, detail: `${materialCount} eingebettete 3MF-Materialfarben.` },
-    bambuMetadata: { label: "Bambu-/Orca-Metadaten", passed: /filament_colour/.test(projectSettings) && /AI Print Studio/.test(metadata + projectSettings), detail: "Filamentfarben und neutrales AI-Print-Studio-Profil sind vorhanden." }
+    filamentMapping: {
+      label: "Filamentzuordnung",
+      passed: /<part\b[^>]*id="3"[^>]*subtype="normal_part"/.test(metadata)
+        && /filament_colour/.test(projectSettings)
+        && /paint_color="/.test(model),
+      detail: "Mesh-Part, Filamentpalette und Oberflächenfarbmarkierungen sind vorhanden."
+    }
   };
   const shared = [checks.validStl, checks.valid3mf, checks.millimeter, checks.dimensions, checks.assembly, checks.colors];
   return (["Bambu Studio", "OrcaSlicer", "Anycubic Slicer", "PrusaSlicer"] as SupportedSlicer[]).map((slicer) => {
-    const slicerChecks = slicer === "Bambu Studio" || slicer === "OrcaSlicer" ? [...shared, checks.bambuMetadata] : shared;
+    const slicerChecks = slicer === "PrusaSlicer" ? shared : [...shared, checks.filamentMapping];
     return { slicer, compatible: slicerChecks.every((check) => check.passed), checks: slicerChecks };
   });
 }

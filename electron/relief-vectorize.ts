@@ -11,6 +11,7 @@ import {
   encodeBinaryStl,
   encodeThreeMf,
   estimateMeshVolume,
+  normalOf,
   sanitizeStem,
   type Mesh,
   type Triangle,
@@ -201,7 +202,11 @@ export async function createSvgPathRelief(
   const backgroundIndex = options.includeBackground
     ? printableParts.reduce((best, part, index) => part.area > printableParts[best].area ? index : best, 0)
     : -1;
-  const colors = uniqueColorsInOrder(printableParts.map((part) => part.color));
+  const selectedBodyColor = options.colors[options.sideColorIndex];
+  const colors = uniqueColorsInOrder([
+    ...printableParts.map((part) => part.color),
+    ...(selectedBodyColor ? [selectedBodyColor] : [])
+  ]);
   const normalizedParts = printableParts.map((part, index) => {
     const isBackground = index === backgroundIndex;
     const bottom = isBackground ? 0 : options.includeBackground ? options.baseMm : 0;
@@ -212,7 +217,7 @@ export async function createSvgPathRelief(
       triangles: scaled.triangles
     };
     return {
-      mesh: adjusted,
+      mesh: removeInvalidTriangles(adjusted),
       color: part.color,
       name: `SVG ${colors.indexOf(part.color) + 1}`
     };
@@ -222,11 +227,15 @@ export async function createSvgPathRelief(
   const geometryValidation = validateMeshGeometry(exportMesh);
   if (!geometryValidation.valid) return null;
   const stlBuffer = encodeBinaryStl(exportMesh, "AI Print Studio SVG Relief");
-  const exportColoredMeshes = normalizedParts.map((part) => ({
-    ...part,
-    mesh: orientMeshLikePreview(transformProductMesh(part.mesh, options.widthMm, options.curveAngle, options.mirrorX), heightMm)
-  }));
-  const threeMfBuffer = await encodeThreeMf(exportMesh, exportColoredMeshes);
+  const bodyColor = options.colors[options.sideColorIndex] ?? colors[0];
+  const bodyIndex = Math.max(0, colors.indexOf(bodyColor));
+  const triangleMaterials = normalizedParts.flatMap(part => part.mesh.triangles.map(() => colors.indexOf(part.color)));
+  const surfaceMaterials = exportMesh.triangles.map(([a, b, c], index) =>
+    [a, b, c].some(i => exportMesh.vertices[i][2] > 1e-5) &&
+    normalOf(exportMesh.vertices[a], exportMesh.vertices[b], exportMesh.vertices[c])[2] > 0.85
+      ? triangleMaterials[index] : bodyIndex
+  );
+  const threeMfBuffer = await encodeThreeMf(exportMesh, undefined, surfaceMaterials, colors, bodyIndex);
   const [stlValidation, threeMfValidation] = await Promise.all([
     validateGeneratedExportBuffer(".stl", stlBuffer),
     validateGeneratedExportBuffer(".3mf", threeMfBuffer)
@@ -258,15 +267,7 @@ export async function createSvgPathRelief(
       { label: "Mindestbreite", status: "ok", detail: "Bitte im Slicer prüfen, falls die SVG sehr feine Linien enthält." }
     ]
   };
-  const preview = buildCanonicalMeshPreview(exportMesh, options.widthMm, heightMm, exportMesh.triangles.map((_, triangleIndex) => {
-    let accumulated = 0;
-    for (const part of exportColoredMeshes) {
-      const next = accumulated + part.mesh.triangles.length;
-      if (triangleIndex < next) return Math.max(0, colors.indexOf(part.color));
-      accumulated = next;
-    }
-    return 0;
-  }), colors);
+  const preview = buildCanonicalMeshPreview(exportMesh, options.widthMm, heightMm, surfaceMaterials, colors);
   const heightmapPng = await sharp(Buffer.from(svg)).resize(256, 256, { fit: "inside" }).png().toBuffer();
   onProgress({ phase: "Fertig", detail: "SVG-Pfade wurden direkt als Druckmodell exportiert.", progress: 100 });
   return {

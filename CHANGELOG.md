@@ -156,6 +156,19 @@
 - Fehlen Zertifikat oder Notarisierungszugang, wird kein unsicherer offizieller
   Release mehr erzeugt.
 
+## 0.31.52 – 2026-10-21
+
+- 3MF-Import in Anycubic Slicer Next korrigiert: vollständiger Mesh-/Part-Eintrag
+  und explizite Filamentfarbmarkierungen statt offener Farbteilmeshes.
+- Das Motiv erscheint nur auf der Oberseite. Rückseite und Seiten bleiben in
+  der gewählten Körperfarbe (beim Wappen Schwarz), auch bei direkten SVGs.
+- Identische SVG-Farben teilen sich einen Filamentplatz statt dutzende
+  scheinbar unterschiedliche Materialien zu erzeugen.
+- SVG-Dateien werden vor der KI-Tiefenanalyse als RGB-PNG vorbereitet. Das
+  verhindert den Apple-Vision-Fehler „zero-dimensioned image (0 x 0)“.
+- Reparaturwerkzeug für ältere AI-Print-Studio-3MF-Dateien ergänzt.
+
+
 ## 0.15.1
 
 - Die 3D-Vorschau behält bei Logo-Modellen die volle Rasterauflösung bei,

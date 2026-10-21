@@ -28,7 +28,8 @@ export async function encodeThreeMf(
   mesh: Mesh,
   coloredMeshes?: ColoredMesh[],
   canonicalMaterials?: number[],
-  canonicalColors?: string[]
+  canonicalColors?: string[],
+  sideColorIndex = 0
 ): Promise<Buffer> {
   const zip = new JSZip();
   zip.file("[Content_Types].xml", `<?xml version="1.0" encoding="UTF-8"?>
@@ -44,19 +45,20 @@ export async function encodeThreeMf(
     ? canonicalColors.map((color, index) => ({ mesh: { vertices: [], triangles: [] }, color, name: `AMS ${index + 1}` }))
     : coloredMeshes?.length ? coloredMeshes : [{ mesh, color: "#B7F58A", name: "Relief" }])
     .map((part) => ({ ...part, mesh: removeInvalidTriangles(part.mesh) }));
-  const materialXml = parts.map(({ color, name }) =>
+  const palette = parts.filter((part, index) => parts.findIndex(other => other.color.toUpperCase() === part.color.toUpperCase()) === index);
+  const materialIndex = parts.map(part => palette.findIndex(other => other.color.toUpperCase() === part.color.toUpperCase()));
+  const materialXml = palette.map(({ color, name }) =>
     `<base name="${escapeXml(name)}" displaycolor="${color.toUpperCase()}FF"/>`
   ).join("");
-  // Ein einziges Core-3MF-Mesh ist kompatibler als ein Komponenten-Assembly:
-  // Geometrie, Maßstab und Lage entsprechen damit exakt der zusammengeführten
-  // STL. Die Farbe bleibt über pid/p1 pro Dreieck eindeutig erhalten.
+  // Keep a closed mesh: splitting painted surface triangles into parts creates
+  // open shells that slicers repair into unwanted through-colored volumes.
   const vertices: Vec3[] = [];
   const coloredTriangles: Array<{ triangle: Triangle; material: number }> = [];
   if (canonicalMaterials?.length === mesh.triangles.length && canonicalColors?.length) {
     for (const vertex of mesh.vertices) vertices.push(vertex);
     mesh.triangles.forEach((triangle, index) => coloredTriangles.push({
       triangle,
-      material: Math.max(0, Math.min(canonicalColors.length - 1, canonicalMaterials[index] ?? 0))
+      material: materialIndex[Math.max(0, Math.min(canonicalColors.length - 1, canonicalMaterials[index] ?? 0))]
     }));
   } else {
     for (let material = 0; material < parts.length; material += 1) {
@@ -65,42 +67,51 @@ export async function encodeThreeMf(
       // sonst die maximale JavaScript-Argumentzahl überschreiten.
       for (const vertex of parts[material].mesh.vertices) vertices.push(vertex);
       for (const [a, b, c] of parts[material].mesh.triangles) {
-        coloredTriangles.push({ triangle: [a + offset, b + offset, c + offset], material });
+        coloredTriangles.push({ triangle: [a + offset, b + offset, c + offset], material: materialIndex[material] });
       }
     }
   }
   const vertexXml = vertices.map(([x, y, z]) => `<vertex x="${x.toFixed(5)}" y="${y.toFixed(5)}" z="${z.toFixed(5)}"/>`).join("");
-  const triangleXml = coloredTriangles.map(({ triangle: [v1, v2, v3], material }) =>
-    `<triangle v1="${v1}" v2="${v2}" v3="${v3}" pid="2" p1="${material}"/>`
-  ).join("");
+  let minimumZ = Infinity;
+  for (const vertex of vertices) minimumZ = Math.min(minimumZ, vertex[2]);
+  const triangleXml = coloredTriangles.map(({ triangle: [v1, v2, v3], material }) => {
+    // Only upward-facing surfaces carry the motif; back and walls stay in
+    // the selected body color, including legacy through-colored meshes.
+    const points = [vertices[v1], vertices[v2], vertices[v3]];
+    const onBottom = points.every(point => point[2] <= minimumZ + 1e-5);
+    const top = !onBottom && normalOf(vertices[v1], vertices[v2], vertices[v3])[2] > 0.85;
+    const assigned = top ? material : (materialIndex[sideColorIndex] ?? 0);
+    return `<triangle v1="${v1}" v2="${v2}" v3="${v3}" pid="2" p1="${assigned}" paint_color="${encodePaintColor(assigned + 1)}"/>`;
+  }).join("");
   const objectId = 3;
   const objectXml = `<object id="${objectId}" type="model" name="AI Print Studio"><mesh><vertices>${vertexXml}</vertices><triangles>${triangleXml}</triangles></mesh></object>`;
   const buildXml = `<item objectid="${objectId}"/>`;
   zip.folder("3D")?.file("3dmodel.model", `<?xml version="1.0" encoding="UTF-8"?>
 <model unit="millimeter" xml:lang="de-DE" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+<metadata name="Application">OrcaSlicer-2.0.0</metadata>
+<metadata name="BambuStudio:3mfVersion">1</metadata>
 <metadata name="Title">AI Print Studio</metadata>
 <metadata name="Description">Druckoptimiert für eine 0,4-mm-Düse</metadata>
 <resources><basematerials id="2">${materialXml}</basematerials>${objectXml}</resources>
 <build>${buildXml}</build></model>`);
-  if (coloredMeshes?.length || canonicalMaterials?.length) {
-    zip.folder("Metadata")?.file("model_settings.config", `<?xml version="1.0" encoding="UTF-8"?>
-<config>
-  <object id="${objectId}">
-    <metadata key="name" value="AI Print Studio"/>
-    <metadata key="extruder" value="1"/>
-    <mesh_stat edges_fixed="0" degenerate_facets="0" facets_removed="0" facets_reversed="0" backwards_edges="0"/>
-  </object>
-</config>`);
-    zip.folder("Metadata")?.file("project_settings.config", JSON.stringify({
-      print_settings_id: "AI Print Studio",
-      filament_colour: parts.map(({ color }) => color.toUpperCase()),
-      filament_type: parts.map(() => "PLA"),
-      filament_settings_id: parts.map(() => "AI Print Studio"),
-      nozzle_diameter: ["0.4"],
-      printer_settings_id: "AI Print Studio · 0.4 mm"
-    }, null, 2));
-  }
+  // Anycubic/Orca require a part record even for a single painted mesh.
+  // Omitting it makes a model with project metadata appear to have no geometry.
+  zip.file("Metadata/model_settings.config", `<?xml version="1.0" encoding="UTF-8"?>
+<config><object id="${objectId}"><metadata key="name" value="AI Print Studio"/><metadata key="extruder" value="${(materialIndex[sideColorIndex] ?? 0) + 1}"/><part id="${objectId}" subtype="normal_part"><metadata key="name" value="Relief"/><metadata key="extruder" value="${(materialIndex[sideColorIndex] ?? 0) + 1}"/></part></object></config>`);
+  // Supply the palette only; invented printer/process preset IDs overwrite
+  // the user's working profiles and leave the project unprintable.
+  zip.file("Metadata/project_settings.config", JSON.stringify({
+    filament_colour: palette.map(({ color }) => color.toUpperCase())
+  }));
   return zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE", compressionOptions: { level: 6 } });
+}
+
+// TriangleSelector leaf encoding, filament slots are one-based (max 16).
+export function encodePaintColor(slot: number): string {
+  if (!Number.isInteger(slot) || slot < 1 || slot > 16) {
+    throw new Error("3MF-Farbdruck unterstützt 1 bis 16 Filamentplätze.");
+  }
+  return slot < 3 ? (slot * 4).toString(16).toUpperCase() : `${(slot - 3).toString(16).toUpperCase()}C`;
 }
 
 function escapeXml(value: string): string {

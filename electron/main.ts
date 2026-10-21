@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { Worker } from "node:worker_threads";
 import sharp, { type Metadata } from "sharp";
+import { prepareDepthInput } from "./depth-input.js";
 import type { ReliefProgress, ReliefResult } from "./relief.js";
 import { exportFitsLimits, validateGeneratedExportBuffer } from "./export-validation.js";
 import { renderTextImage } from "./text-image.js";
@@ -250,10 +251,13 @@ async function createDepthMap(imagePath: string, signal?: AbortSignal): Promise<
   const output = join(directory, "depth.png");
   const resources = depthResources();
   try {
+    const input = join(directory, "input.png");
+    await prepareDepthInput(imagePath, input);
+    if (signal?.aborted) throw new Error("Vorgang abgebrochen.");
     await new Promise<void>((resolve, reject) => {
       const child = execFile(
         resources.worker,
-        [resources.model, imagePath, output],
+        [resources.model, input, output],
         { timeout: 120_000, maxBuffer: 1024 * 1024 },
         (error) => error ? reject(error) : resolve()
       );

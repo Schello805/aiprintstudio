@@ -56,14 +56,22 @@ dunkle Verläufe und Mehrfarbigkeit dieser Sammlung unverändert bestehen.
 ## Exportregeln
 
 - STL ist ein einfarbiges, wasserdichtes Fallback.
-- Mehrfarbige 3MF-Dateien enthalten getrennte Farbkörper und Basismaterialien
-  als Komponenten eines einzigen Assembly-Objekts.
-- Die konfigurierte Seitenfarbe umfasst Tragkörper, Außenwände und Farbgrenzen.
-- Motivfarben bilden eine 0,4-mm-Decklage auf horizontalen Oberflächen.
+- Mehrfarbige 3MF-Dateien enthalten ein gemeinsames Mesh mit Core-3MF-
+  Basismaterialien und Anycubic-/Orca-Farbmarkierungen (`paint_color`).
+- Die konfigurierte Seitenfarbe umfasst Boden, Außenwände und Tragkörper.
+  Nur nach oben gerichtete Motivflächen erhalten die Motivfarbe.
+- Farbflächen dürfen nicht als offene Teilmeshes exportiert werden: Die
+  automatische Reparatur im Slicer kann daraus durchgefärbte Körper machen.
 - Das 3MF verwendet Millimeter und genau einen Eintrag im Build-Bereich.
-- Farbdreiecke besitzen explizite Core-3MF-Materialreferenzen.
-- Orca-/Anycubic-Metadaten müssen Palette und Extruderzuordnung aller
-  Farbkörper enthalten.
+- `Metadata/model_settings.config` muss auch für ein einziges Mesh einen
+  passenden `part`-Eintrag enthalten. Sonst meldet Anycubic fehlende Geometrie.
+- `Metadata/project_settings.config` enthält die Filamentpalette, jedoch keine
+  erfundenen Drucker-, Filament- oder Prozessprofil-IDs. Druckprofile müssen im
+  Slicer passend zum verwendeten Drucker gewählt werden.
+- Alte AI-Print-Studio-Exporte lassen sich nach `npm run build` mit
+  `node scripts/repair-generated-3mf.mjs quelle.3mf ziel.3mf` umwandeln.
+- SVGs werden vor der lokalen KI-Tiefenanalyse in ein ausgerichtetes,
+  deckendes RGB-PNG umgewandelt, da Apple Vision SVG nicht direkt dekodiert.
 - Erzeugte Modelle werden zunächst nur im temporären Vorschauverzeichnis
   abgelegt. Dauerhafte STL-/3MF-Dateien dürfen erst über `export:save` und den
   nativen Speicherdialog entstehen.
