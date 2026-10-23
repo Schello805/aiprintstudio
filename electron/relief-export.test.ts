@@ -72,3 +72,33 @@ it("keeps direct SVG backs in the body color and deduplicates repeated fills", a
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+it("maps extra SVG shades into exactly the four app filament slots and honors remapping", async () => {
+  const { mkdtemp, writeFile, readFile, rm } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const { createRelief } = await import("./relief");
+  const directory = await mkdtemp(join(tmpdir(), "svg-four-slots-"));
+  const palette = ["#E72229", "#FDFDFD", "#0D0807", "#F2D300"];
+  try {
+    const source = join(directory, "logo.svg");
+    const fills = ["#FEFEFE", "#E51D24", "#030201", "#A2A2A2", "#FADB00", "#0D0807"];
+    await writeFile(source, `<svg xmlns="http://www.w3.org/2000/svg" width="60" height="10">${fills.map((fill,i) => `<rect x="${i * 10}" width="10" height="10" fill="${fill}"/>`).join("")}</svg>`);
+    const result = await createRelief(source, directory, {
+      pipelineKind: "wordmark", processingMode: "wordmark", profile: "logo",
+      widthMm: 60, resolution: 128, includeBackground: false,
+      colors: palette, sourceColors: palette, colorMapping: [3, 1, 2, 0], sideColorIndex: 2
+    });
+    const zip = await JSZip.loadAsync(await readFile(result.threeMfPath));
+    const xml = await zip.file("3D/3dmodel.model")!.async("string");
+    const settings = JSON.parse(await zip.file("Metadata/project_settings.config")!.async("string"));
+    expect(settings.filament_colour).toEqual(palette);
+    expect(xml.match(/<base\b/g)).toHaveLength(4);
+    const materials = [...xml.matchAll(/\bp1="(\d+)"/g)].map(m => +m[1]);
+    expect(Math.max(...materials)).toBeLessThan(4);
+    // Source red is mapped to yellow (slot 4), not a new source-red filament.
+    expect(xml).not.toContain('displaycolor="#E51D24FF"');
+    expect(result.preview.colorParts.every(part => palette.includes(part.color))).toBe(true);
+    expect(result.preview.colorParts.find(part => part.color === palette[3])?.indices.length).toBeGreaterThan(0);
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});

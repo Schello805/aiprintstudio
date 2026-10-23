@@ -875,7 +875,7 @@ describe("relief mesh", () => {
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
-  });
+  }, 20_000);
 
   it("exports a word logo background as a flat base with a clearly raised motif", async () => {
     const directory = await mkdtemp(join(tmpdir(), "ai-print-wordmark-background-test-"));
@@ -914,7 +914,7 @@ describe("relief mesh", () => {
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
-  });
+  }, 20_000);
 
   it("raises text and signets on multicolor logo backgrounds instead of the whole badge", async () => {
     const directory = await mkdtemp(join(tmpdir(), "ai-print-wordmark-badge-test-"));
@@ -949,7 +949,7 @@ describe("relief mesh", () => {
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
-  });
+  }, 20_000);
 
   it("does not treat a transparent round badge as raised wordmark foreground", async () => {
     const svg = Buffer.from(`

@@ -202,11 +202,22 @@ export async function createSvgPathRelief(
   const backgroundIndex = options.includeBackground
     ? printableParts.reduce((best, part, index) => part.area > printableParts[best].area ? index : best, 0)
     : -1;
-  const selectedBodyColor = options.colors[options.sideColorIndex];
-  const colors = uniqueColorsInOrder([
-    ...printableParts.map((part) => part.color),
-    ...(selectedBodyColor ? [selectedBodyColor] : [])
-  ]);
+  // The UI palette is authoritative. SVG tracing may introduce gray and
+  // near-black fills; those are source shades, never extra filament slots.
+  const colors = options.colors.length
+    ? options.colors.map(color => color.toUpperCase())
+    : uniqueColorsInOrder(printableParts.map(part => part.color));
+  const sourcePalette = options.sourceColors.length === options.colors.length && options.sourceColors.length
+    ? options.sourceColors : colors;
+  const rgb = (hex: string): [number, number, number] => [
+    parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16)
+  ];
+  const sourceCenters = sourcePalette.map(rgb);
+  const materialFor = (fill: string) => {
+    const sourceIndex = nearestColorCenter(rgb(fill), sourceCenters);
+    const target = options.colors.length ? (options.colorMapping[sourceIndex] ?? sourceIndex) : sourceIndex;
+    return Math.max(0, Math.min(colors.length - 1, target));
+  };
   const normalizedParts = printableParts.map((part, index) => {
     const isBackground = index === backgroundIndex;
     const bottom = isBackground ? 0 : options.includeBackground ? options.baseMm : 0;
@@ -218,8 +229,9 @@ export async function createSvgPathRelief(
     };
     return {
       mesh: removeInvalidTriangles(adjusted),
-      color: part.color,
-      name: `SVG ${colors.indexOf(part.color) + 1}`
+      color: colors[materialFor(part.color)],
+      material: materialFor(part.color),
+      name: `AMS ${materialFor(part.color) + 1}`
     };
   });
   const combined = removeInvalidTriangles(mergeMeshes(normalizedParts.map((part) => part.mesh)));
@@ -227,9 +239,8 @@ export async function createSvgPathRelief(
   const geometryValidation = validateMeshGeometry(exportMesh);
   if (!geometryValidation.valid) return null;
   const stlBuffer = encodeBinaryStl(exportMesh, "AI Print Studio SVG Relief");
-  const bodyColor = options.colors[options.sideColorIndex] ?? colors[0];
-  const bodyIndex = Math.max(0, colors.indexOf(bodyColor));
-  const triangleMaterials = normalizedParts.flatMap(part => part.mesh.triangles.map(() => colors.indexOf(part.color)));
+  const bodyIndex = Math.max(0, Math.min(colors.length - 1, options.sideColorIndex));
+  const triangleMaterials = normalizedParts.flatMap(part => part.mesh.triangles.map(() => part.material));
   const surfaceMaterials = exportMesh.triangles.map(([a, b, c], index) =>
     [a, b, c].some(i => exportMesh.vertices[i][2] > 1e-5) &&
     normalOf(exportMesh.vertices[a], exportMesh.vertices[b], exportMesh.vertices[c])[2] > 0.85

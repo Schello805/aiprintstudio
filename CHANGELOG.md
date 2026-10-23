@@ -156,6 +156,13 @@
 - Fehlen Zertifikat oder Notarisierungszugang, wird kein unsicherer offizieller
   Release mehr erzeugt.
 
+## 0.31.53 – 2026-10-23
+
+- Direkte und nachgezeichnete SVGs verwenden ausschließlich die in der App
+  gewählte Filamentpalette und Farbzuordnung. Zusätzliche Grau- und Schwarztöne
+  erzeugen keine weiteren Filamentplätze im 3MF-Export.
+- Regressionstest für sechs SVG-Farbtöne mit vier App-Filamenten ergänzt.
+
 ## 0.31.52 – 2026-10-21
 
 - 3MF-Import in Anycubic Slicer Next korrigiert: vollständiger Mesh-/Part-Eintrag
