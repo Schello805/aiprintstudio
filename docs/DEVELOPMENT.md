@@ -56,6 +56,16 @@ dunkle Verläufe und Mehrfarbigkeit dieser Sammlung unverändert bestehen.
 ## Exportregeln
 
 - STL ist ein einfarbiges, wasserdichtes Fallback.
+- Identische Positionen an STL-/Three.js-Nähten zählen als gemeinsame Eckpunkte.
+  Offene oder mehrfach belegte Kanten sowie widersprüchliche Orientierung
+  blockieren die Freigabe. Kleine gültige Dreiecke dürfen nicht pauschal gelöscht werden.
+- SVG-Volumen werden über Manifold vereinigt; beim Überlappen von Flächen gleicher
+  Höhe entscheidet die SVG-Zeichenreihenfolge. Nicht freigabefähige Vektorergebnisse
+  verwenden die kanonische Höhenfeld-Pipeline statt ungeschlossener Exporte.
+- 3MF-Ressourcen und Referenzen werden mit einem XML-Parser geprüft.
+- Bildabmessungen beziehen sich auf die EXIF-ausgerichtete Quelle.
+- `project-persistence.ts` prüft denselben Vertrag für Speichern, Öffnen und
+  Wiederherstellung aller drei Werkzeuge. Originalbytes und Vorschau sind getrennt.
 - Mehrfarbige 3MF-Dateien enthalten ein gemeinsames Mesh mit Core-3MF-
   Basismaterialien und Anycubic-/Orca-Farbmarkierungen (`paint_color`).
 - Die konfigurierte Seitenfarbe umfasst Boden, Außenwände und Tragkörper.

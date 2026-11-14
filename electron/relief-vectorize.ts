@@ -17,16 +17,17 @@ import {
   type Triangle,
   type Vec3
 } from "./relief-export.js";
+import { buildSvgSolid } from "./solid-mesh.js";
 import { hasUsefulTransparency } from "./relief-masks.js";
 import {
   buildCanonicalMeshPreview,
-  mergeMeshes,
   orientMeshLikePreview,
   smoothVectorRing
 } from "./relief-meshing.js";
 import type { PrintabilityReport, ReliefOptions, ReliefProgress, ReliefResult } from "./relief.js";
 
 export type SvgReliefPart = {
+  polygons?: Array<Array<[number, number]>>;
   mesh: Mesh;
   color: string;
   area: number;
@@ -184,7 +185,9 @@ export async function createSvgPathRelief(
       // bleiben hier als Bézier-Geometrie erhalten und werden nicht über ein
       // Pixelraster zurückgerechnet.
       const geometry = new ExtrudeGeometry(shape, { depth: 1, bevelEnabled: false, curveSegments, steps: 1 });
-      rawParts.push({ mesh: meshFromExtrudeGeometry(geometry, 0), color, area, bounds: svgPointBounds(points) });
+      const extracted = shape.extractPoints(curveSegments);
+      const polygons = [extracted.shape, ...extracted.holes].map(ring => ring.map(point => [point.x, point.y] as [number,number]));
+      rawParts.push({ polygons, mesh: meshFromExtrudeGeometry(geometry, 0), color, area, bounds: svgPointBounds(points) });
     }
   }
   if (!rawParts.length || (unsupportedVectorPaint && rawParts.length <= 1)) return null;
@@ -197,7 +200,17 @@ export async function createSvgPathRelief(
   if (!Number.isFinite(minX) || !Number.isFinite(maxX) || maxX <= minX || maxY <= minY) return null;
   const heightMm = options.widthMm * (maxY - minY) / Math.max(1e-6, maxX - minX);
   const scaleMm = options.widthMm / Math.max(1e-6, maxX - minX);
-  const printableParts = rawParts.filter((part) => !isNeedleLikeSvgArtifact(part, scaleMm));
+  const printableParts = rawParts.filter((part) => {
+    if (isNeedleLikeSvgArtifact(part, scaleMm)) return false;
+    // A white canvas is not a solid backing when the user requests a
+    // freestanding logo. Keep white motif details and nonrectangular shields.
+    const rgb = [1,3,5].map(offset => parseInt(part.color.slice(offset,offset+2),16));
+    const lightCanvas = rgb.every(value => value >= 240)
+      && part.area >= (maxX-minX)*(maxY-minY)*0.999
+      && Math.abs(part.bounds.minX-minX)<1e-5 && Math.abs(part.bounds.maxX-maxX)<1e-5
+      && Math.abs(part.bounds.minY-minY)<1e-5 && Math.abs(part.bounds.maxY-maxY)<1e-5;
+    return options.includeBackground || !lightCanvas;
+  });
   if (!printableParts.length) return null;
   const backgroundIndex = options.includeBackground
     ? printableParts.reduce((best, part, index) => part.area > printableParts[best].area ? index : best, 0)
@@ -206,7 +219,7 @@ export async function createSvgPathRelief(
   // near-black fills; those are source shades, never extra filament slots.
   const colors = options.colors.length
     ? options.colors.map(color => color.toUpperCase())
-    : uniqueColorsInOrder(printableParts.map(part => part.color));
+    : ["#B7F58A"];
   const sourcePalette = options.sourceColors.length === options.colors.length && options.sourceColors.length
     ? options.sourceColors : colors;
   const rgb = (hex: string): [number, number, number] => [
@@ -214,6 +227,7 @@ export async function createSvgPathRelief(
   ];
   const sourceCenters = sourcePalette.map(rgb);
   const materialFor = (fill: string) => {
+    if (!options.colors.length) return 0;
     const sourceIndex = nearestColorCenter(rgb(fill), sourceCenters);
     const target = options.colors.length ? (options.colorMapping[sourceIndex] ?? sourceIndex) : sourceIndex;
     return Math.max(0, Math.min(colors.length - 1, target));
@@ -228,19 +242,22 @@ export async function createSvgPathRelief(
       triangles: scaled.triangles
     };
     return {
+      polygons: (part.polygons ?? []).map(ring => ring.map(([x,y]) => [(x-minX)*scaleMm,(maxY-y)*scaleMm] as [number,number])),
+      bottom, top,
       mesh: removeInvalidTriangles(adjusted),
       color: colors[materialFor(part.color)],
       material: materialFor(part.color),
       name: `AMS ${materialFor(part.color) + 1}`
     };
   });
-  const combined = removeInvalidTriangles(mergeMeshes(normalizedParts.map((part) => part.mesh)));
+  const solid = await buildSvgSolid(normalizedParts);
+  const combined = solid.mesh;
   const exportMesh = orientMeshLikePreview(transformProductMesh(combined, options.widthMm, options.curveAngle, options.mirrorX), heightMm);
   const geometryValidation = validateMeshGeometry(exportMesh);
-  if (!geometryValidation.valid) return null;
+  if (!geometryValidation.valid) return null; // Retry the canonical height-field pipeline rather than exporting touching/invalid shells.
   const stlBuffer = encodeBinaryStl(exportMesh, "AI Print Studio SVG Relief");
   const bodyIndex = Math.max(0, Math.min(colors.length - 1, options.sideColorIndex));
-  const triangleMaterials = normalizedParts.flatMap(part => part.mesh.triangles.map(() => part.material));
+  const triangleMaterials = solid.materials;
   const surfaceMaterials = exportMesh.triangles.map(([a, b, c], index) =>
     [a, b, c].some(i => exportMesh.vertices[i][2] > 1e-5) &&
     normalOf(exportMesh.vertices[a], exportMesh.vertices[b], exportMesh.vertices[c])[2] > 0.85
@@ -267,7 +284,7 @@ export async function createSvgPathRelief(
   const maximumHeight = options.includeBackground ? options.baseMm + options.reliefMm : options.reliefMm;
   const layerCount = Math.max(1, Math.ceil(maximumHeight / layerHeightMm));
   const printability: PrintabilityReport = {
-    score: 100,
+    score: geometryValidation.warnings.length ? 80 : 100,
     status: "ready",
     issues: ["SVG-Pfade direkt extrudiert – keine Raster-Vektorisierung nötig."],
     estimatedVolumeCm3: estimateMeshVolume(exportMesh) / 1000,

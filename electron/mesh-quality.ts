@@ -15,6 +15,14 @@ export type ContourQualityReport = { score: number; shortEdgeRatio: number; sliv
 export function validateMeshGeometry(mesh: MeshGeometry): GeometryValidationReport {
   const errors: string[] = [], warnings: string[] = [];
   const edgeUse = new Map<string, number>(), triangleKeys = new Set<string>();
+  // STL and non-indexed Three.js geometry repeat positions at face seams.
+  const positionIds = new Map<string, number>();
+  const welded = mesh.vertices.map(vertex => {
+    const key = vertex.map(value => value === 0 ? "0" : String(value)).join(":");
+    if (!positionIds.has(key)) positionIds.set(key, positionIds.size);
+    return positionIds.get(key)!;
+  });
+  const edgeDirection = new Map<string, number>();
   const parents = new Int32Array(mesh.triangles.length), firstTriangleByVertex = new Int32Array(mesh.vertices.length).fill(-1);
   let invalidTriangles = 0, degenerateTriangles = 0, duplicateTriangles = 0;
   parents.forEach((_value, index) => { parents[index] = index; });
@@ -28,18 +36,20 @@ export function validateMeshGeometry(mesh: MeshGeometry): GeometryValidationRepo
   const finiteVertices = mesh.vertices.every((vertex) => vertex.every(Number.isFinite));
   if (!finiteVertices) errors.push("Mindestens ein Eckpunkt enthält keinen gültigen Zahlenwert.");
   mesh.triangles.forEach((triangle, triangleIndex) => {
-    if (!triangle.every((index) => Number.isInteger(index) && index >= 0 && index < mesh.vertices.length) || new Set(triangle).size !== 3) { invalidTriangles += 1; return; }
+    if (!triangle.every((index) => Number.isInteger(index) && index >= 0 && index < mesh.vertices.length) || new Set(triangle.map(index => welded[index])).size !== 3) { invalidTriangles += 1; return; }
     const [a, b, c] = triangle.map((index) => mesh.vertices[index]);
     const ab = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], ac = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
-    if (Math.hypot(ab[1] * ac[2] - ab[2] * ac[1], ab[2] * ac[0] - ab[0] * ac[2], ab[0] * ac[1] - ab[1] * ac[0]) <= 1e-9) degenerateTriangles += 1;
-    const triangleKey = [...triangle].sort((left, right) => left - right).join(":");
+    if (Math.hypot(ab[1] * ac[2] - ab[2] * ac[1], ab[2] * ac[0] - ab[0] * ac[2], ab[0] * ac[1] - ab[1] * ac[0]) === 0) degenerateTriangles += 1;
+    const triangleKey = triangle.map(index => welded[index]).sort((left, right) => left - right).join(":");
     if (triangleKeys.has(triangleKey)) duplicateTriangles += 1;
     triangleKeys.add(triangleKey);
     for (const [left, right] of [[triangle[0], triangle[1]], [triangle[1], triangle[2]], [triangle[2], triangle[0]]]) {
-      const key = left < right ? `${left}:${right}` : `${right}:${left}`;
+      const l = welded[left], r = welded[right];
+      const key = l < r ? `${l}:${r}` : `${r}:${l}`;
+      edgeDirection.set(key,(edgeDirection.get(key)??0)+(l<r?1:-1));
       edgeUse.set(key, (edgeUse.get(key) ?? 0) + 1);
     }
-    for (const vertex of triangle) { if (firstTriangleByVertex[vertex] >= 0) unite(triangleIndex, firstTriangleByVertex[vertex]); else firstTriangleByVertex[vertex] = triangleIndex; }
+    for (const vertex of triangle.map(index => welded[index])) { if (firstTriangleByVertex[vertex] >= 0) unite(triangleIndex, firstTriangleByVertex[vertex]); else firstTriangleByVertex[vertex] = triangleIndex; }
   });
   const boundaryEdges = [...edgeUse.values()].filter((uses) => uses === 1).length;
   const nonManifoldEdges = [...edgeUse.values()].filter((uses) => uses > 2).length;
@@ -47,8 +57,9 @@ export function validateMeshGeometry(mesh: MeshGeometry): GeometryValidationRepo
   if (invalidTriangles) errors.push(`${invalidTriangles} Dreiecke verweisen auf ungültige Eckpunkte.`);
   if (degenerateTriangles) errors.push(`${degenerateTriangles} Dreiecke besitzen keine Fläche.`);
   if (duplicateTriangles) errors.push(`${duplicateTriangles} Dreiecke sind doppelt vorhanden.`);
-  if (boundaryEdges) warnings.push(`${boundaryEdges} offene Netzkanten wurden gefunden.`);
-  if (nonManifoldEdges) warnings.push(`${nonManifoldEdges} mehrfach belegte Kanten wurden gefunden.`);
+  if (boundaryEdges) errors.push(`${boundaryEdges} offene Netzkanten wurden gefunden.`);
+  if (nonManifoldEdges) errors.push(`${nonManifoldEdges} mehrfach belegte Kanten wurden gefunden.`);
+  if ([...edgeUse].some(([key, uses]) => uses === 2 && edgeDirection.get(key) !== 0)) errors.push("Benachbarte Flächen sind widersprüchlich orientiert.");
   if (connectedComponents > 24) warnings.push(`${connectedComponents} getrennte Körper können den Import im Slicer erschweren.`);
   return { valid: finiteVertices && errors.length === 0, errors, warnings, stats: { boundaryEdges, nonManifoldEdges, degenerateTriangles, invalidTriangles, duplicateTriangles, connectedComponents } };
 }
@@ -61,7 +72,7 @@ export function removeInvalidTriangles<T extends MeshGeometry>(mesh: T): T {
     if (seen.has(key)) return false;
     const [a, b, c] = triangle.map((index) => mesh.vertices[index]);
     const ab = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], ac = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
-    if (Math.hypot(ab[1] * ac[2] - ab[2] * ac[1], ab[2] * ac[0] - ab[0] * ac[2], ab[0] * ac[1] - ab[1] * ac[0]) <= 1e-9) return false;
+    if (Math.hypot(ab[1] * ac[2] - ab[2] * ac[1], ab[2] * ac[0] - ab[0] * ac[2], ab[0] * ac[1] - ab[1] * ac[0]) === 0) return false;
     seen.add(key); return true;
   });
   return { ...mesh, triangles } as T;

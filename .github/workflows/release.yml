@@ -34,8 +34,8 @@ jobs:
             echo "APPLE_API_ISSUER=$APPLE_API_ISSUER" >> "$GITHUB_ENV"
             echo "enabled=true" >> "$GITHUB_OUTPUT"
           else
-            echo "::notice::Apple-Zertifikate nicht gesetzt – baue Release-DMG ohne Notarisierung."
-            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::error::Offizieller Release benötigt Apple-Zertifikat und Notarisierungszugang."
+            exit 1
           fi
       - run: npm ci
       - run: npm run revision

@@ -233,24 +233,26 @@ Ergebnis ohne Springen miteinander verglichen werden können.
 
 ## Mehrfarbiger AMS-Export
 
-Der AMS-Modus reduziert das Motiv auf zwei bis acht frei definierbare
-Filamentfarben. Erkannte Bildfarben können direkt den tatsächlich eingelegten
-Filamenten zugeordnet werden. Der 3MF-Export enthält getrennte, benannte
-Farbkörper mit Basismaterialien. Sie werden als Komponenten eines einzigen
-gemeinsamen 3MF-Modells exportiert, damit Slicer wie Anycubic Slicer und Bambu
-Studio sie als zusammengehöriges Mehrmaterialobjekt laden.
+Der AMS-Modus verwendet die in der App erkannten beziehungsweise zugeordneten
+Filamentplätze. Direkte SVGs und nachgezeichnete Rasterbilder verwenden dieselbe
+Palette; zusätzliche Grau- oder Schwarztöne erzeugen keine zusätzlichen Plätze.
+Bei deaktiviertem AMS-Farbdruck enthält das 3MF genau ein Material.
 
-Für Anycubic Slicer Next und andere Orca-basierte Slicer enthält die Datei
-zusätzlich die konkrete Filamentpalette und eine Extruderzuordnung je Farbkörper.
-Dadurch werden nicht nur die Geometrien gruppiert, sondern auch die in der App
-festgelegten AMS-Farben den Filamentplätzen 1 bis 8 zugeordnet.
+Das 3MF enthält einen geschlossenen Körper mit Oberflächenfarbmarkierungen und
+der zugehörigen Filamentpalette für Anycubic Slicer Next und Orca-basierte
+Slicer. Überlappende SVG-Flächen werden geometrisch vereinigt; spätere Flächen
+besitzen in überlappenden Bereichen Vorrang. Außenwände und Rückseite erhalten
+die gewählte Körperfarbe. STL bleibt als einfarbiger Export verfügbar.
 
-Senkrechte Außenkanten, Tragkörper und Farbgrenzen erhalten einheitlich die
-gewählte Farbe **Seiten & Tragkörper**. Die übrigen Farben liegen als 0,4 mm
-starke und damit mindestens zwei typische 0,2-mm-Schichten umfassende
-Deckkörper auf horizontalen Motivbereichen. Dadurch entstehen an den Seiten
-keine gestreiften Farbkanten und Slicer erkennen keine scheinbar
-dimensionslosen Teile. STL bleibt als einfarbiger Fallback erhalten.
+Die Geometrieprüfung blockiert offene Kanten, mehrfach belegte Kanten und
+widersprüchliche Flächenorientierungen. Die 3MF-Prüfung kontrolliert zusätzlich
+Dreiecks-, Material-, Objekt- und Paketbeziehungen. Die konkrete Füllung,
+Schichthöhe und Druckparameter werden weiterhin im Slicer eingestellt.
+
+Projekte und Wiederherstellung unterstützen Bild-, Text- und Lithophan-Projekte.
+Neue SVG-Projekte speichern die Originaldaten getrennt von der PNG-Vorschau;
+gespeicherte Farben und Zuordnungen bleiben beim Öffnen erhalten. Ältere Projekte,
+die nur eine Rastervorschau enthalten, werden als Rasterquelle geladen.
 
 ## Verarbeitungsarten
 
@@ -269,10 +271,12 @@ Nach dem Öffnen des DMG wird **AI Print Studio.app** auf den dort angezeigten
 Ordner **Applications** gezogen.
 
 Unter **Einstellungen → App-Updates** kann die App nach einer neuen
-GitHub-Version suchen. Bei einem verfügbaren Update öffnet
-**DMG herunterladen** den direkten Download im Browser. Anschließend muss die
-App aus dem DMG auf **Applications** gezogen werden. Eine automatische
-Hintergrundinstallation gibt es derzeit nicht.
+GitHub-Version suchen und ein verfügbares Update installieren. Das Paket wird
+vor dem Beenden der App vorbereitet und geprüft. Erst danach wird die App
+getauscht; die bisherige Version bleibt als Backup im Zielordner erhalten.
+Fehlschläge beim Austausch stellen die alte App wieder her. Der Ablauf wird in
+`AI-Print-Studio-update.log` im Zielordner protokolliert. Ohne Schreibzugriff wird
+das geprüfte DMG zur manuellen Installation geöffnet.
 
 Offizielle Releases werden mit **Developer ID Application**, Hardened Runtime
 und Apple-Notarisierung erstellt. Das Notarisierungsticket wird an das DMG

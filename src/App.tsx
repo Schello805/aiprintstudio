@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPaletteLoader } from "./domain/palette-loader";
 import {
   Box,
   CheckCircle2,
@@ -94,6 +95,8 @@ export function App() {
   const activeReliefJob = useRef<string | null>(null);
   const reliefProgressWindow = useRef({ start: 1, end: 96 });
   const recoveryLoaded = useRef(false);
+  const paletteLoader = useRef(createPaletteLoader(detectPalette));
+  useEffect(() => () => paletteLoader.current.cancel(), []);
   const [result, setResult] = useState<ReliefResult>(null);
   const [uploadStatus, setUploadStatus] = useState<string | null>(null);
   const [raiseLightAreas, setRaiseLightAreas] = useState(false);
@@ -203,29 +206,6 @@ export function App() {
     }));
   }), []);
 
-  useEffect(() => {
-    if (!preview) return;
-    let active = true;
-    void detectPalette(preview)
-      .then((palette) => {
-        if (!active) return;
-        setColorCount(palette.length);
-        setSourceColors(palette);
-        setColors(palette);
-        setColorMapping(palette.map((_, index) => index));
-        setSideColorIndex(darkestColorIndex(palette));
-      })
-      .catch(() => {
-        if (!active) return;
-        const fallback = ["#111827", "#F5F5F4", "#22C55E", "#F59E0B"];
-        setColorCount(fallback.length);
-        setSourceColors(fallback);
-        setColors(fallback);
-        setColorMapping(fallback.map((_, index) => index));
-        setSideColorIndex(0);
-      });
-    return () => { active = false; };
-  }, [preview]);
 
   async function selectFile(targetTool: Exclude<StudioTool, "home" | "text" | "prompt"> = "image") {
     setFileError(null);
@@ -254,6 +234,10 @@ export function App() {
   }
 
   function applySelectedImage(selected: SelectedImage) {
+    void paletteLoader.current.load(selected.dataUrl, palette => {
+      setColorCount(palette.length); setSourceColors(palette); setColors(palette);
+      setColorMapping(palette.map((_, index) => index)); setSideColorIndex(darkestColorIndex(palette));
+    });
     setFileError(null);
     setFile(selected);
     setPreview(selected.dataUrl);
@@ -492,6 +476,7 @@ export function App() {
   }, [file, studioTool, widthMm, baseMm, reliefMm, smoothing, detail, processingMode, profile, raiseLightAreas, multicolorEnabled, colorCount, sourceColors, colors, colorMapping, sideColorIndex, includeLogoBackground, optimizeForStandardNozzle, reduceTo250kTriangles, productShape, borderMm, holeDiameterMm, curveAngle]);
 
   function applyProject(loaded: StudioProject, message: string) {
+    paletteLoader.current.cancel();
     const settings = loaded.settings;
     setView("studio"); setStudioTool(loaded.tool); setFile(loaded.source); setPreview(loaded.source.dataUrl);
     setWidthMm(settings.widthMm); setBaseMm(settings.baseMm); setReliefMm(settings.reliefMm);
@@ -542,6 +527,7 @@ export function App() {
   function returnToToolSelection() {
     const hasProgress = Boolean(file || result);
     if (hasProgress && !window.confirm("Aktuellen Studio-Stand verwerfen?\n\nBild, Einstellungen, Farbauswahl und noch nicht exportierte Änderungen gehen dabei verloren.")) return;
+    paletteLoader.current.cancel();
     setStudioTool("home");
     setFile(null);
     setPreview(null);
@@ -791,7 +777,7 @@ export function App() {
                   {studioTool !== "lithophane" && <div className={multicolorEnabled ? "multicolor-panel active" : "multicolor-panel"}>
                     <button className="multicolor-toggle" onClick={() => setMulticolorEnabled((current) => !current)} aria-pressed={multicolorEnabled}>
                       <Palette />
-                      <div><strong>AMS-Farbdruck</strong><span>{multicolorEnabled ? `${colors.length} Farben werden als getrennte 3MF-Objekte exportiert` : "Mehrfarbige 3MF für Bambu Studio aktivieren"}</span></div>
+                      <div><strong>AMS-Farbdruck</strong><span>{multicolorEnabled ? `${colors.length} Farben werden als 3MF-Filamentplätze exportiert` : "Mehrfarbige 3MF für Bambu Studio aktivieren"}</span></div>
                       <span className="toggle-track"><span /></span>
                     </button>
                     {multicolorEnabled && (

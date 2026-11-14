@@ -102,3 +102,17 @@ it("maps extra SVG shades into exactly the four app filament slots and honors re
     expect(result.preview.colorParts.find(part => part.color === palette[3])?.indices.length).toBeGreaterThan(0);
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
+
+it("unites nested SVG fills, keeps the later fill on top, and honors AMS off", async () => {
+ const {mkdtemp,writeFile,readFile,rm}=await import("node:fs/promises");const {tmpdir}=await import("node:os");const {join}=await import("node:path");const {createRelief}=await import("./relief");
+ const dir=await mkdtemp(join(tmpdir(),"svg-solid-"));
+ try{const path=join(dir,"nested.svg");await writeFile(path,'<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect width="100" height="100" fill="black"/><rect x="25" y="25" width="50" height="50" fill="white"/></svg>');
+ for(const colors of [[],["#000000","#FFFFFF"]]){
+  const result=await createRelief(path,dir,{pipelineKind:"wordmark",processingMode:"wordmark",profile:"logo",widthMm:20,reliefMm:4,resolution:64,includeBackground:false,colors,sourceColors:colors});
+  expect(result.printability.estimatedVolumeCm3*1000).toBeCloseTo(1600,3);
+  expect(result.geometryValidation.valid).toBe(true);expect(result.geometryValidation.stats.boundaryEdges).toBe(0);expect(result.geometryValidation.stats.nonManifoldEdges).toBe(0);expect(result.geometryValidation.stats.connectedComponents).toBe(1);
+  const zip=await JSZip.loadAsync(await readFile(result.threeMfPath));const settings=JSON.parse(await zip.file("Metadata/project_settings.config")!.async("string"));expect(settings.filament_colour).toHaveLength(colors.length||1);
+  if(colors.length){const model=await zip.file("3D/3dmodel.model")!.async("string");expect(model).toContain('p1="1"');}
+ }
+ }finally{await rm(dir,{recursive:true,force:true});}
+});

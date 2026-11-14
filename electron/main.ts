@@ -8,6 +8,8 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { Worker } from "node:worker_threads";
 import sharp, { type Metadata } from "sharp";
+import { parseStudioProject, restoreProjectSource } from "./project-persistence.js";
+import { orientedDimensions } from "./image-source.js";
 import { prepareDepthInput } from "./depth-input.js";
 import type { ReliefProgress, ReliefResult } from "./relief.js";
 import { exportFitsLimits, validateGeneratedExportBuffer } from "./export-validation.js";
@@ -647,6 +649,7 @@ app.whenReady().then(async () => {
     let metadata: Metadata;
     try {
       metadata = await sharp(bytes).metadata();
+      metadata = { ...metadata, ...orientedDimensions(metadata) };
     } catch {
       throw new Error("Die Datei ist kein lesbares PNG-, JPG-, WEBP- oder SVG-Bild oder sie ist beschädigt.");
     }
@@ -666,9 +669,8 @@ app.whenReady().then(async () => {
       .raw()
       .toBuffer({ resolveWithObject: true });
     const suggestedProfile = suggestImageProfile(sample, sampleInfo.width, sampleInfo.height, metadata.format);
-    const extension = path.toLowerCase().split(".").pop();
-    const previewBytes = extension === "svg" ? await sharp(bytes).png().toBuffer() : bytes;
-    const mime = extension === "png" || extension === "svg" ? "image/png" : extension === "webp" ? "image/webp" : "image/jpeg";
+    const previewBytes = metadata.format === "svg" ? await sharp(bytes).png().toBuffer() : bytes;
+    const mime = metadata.format === "png" || metadata.format === "svg" ? "image/png" : metadata.format === "webp" ? "image/webp" : "image/jpeg";
     const approvedPath = approveSourcePath(path);
     return {
       path: approvedPath,
@@ -678,16 +680,14 @@ app.whenReady().then(async () => {
       height: metadata.height,
       format: metadata.format === "svg" ? "svg" : metadata.format === "jpeg" ? "jpg" : metadata.format,
       suggestedProfile,
+      ...(metadata.format === "svg" ? { originalDataUrl: `data:image/svg+xml;base64,${bytes.toString("base64")}` } : {}),
       dataUrl: `data:${mime};base64,${previewBytes.toString("base64")}`
     };
   });
   ipcMain.handle("project:save", async (_event, project: unknown) => {
-    const serialized = JSON.stringify(project, null, 2);
-    if (serialized.length > 35 * 1024 * 1024) throw new Error("Das Projekt ist größer als 35 MB.");
-    const parsed = JSON.parse(serialized) as { schemaVersion?: number; source?: { name?: string }; settings?: unknown };
-    if (parsed.schemaVersion !== 1 || !parsed.source?.name || !parsed.settings || typeof parsed.settings !== "object") {
-      throw new Error("Der Projektstand ist unvollständig.");
-    }
+    const parsed = parseStudioProject(project);
+    const serialized = JSON.stringify(parsed, null, 2);
+    if (Buffer.byteLength(serialized) > 35 * 1024 * 1024) throw new Error("Das Projekt ist größer als 35 MB.");
     const suggested = `${parsed.source.name.replace(/\.[^.]+$/, "").replace(/[^a-zA-Z0-9äöüÄÖÜß_-]+/g, "-") || "AI-Print-Projekt"}.aips`;
     const result = await dialog.showSaveDialog({
       title: "AI-Print-Studio-Projekt speichern",
@@ -707,39 +707,13 @@ app.whenReady().then(async () => {
     if (result.canceled || !result.filePaths[0]) return null;
     const bytes = await readFile(result.filePaths[0]);
     if (!bytes.length || bytes.length > 35 * 1024 * 1024) throw new Error("Die Projektdatei ist leer oder zu groß.");
-    const project = JSON.parse(bytes.toString("utf8")) as {
-      schemaVersion?: number;
-      source?: { name?: string; dataUrl?: string; path?: string };
-      settings?: unknown;
-      tool?: string;
-    };
-    if (
-      project.schemaVersion !== 1 ||
-      !project.source?.name ||
-      !project.settings ||
-      typeof project.settings !== "object" ||
-      !["image", "text"].includes(project.tool ?? "") ||
-      !/^data:image\/[a-z+.-]+;base64,/.test(project.source.dataUrl ?? "")
-    ) {
-      throw new Error("Die Datei ist kein gültiges AI-Print-Studio-Projekt.");
-    }
-    const match = /^data:image\/[a-z+.-]+;base64,([A-Za-z0-9+/=]+)$/.exec(project.source.dataUrl ?? "");
-    if (!match) throw new Error("Das eingebettete Projektbild ist ungültig.");
-    const directory = join(app.getPath("temp"), "AI Print Studio Projects");
-    await mkdir(directory, { recursive: true });
-    const extension = project.source.dataUrl?.startsWith("data:image/png") ? "png" : "jpg";
-    const restoredPath = approveSourcePath(join(directory, `project-${Date.now()}.${extension}`));
-    await writeFile(restoredPath, Buffer.from(match[1], "base64"));
-    project.source.path = restoredPath;
+    const project = await restoreProjectSource(JSON.parse(bytes.toString("utf8")), join(app.getPath("temp"), "AI Print Studio Projects"));
+    approveSourcePath(project.source.path as string);
     return project;
   });
   ipcMain.handle("recovery:save", async (_event, project: unknown) => {
-    const serialized = JSON.stringify(project);
-    if (serialized.length > 35 * 1024 * 1024) throw new Error("Der Wiederherstellungsstand ist größer als 35 MB.");
-    const parsed = JSON.parse(serialized) as { schemaVersion?: number; source?: { name?: string }; settings?: unknown; tool?: string };
-    if (parsed.schemaVersion !== 1 || !parsed.source?.name || !parsed.settings || !["image", "text", "lithophane"].includes(parsed.tool ?? "")) {
-      throw new Error("Der Wiederherstellungsstand ist unvollständig.");
-    }
+    const serialized = JSON.stringify(parseStudioProject(project));
+    if (Buffer.byteLength(serialized) > 35 * 1024 * 1024) throw new Error("Der Wiederherstellungsstand ist größer als 35 MB.");
     await mkdir(dirname(recoveryPath()), { recursive: true });
     const temporary = `${recoveryPath()}.tmp`;
     await writeFile(temporary, serialized, "utf8");
@@ -750,18 +724,8 @@ app.whenReady().then(async () => {
     try {
       const bytes = await readFile(recoveryPath());
       if (!bytes.length || bytes.length > 35 * 1024 * 1024) return null;
-      const project = JSON.parse(bytes.toString("utf8")) as {
-        schemaVersion?: number; savedAt?: string; source?: { name?: string; dataUrl?: string; path?: string }; settings?: unknown; tool?: string;
-      };
-      if (project.schemaVersion !== 1 || !project.source?.name || !project.settings || !["image", "text", "lithophane"].includes(project.tool ?? "")) return null;
-      const match = /^data:image\/[a-z+.-]+;base64,([A-Za-z0-9+/=]+)$/.exec(project.source.dataUrl ?? "");
-      if (!match) return null;
-      const directory = join(app.getPath("temp"), "AI Print Studio Recovery");
-      await mkdir(directory, { recursive: true });
-      const extension = project.source.dataUrl?.startsWith("data:image/png") ? "png" : "jpg";
-      const restoredPath = approveSourcePath(join(directory, `recovery-${Date.now()}.${extension}`));
-      await writeFile(restoredPath, Buffer.from(match[1], "base64"));
-      project.source.path = restoredPath;
+      const project = await restoreProjectSource(JSON.parse(bytes.toString("utf8")), join(app.getPath("temp"), "AI Print Studio Recovery"));
+      approveSourcePath(project.source.path as string);
       return project;
     } catch {
       return null;

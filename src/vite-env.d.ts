@@ -38,6 +38,7 @@ interface Window {
       format: "png" | "jpg" | "webp" | "svg";
       suggestedProfile: "logo" | "photo";
       dataUrl: string;
+      originalDataUrl?: string;
     } | null>;
     saveProject: (project: unknown) => Promise<string | null>;
     openProject: () => Promise<unknown | null>;
@@ -60,6 +61,7 @@ interface Window {
       format?: "png" | "jpg" | "webp" | "svg";
       suggestedProfile: "logo";
       dataUrl: string;
+      originalDataUrl?: string;
     }>;
     getAi3dModels: () => Promise<Array<{
       id: "gpt-5.6-sol" | "gpt-5.6-terra" | "gpt-5.6-luna";

@@ -71,7 +71,7 @@ export async function encodeThreeMf(
       }
     }
   }
-  const vertexXml = vertices.map(([x, y, z]) => `<vertex x="${x.toFixed(5)}" y="${y.toFixed(5)}" z="${z.toFixed(5)}"/>`).join("");
+  const vertexXml = vertices.map(([x, y, z]) => `<vertex x="${x}" y="${y}" z="${z}"/>`).join("");
   let minimumZ = Infinity;
   for (const vertex of vertices) minimumZ = Math.min(minimumZ, vertex[2]);
   const triangleXml = coloredTriangles.map(({ triangle: [v1, v2, v3], material }) => {

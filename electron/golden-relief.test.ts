@@ -30,6 +30,8 @@ describe("golden relief exports", () => {
         await readFile(result.threeMfPath);
         expect(result.geometryValidation.valid).toBe(true);
         expect(result.geometryValidation.stats.invalidTriangles).toBe(0);
+        expect(result.geometryValidation.stats.boundaryEdges).toBe(0);
+        expect(result.geometryValidation.stats.nonManifoldEdges).toBe(0);
         expect(result.contourQuality.score).toBeGreaterThanOrEqual(60);
         expect(result.triangleCount).toBeLessThanOrEqual(250_000);
         expect(result.fileBytes.stl).toBeLessThanOrEqual(25_000_000);

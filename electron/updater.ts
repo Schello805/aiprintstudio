@@ -2,7 +2,8 @@ import { execFile, spawn } from "node:child_process";
 import { createWriteStream, existsSync } from "node:fs";
 import { access, constants, mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, dirname } from "node:path";
+import { buildUpdateActivationScript, stageAppUpdate } from "./update-installer.js";
 import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
@@ -178,11 +179,12 @@ export async function downloadAndInstallDmgUpdate(options: {
     }
 
     await execFileAsync("codesign", ["--verify", "--deep", "--strict", mountedAppPath]);
+    await execFileAsync("spctl", ["--assess", "--type", "execute", mountedAppPath]);
 
     const targetAppPath = options.targetAppPath ?? "/Applications/AI Print Studio.app";
     let canWriteApplications = false;
     try {
-      await access("/Applications", constants.W_OK);
+      await access(dirname(targetAppPath), constants.W_OK);
       canWriteApplications = true;
     } catch {
       canWriteApplications = false;
@@ -209,29 +211,18 @@ export async function downloadAndInstallDmgUpdate(options: {
       percent: 98
     });
 
-    const updateScript = [
-      "PID=$1",
-      "SRC_APP=$2",
-      "DST_APP=$3",
-      "MNT_POINT=$4",
-      "TMP_DIR=$5",
-      "for _ in $(seq 1 150); do",
-      "  if ! kill -0 \"$PID\" 2>/dev/null; then break; fi",
-      "  sleep 0.2",
-      "done",
-      "rm -rf \"$DST_APP\"",
-      "ditto \"$SRC_APP\" \"$DST_APP\"",
-      "xattr -dr com.apple.quarantine \"$DST_APP\" 2>/dev/null || true",
-      "hdiutil detach \"$MNT_POINT\" -quiet 2>/dev/null || hdiutil detach \"$MNT_POINT\" -force -quiet 2>/dev/null || true",
-      "rm -rf \"$TMP_DIR\" 2>/dev/null || true",
-      "open -n \"$DST_APP\""
-    ].join("\n");
-
+    const staged = await stageAppUpdate(mountedAppPath, targetAppPath);
+    const backup = `${targetAppPath.replace(/\.app$/, "")}.previous-${Date.now()}.app`;
+    const log = join(dirname(targetAppPath), "AI-Print-Studio-update.log");
     const child = spawn(
       "/bin/zsh",
-      ["-c", updateScript, "ai-print-studio-updater", String(process.pid), mountedAppPath, targetAppPath, mountPoint, tempDir],
+      ["-c", buildUpdateActivationScript(), "ai-print-studio-updater", String(process.pid), staged, targetAppPath, backup, mountPoint, tempDir, log],
       { detached: true, stdio: "ignore" }
     );
+    await new Promise<void>((resolve, reject) => {
+      child.once("spawn", resolve);
+      child.once("error", reject);
+    });
     child.unref();
 
     setTimeout(() => {
@@ -239,7 +230,7 @@ export async function downloadAndInstallDmgUpdate(options: {
     }, 350);
 
     return {
-      installed: true,
+      installed: false,
       message: "Update wird installiert und AI Print Studio neu gestartet …"
     };
   } catch (error) {

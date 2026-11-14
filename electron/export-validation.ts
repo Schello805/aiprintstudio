@@ -1,4 +1,6 @@
-import JSZip from "jszip";
+import { inspectThreeMf } from "./three-mf-validation.js";
+import { validateMeshGeometry } from "./mesh-quality.js";
+import type { Mesh } from "./relief-export.js";
 
 export type ExportValidation = { valid: boolean; errors: string[]; triangleCount: number };
 export const maximumExportTriangles = 250_000;
@@ -26,23 +28,25 @@ export async function validateGeneratedExportBuffer(extension: ".stl" | ".3mf", 
         }
       }
     }
+    if (errors.length === 0) {
+      const mesh: Mesh = { vertices: [], triangles: [] };
+      for (let triangle=0;triangle<triangleCount;triangle++) {
+        const indices: [number,number,number] = [0,0,0];
+        for(let vertex=0;vertex<3;vertex++) {
+          const offset=84+triangle*50+12+vertex*12;
+          indices[vertex]=mesh.vertices.length;
+          mesh.vertices.push([data.readFloatLE(offset),data.readFloatLE(offset+4),data.readFloatLE(offset+8)]);
+        }
+        mesh.triangles.push(indices);
+      }
+      errors.push(...validateMeshGeometry(mesh).errors);
+    }
     return { valid: errors.length === 0, errors, triangleCount };
   }
 
   try {
-    const archive = await JSZip.loadAsync(data);
-    const modelEntry = archive.file("3D/3dmodel.model");
-    if (!archive.file("[Content_Types].xml")) errors.push("3MF-Inhaltstypen fehlen.");
-    if (!archive.file("_rels/.rels")) errors.push("3MF-Beziehungsdatei fehlt.");
-    if (!modelEntry) return { valid: false, errors: [...errors, "3MF-Modellbeschreibung fehlt."], triangleCount: 0 };
-    const model = await modelEntry.async("string");
-    if (!/<model\b[^>]*\bunit="millimeter"/i.test(model)) errors.push("3MF verwendet nicht Millimeter als Einheit.");
-    const vertices = [...model.matchAll(/<vertex\s+x="([^"]+)"\s+y="([^"]+)"\s+z="([^"]+)"\s*\/>/g)];
-    const triangles = [...model.matchAll(/<triangle\b/g)];
-    if (!vertices.length || !triangles.length) errors.push("3MF enthält keine verwertbare Meshgeometrie.");
-    if ([...model.matchAll(/<item\b/g)].length !== 1) errors.push("3MF muss genau ein gemeinsames Build-Objekt enthalten.");
-    if (vertices.some((match) => match.slice(1).some((value) => !Number.isFinite(Number(value))))) errors.push("3MF enthält ungültige Koordinaten.");
-    return { valid: errors.length === 0, errors, triangleCount: triangles.length };
+    const validation = await inspectThreeMf(data);
+    return { valid: validation.errors.length === 0, ...validation };
   } catch (error) {
     return { valid: false, errors: [`3MF-Archiv ist beschädigt: ${error instanceof Error ? error.message : "unbekannter Fehler"}`], triangleCount: 0 };
   }

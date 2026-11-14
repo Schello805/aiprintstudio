@@ -1,6 +1,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { basename, extname, join } from "node:path";
 import sharp from "sharp";
+import { orientedDimensions } from "./image-source.js";
 import { validateGeneratedExportBuffer } from "./export-validation.js";
 import { analyseContourQuality, removeInvalidTriangles, validateMeshGeometry, type ContourQualityReport, type GeometryValidationReport } from "./mesh-quality.js";
 import { resolveReliefPipeline, type ReliefPipelineKind } from "./relief-pipelines.js";
@@ -173,7 +174,8 @@ export async function createRelief(
   // gezackte Glättung 1 zurückfallen. Dieser Vertrag liegt bewusst in der
   // Engine und gilt damit identisch für Vorschau, STL und 3MF.
   options.smoothing = Math.max(options.smoothing, pipeline.minimumSmoothing);
-  const metadata = await sharp(imagePath).metadata();
+  const rawMetadata = await sharp(imagePath).metadata();
+  const metadata = { ...rawMetadata, ...orientedDimensions(rawMetadata) };
   if (!metadata.width || !metadata.height) throw new Error("Das Bild besitzt keine gültigen Abmessungen.");
   if (metadata.format === "svg" && pipeline.kind === "wordmark") {
     const svgResult = await createSvgPathRelief(imagePath, outputDirectory, options, onProgress);

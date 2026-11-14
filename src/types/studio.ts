@@ -14,6 +14,7 @@ export type SelectedImage = {
   format?: "png" | "jpg" | "webp" | "svg";
   suggestedProfile: "logo" | "photo";
   dataUrl: string;
+  originalDataUrl?: string;
 };
 export type ReliefResult = Awaited<ReturnType<NonNullable<typeof window.desktop>["createRelief"]>>;
 export type Ai3dResult = Awaited<ReturnType<NonNullable<typeof window.desktop>["createAi3d"]>>;
@@ -78,7 +79,7 @@ export type SettingsStatus = {
   depthModelAvailable: boolean;
 };
 
-export const RELIEF_ENGINE_VERSION = "2026-08-09-wordmark-trace-v2";
+export const RELIEF_ENGINE_VERSION = "2026-11-14-closed-solid-v3";
 
 export const optimalResolution: Record<QualityProfile, number> = {
   fast: 192,

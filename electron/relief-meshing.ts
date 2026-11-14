@@ -1,3 +1,4 @@
+import { extractSolidMesh } from "./solid-mesh.js";
 import { contours } from "d3-contour";
 import ManifoldModule from "manifold-3d/manifold";
 import { ShapeUtils, Vector2 } from "three";
@@ -624,19 +625,7 @@ export async function buildLayeredCellVectorRelief(
   }
   if (!solids.length) return { vertices: [], triangles: [] };
   const unified = manifoldModule.Manifold.union(solids);
-  const output = unified.getMesh();
-  const vertices: Vec3[] = [];
-  for (let offset = 0; offset < output.vertProperties.length; offset += output.numProp) {
-    vertices.push([
-      output.vertProperties[offset],
-      output.vertProperties[offset + 1],
-      output.vertProperties[offset + 2]
-    ]);
-  }
-  const triangles: Triangle[] = [];
-  for (let offset = 0; offset < output.triVerts.length; offset += 3) {
-    triangles.push([output.triVerts[offset], output.triVerts[offset + 1], output.triVerts[offset + 2]]);
-  }
+  const closed = extractSolidMesh(unified.getMesh());
   unified.delete();
   solids.forEach((solid) => solid.delete());
   const snapLevels = [
@@ -644,7 +633,7 @@ export async function buildLayeredCellVectorRelief(
     ...(baseplate?.enabled && baseplate.baseMm > 0 ? [baseplate.baseMm] : []),
     ...levels
   ];
-  return weldMeshVertices(snapMeshZToLevels({ vertices, triangles }, snapLevels), 5);
+  return snapMeshZToLevels(closed, snapLevels);
 }
 
 export function snapMeshZToLevels(mesh: Mesh, levels: number[], epsilon = 0.035): Mesh {
