@@ -2,21 +2,6 @@
 
 ## Unveröffentlicht
 
-- App-Updates bereiten die neue Version vor dem Beenden vor, behalten ein
-  Backup und stellen bei fehlgeschlagenem Austausch die bisherige App wieder her.
-- Offizielle Releases brechen bei fehlenden Apple-Zugangsdaten ab; automatische
-  Updates prüfen zusätzlich die macOS-Vertrauensbewertung.
-- Geometrieprüfung blockiert offene, nicht-manifold und widersprüchlich orientierte
-  Netze. STL und 3MF werden auch anhand der tatsächlichen gespeicherten Geometrie geprüft.
-- SVG-Flächen werden unter Beachtung der Zeichenreihenfolge zu Volumenkörpern
-  vereinigt; weiße Hintergrundrechtecke bleiben bei freigestellten Logos weg.
-- Ausgeschalteter AMS-Farbdruck bleibt auch bei SVGs einfarbig.
-- EXIF-Drehungen werden bei Modellmaßen und Bildraster berücksichtigt.
-- Gemeinsames Projektschema für Bild, Text und Lithophan; Original-SVGs bleiben
-  in neuen Projekten und Wiederherstellungsständen erhalten.
-- Gespeicherte Farbzuordnungen werden beim Laden nicht erneut automatisch überschrieben.
-- 3MF-Prüfung löst Paket-, Objekt-, Komponenten-, Dreiecks- und Materialreferenzen auf.
-
 - Der manuelle Flächeneditor wurde vollständig aus Oberfläche, Projektformat,
   IPC-Brücke, Worker und Relief-Engine entfernt.
 - Transparente Schriftkonturen erzeugen keine zusätzliche äußere Zellreihe
@@ -170,6 +155,23 @@
   prüft Signatur sowie Gatekeeper vor der Veröffentlichung.
 - Fehlen Zertifikat oder Notarisierungszugang, wird kein unsicherer offizieller
   Release mehr erzeugt.
+
+## 0.31.54 – 2026-11-14
+
+- App-Updates bereiten die neue Version vor dem Beenden vor, behalten ein
+  Backup und stellen bei fehlgeschlagenem Austausch die bisherige App wieder her.
+- Offizielle Releases brechen bei fehlenden Apple-Zugangsdaten ab; automatische
+  Updates prüfen zusätzlich die macOS-Vertrauensbewertung.
+- Geometrieprüfung blockiert offene, nicht-manifold und widersprüchlich orientierte
+  Netze. STL und 3MF werden auch anhand der tatsächlichen gespeicherten Geometrie geprüft.
+- SVG-Flächen werden unter Beachtung der Zeichenreihenfolge zu Volumenkörpern
+  vereinigt; weiße Hintergrundrechtecke bleiben bei freigestellten Logos weg.
+- Ausgeschalteter AMS-Farbdruck bleibt auch bei SVGs einfarbig.
+- EXIF-Drehungen werden bei Modellmaßen und Bildraster berücksichtigt.
+- Gemeinsames Projektschema für Bild, Text und Lithophan; Original-SVGs bleiben
+  in neuen Projekten und Wiederherstellungsständen erhalten.
+- Gespeicherte Farbzuordnungen werden beim Laden nicht erneut automatisch überschrieben.
+- 3MF-Prüfung löst Paket-, Objekt-, Komponenten-, Dreiecks- und Materialreferenzen auf.
 
 ## 0.31.53 – 2026-10-23
 
