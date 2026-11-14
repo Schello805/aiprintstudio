@@ -171,7 +171,8 @@ export function assignCanonicalTriangleMaterials(
   rows: number,
   widthMm: number,
   heightMm: number,
-  sideColorIndex: number
+  sideColorIndex: number,
+  sourceCellHeights?: number[]
 ): number[] {
   const cellColumns = columns - 1;
   const cellRows = rows - 1;
@@ -188,6 +189,30 @@ export function assignCanonicalTriangleMaterials(
     if (z > 0.05 && z < minTopZ) minTopZ = z;
   }
   const hasRaisedOutlines = maxTopZ - minTopZ > 0.25;
+  const materialAtHeight = (xMm: number, yMm: number, top: number) => {
+    const cx = Math.max(0, Math.min(cellColumns - 1, Math.floor(xMm / widthMm * cellColumns)));
+    const cy = Math.max(0, Math.min(cellRows - 1, Math.floor(yMm / heightMm * cellRows)));
+    let bestMaterial = sideColorIndex;
+    let bestDistance = Number.POSITIVE_INFINITY;
+    // A smoothed contour can move across the source cell boundary. Sample
+    // only the same height band so a raised outline cannot inherit the
+    // neighboring white field's color, nor a red fill the black outline.
+    for (let dy = -2; dy <= 2; dy += 1) {
+      for (let dx = -2; dx <= 2; dx += 1) {
+        const x = cx + dx, y = cy + dy;
+        if (x < 0 || y < 0 || x >= cellColumns || y >= cellRows) continue;
+        const cell = y * cellColumns + x;
+        if (assignments[cell] < 0 || Math.abs((sourceCellHeights?.[cell] ?? 0) - top) > 0.05) continue;
+        const distance = ((x + 0.5) * widthMm / cellColumns - xMm) ** 2
+          + ((y + 0.5) * heightMm / cellRows - yMm) ** 2;
+        if (distance < bestDistance) {
+          bestDistance = distance;
+          bestMaterial = assignments[cell];
+        }
+      }
+    }
+    return bestMaterial;
+  };
   const fillMaterialNear = (xMm: number, yMm: number) => {
     const cx = Math.max(0, Math.min(cellColumns - 1, Math.floor(xMm / widthMm * cellColumns)));
     const cy = Math.max(0, Math.min(cellRows - 1, Math.floor(yMm / heightMm * cellRows)));
@@ -228,7 +253,9 @@ export function assignCanonicalTriangleMaterials(
     samples.forEach(([wa, wb, wc], index) => {
       const sx = a[0] * wa + b[0] * wb + c[0] * wc;
       const sy = a[1] * wa + b[1] * wb + c[1] * wc;
-      const material = isLowerPlateau ? fillMaterialNear(sx, sy) : materialAt(sx, sy);
+      const material = sourceCellHeights
+        ? materialAtHeight(sx, sy, avgZ)
+        : isLowerPlateau ? fillMaterialNear(sx, sy) : materialAt(sx, sy);
       if (index === 0) centerMaterial = material;
       counts.set(material, (counts.get(material) ?? 0) + 1);
     });
@@ -494,7 +521,6 @@ export async function buildLayeredVectorRelief(
   isText = false,
   baseplate?: LayeredBaseplateOptions
 ): Promise<Mesh> {
-  const cellColumns = columns - 1;
   let maxH = 0;
   if (isText && (!baseplate || !baseplate.reliefMm)) {
     for (let i = 0; i < heights.length; i += 1) {
@@ -506,9 +532,15 @@ export async function buildLayeredVectorRelief(
         ? baseplate.baseMm + baseplate.reliefMm
         : (baseplate?.reliefMm ?? (maxH > 0 ? maxH : 3)))
     : 0;
-  const cellHeights = cellMask.map((occupied, cell) => {
+  const cellHeights = buildVectorCellHeights(heights, cellMask, columns, isText ? targetTextHeight : undefined);
+  return buildLayeredCellVectorRelief(columns, rows, widthMm, heightMm, cellHeights, cellMask, smoothing, stabilizeOuterWall, isText, baseplate);
+}
+
+export function buildVectorCellHeights(heights: number[], cellMask: boolean[], columns: number, textHeight?: number): number[] {
+  const cellColumns = columns - 1;
+  return cellMask.map((occupied, cell) => {
     if (!occupied) return 0;
-    if (isText) return targetTextHeight;
+    if (textHeight !== undefined) return textHeight;
     const x = cell % cellColumns;
     const y = Math.floor(cell / cellColumns);
     const vertex = y * columns + x;
@@ -529,7 +561,6 @@ export async function buildLayeredVectorRelief(
     }
     return bestHeight;
   });
-  return buildLayeredCellVectorRelief(columns, rows, widthMm, heightMm, cellHeights, cellMask, smoothing, stabilizeOuterWall, isText, baseplate);
 }
 
 export async function buildLayeredCellVectorRelief(

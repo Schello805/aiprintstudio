@@ -79,7 +79,7 @@ export type SettingsStatus = {
   depthModelAvailable: boolean;
 };
 
-export const RELIEF_ENGINE_VERSION = "2026-11-14-closed-solid-v3";
+export const RELIEF_ENGINE_VERSION = "2026-11-14-height-matched-colors-v4";
 
 export const optimalResolution: Record<QualityProfile, number> = {
   fast: 192,

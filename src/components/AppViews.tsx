@@ -4,26 +4,27 @@ import type { HistoryEntry, LegalPage } from "../types/studio";
 export function InfoView({ version }: { version: string }) {
   const technologies = [
     ["Desktop-App", "Electron", "Fenster, sichere IPC-Brücke, Dateien und lokale Prozesse", "MIT"],
-    ["Oberfläche", "React · TypeScript · Vite", "Studio, Vorschau und Zustandsverwaltung", "MIT"],
+    ["Oberfläche", "React · TypeScript · Vite", "Studio, Vorschau und Zustandsverwaltung", "MIT · Apache-2.0"],
     ["3D-Vorschau", "Three.js · React Three Fiber · Drei", "Dreh- und zoombare Mesh-Vorschau", "MIT"],
     ["Bildverarbeitung", "Sharp", "Rasterung, Masken, Höhenkarten und Farbanalyse", "Apache-2.0"],
     ["Vektorkonturen", "d3-contour · Manifold · Three.js Earcut", "Geglättete Konturen und robust vereinigte Wappen-Volumen", "ISC · Apache-2.0 · MIT"],
-    ["SVG-Logo/Text", "Three.js SVGLoader · ExtrudeGeometry", "SVG-Pfade werden direkt zu STL/3MF extrudiert statt aus Pixeln geschätzt", "MIT"],
-    ["Lokale Foto-Tiefe", "Depth Anything V2 Small · Core ML", "Monokulare Tiefenschätzung auf Apple Silicon", "Apache-2.0"],
+    ["SVG-Logo/Text", "Three.js SVGLoader · Manifold", "Füllpfade werden extrudiert und zu einem geschlossenen Volumen vereinigt; bei ungeeigneten Pfaden greift die Rasteranalyse", "MIT · Apache-2.0"],
+    ["Lokale Foto-Tiefe", "Depth Anything V2 Small · Core ML", "Mitgelieferte Tiefenschätzung auf Apple Silicon ab macOS 14", "Modell: Apache-2.0"],
     ["Prompt zu 3D", "OpenAI Responses API", "Validierter CAD-Bauplan; Vorschau und Mesh entstehen lokal", "optional, nutzungsabhängige API-Kosten"],
-    ["3MF-Verpackung", "JSZip", "Mehrfarbige 3MF-Archive und Slicer-Metadaten", "MIT/GPL-3.0+"]
+    ["Datenprüfung", "Zod · @xmldom/xmldom", "Einstellungen, Projekte und 3MF-Struktur prüfen", "MIT"],
+    ["3MF-Verpackung", "JSZip", "Mehrfarbige 3MF-Archive und Slicer-Metadaten", "MIT oder GPL-3.0+"]
   ];
   return (
     <section className="info-view">
       <div className="info-hero">
         <div className="info-hero-icon"><Info /></div>
-        <div><p className="eyebrow">AI PRINT STUDIO · VERSION {version}</p><h2>So wird aus einer Idee ein druckbares Modell</h2><p>Die App kombiniert lokale Bildanalyse, deterministischen Meshaufbau und optionale KI-Planung. Bilder, Geometrie und Exporte bleiben grundsätzlich auf deinem Mac.</p></div>
+        <div><p className="eyebrow">AI PRINT STUDIO · VERSION {version}</p><h2>So entsteht dein 3D-Modell</h2><p>Bild-, Schrift- und Lithophanmodelle entstehen lokal auf deinem Mac. Für „Prompt zu 3D“ kannst du OpenAI mit deinem eigenen API-Schlüssel nutzen; dabei entstehen API-Kosten.</p></div>
       </div>
 
       <div className="info-section">
         <div className="info-heading"><span>01</span><div><h3>Die vier Arbeitswege</h3><p>Welcher Teil lokal läuft und wann ein externer Dienst beteiligt ist.</p></div></div>
         <div className="info-flow-grid">
-          <article><ImagePlus /><h4>Bild zu 3D</h4><p>Das Bild wird lokal validiert. Wappen/Fotos laufen durch die lokale Reliefanalyse; SVG-Logos mit Text werden als echte Pfade extrudiert.</p><strong>Vollständig lokal</strong></article>
+          <article><ImagePlus /><h4>Bild zu 3D</h4><p>Wappen nutzen Konturen und feste Höhenstufen. Fotos nutzen Helligkeit oder lokale KI-Tiefe. „Logo mit Text“ wertet SVG-Füllpfade aus und vektorisiert Rasterbilder, soweit das Motiv dafür geeignet ist.</p><strong>Vollständig lokal</strong></article>
           <article><Type /><h4>Schrift zu 3D</h4><p>Die Schrift wird lokal gerendert, konturiert, extrudiert und durch dieselbe Druckbarkeits- und Exportpipeline geführt.</p><strong>Vollständig lokal</strong></article>
           <article><ImagePlus /><h4>Foto zu Lithophan</h4><p>Bildhelligkeit wird in Materialstärke übersetzt. Außenform, Rahmen, Aufhängeloch und Wölbung entstehen gemeinsam mit dem wasserdichten Mesh.</p><strong>Vollständig lokal</strong></article>
           <article><Sparkles /><h4>Prompt zu 3D</h4><p>Nur Beschreibung und bei Änderungen der aktuelle CAD-Bauplan gehen an OpenAI. Die Antwort wird streng validiert; STL und Vorschau erzeugt die App lokal.</p><strong>OpenAI optional</strong></article>
@@ -31,13 +32,13 @@ export function InfoView({ version }: { version: string }) {
       </div>
 
       <div className="info-section">
-        <div className="info-heading"><span>02</span><div><h3>Verarbeitungspipeline</h3><p>Die Ausgabe wird nicht einfach aus einem Bild „kopiert“, sondern schrittweise konstruiert.</p></div></div>
+        <div className="info-heading"><span>02</span><div><h3>Verarbeitungspipeline</h3><p>So verarbeitet die App Bilder und Schrift. Prompt-Modelle entstehen separat aus einem validierten CAD-Bauplan.</p></div></div>
         <ol className="pipeline-list">
           <li><span>1</span><div><strong>Eingabe prüfen</strong><p>Format, Größe, Pixelabmessungen und Transparenz werden validiert.</p></div></li>
           <li><span>2</span><div><strong>Motiv verstehen</strong><p>Konturen, Flächen, Helligkeit oder Tiefe werden passend zum Werkzeug analysiert. Bei SVG werden vorhandene Pfade direkt gelesen.</p></div></li>
           <li><span>3</span><div><strong>Geometrie aufbauen</strong><p>Die App erzeugt Höhen, Grundplatte, Außenform, optionale Aussparungen und geschlossene Seitenflächen.</p></div></li>
-          <li><span>4</span><div><strong>Druckbarkeit prüfen</strong><p>Zusammenhalt, Mindestbreiten, Steigungen, Dreiecksmenge und Materialvolumen fließen in den Druckscore ein.</p></div></li>
-          <li><span>5</span><div><strong>Exportieren</strong><p>STL für einfarbige Modelle und 3MF für AMS-Farben.</p></div></li>
+          <li><span>4</span><div><strong>Geometrie und Druckbarkeit prüfen</strong><p>Geschlossene Flächen und gültige Dreiecke werden geprüft. Je nach Werkzeug bewertet die App unter anderem Grundstärke, Zusammenhalt und feine Details. Volumen und Druckdauer sind Schätzwerte.</p></div></li>
+          <li><span>5</span><div><strong>Exportieren</strong><p>STL enthält Geometrie ohne Farben. Mehrfarbige Reliefs erhalten im 3MF die eingestellte Palette und Materialzuordnung. Filamente und Druckprofil prüfst du anschließend im Slicer.</p></div></li>
         </ol>
       </div>
 
@@ -56,8 +57,9 @@ export function InfoView({ version }: { version: string }) {
             <li><CheckCircle2 /> Automatische Wiederherstellung und Diagnose-Logs ausschließlich lokal</li>
             <li><CheckCircle2 /> Bilder, Meshes, Höhenkarten und Exporte bleiben lokal</li>
             <li><CheckCircle2 /> OpenAI nur nach bewusst gestarteter Prompt-zu-3D-Aktion</li>
-            <li><CheckCircle2 /> Keine externen 3D-Modellgewichte oder nachgeladenen KI-Worker</li>
-            <li><CheckCircle2 /> API-Key lokal mit App-Passwort, scrypt und AES-256-GCM geschützt</li>
+            <li><CheckCircle2 /> Das Foto-Tiefenmodell ist enthalten; beim Arbeiten wird kein KI-Modell nachgeladen</li>
+            <li><Info /> Neue API-Schlüssel werden ohne App-Passwort unverschlüsselt in den lokalen Einstellungen gespeichert</li>
+            <li><Info /> Die Updateprüfung verbindet sich mit GitHub; Modelldateien werden dabei nicht übertragen</li>
           </ul>
         </div>
         <div>
@@ -67,13 +69,16 @@ export function InfoView({ version }: { version: string }) {
             <li><Info /> PNG/JPG-Logo-Schrift wird lokal vektorisiert; echte SVG-Dateien liefern weiterhin die saubersten Pfade</li>
             <li><Info /> Reliefs sind kontrollierte 2,5D-Modelle, keine vollständigen Scans</li>
             <li><Info /> Prompt-Modelle bestehen aus validierten Grundkörpern und ersetzen keine Hersteller-CAD-Dateien</li>
+            <li><Info /> Geschlossene Geometrie legt die Fülldichte nicht fest: Infill, Deckschichten und Druckprofil stellt der Slicer ein</li>
+            <li><Info /> 3MF-Farben und Filamentplätze hängen auch vom verwendeten Slicer und Druckerprofil ab</li>
+            <li><Info /> Die Updateprüfung berücksichtigt veröffentlichte GitHub-Releases; Quellcode-Pushes und Entwürfe sind keine App-Updates</li>
             <li><Info /> Vor dem Druck sollte jedes Modell im Slicer kontrolliert werden</li>
           </ul>
         </div>
       </div>
 
       <div className="info-legal-note">
-        <ShieldCheck /><div><strong>Lizenzen und rechtliche Hinweise</strong><p>Open-Source-Komponenten behalten ihre jeweiligen Lizenzen. Produktnamen dienen nur der Beschreibung; eine Partnerschaft oder Autorisierung wird nicht behauptet. Nutzer müssen Rechte an Referenzen, Designs und Marken selbst prüfen. Details stehen in THIRD_PARTY_NOTICES.md.</p></div>
+        <ShieldCheck /><div><strong>Lizenzen und rechtliche Hinweise</strong><p>Der App-Quellcode steht unter PolyForm Noncommercial 1.0.0 für nichtkommerzielle Nutzung zur Verfügung. Die verwendeten Bibliotheken und das Tiefenmodell behalten ihre eigenen Lizenzen. Produktnamen beschreiben die verwendete Technik; eine Partnerschaft wird nicht behauptet. Rechte an fremden Bildern, Designs und Marken musst du selbst prüfen.</p></div>
       </div>
     </section>
   );
@@ -181,7 +186,7 @@ export function EmptyState({ icon: Icon, title, text }: { icon: typeof Clock3; t
 export function Footer({ version, openLegal }: { version: string; openLegal: (page: LegalPage) => void }) {
   return (
     <footer>
-      <p>Quelloffen für nichtkommerzielle Nutzung · Michael Schellenberger</p>
+      <p>Quellcode für nichtkommerzielle Nutzung · Michael Schellenberger</p>
       <div className="footer-links">
         <span className="footer-cost"><strong>0,00 €</strong> lokal · keine API-Kosten</span>
         <button onClick={() => openLegal("imprint")}>Impressum</button>

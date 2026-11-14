@@ -25,9 +25,10 @@ fachkundig geprüft werden.
   Sharp, JSZip, Lucide, Zod und Depth Anything V2 müssen im Release zugänglich
   bleiben. Produktnamen anderer Hersteller dürfen nur sachlich zur
   Kompatibilitätsbeschreibung verwendet werden.
-- **Export-Compliance beantworten:** Der lokale API-Key-Tresor verwendet
-  `scrypt` und AES-256-GCM. Deshalb müssen die Verschlüsselungsfragen in App
-  Store Connect geprüft und wahrheitsgemäß beantwortet werden.
+- **Export-Compliance beantworten:** Neue API-Schlüssel liegen lokal
+  unverschlüsselt vor; für verschlüsselte Altbestände sind weiterhin `scrypt`
+  und AES-256-GCM enthalten. Die Verschlüsselungsfragen müssen anhand des
+  tatsächlich ausgelieferten Builds geprüft und wahrheitsgemäß beantwortet werden.
 - **KI-Nutzung transparent halten:** Vor einer OpenAI-Übertragung müssen
   Empfänger, Zweck, übertragene Inhalte und mögliche API-Kosten erkennbar sein.
   Modellgrenzen und die notwendige Slicer-/Druckprüfung dürfen nicht als

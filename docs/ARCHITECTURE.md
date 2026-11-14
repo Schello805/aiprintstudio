@@ -14,7 +14,7 @@ React Renderer
   │ sichere, typisierte IPC-Aufrufe
 Electron Main Process
   ├── Systemcheck / Hardware- und Ressourcenprüfung
-  ├── Einstellungen / lokaler AES-GCM-Tresor für OpenAI
+  ├── Einstellungen / lokaler OpenAI-Schlüssel (neue Einträge unverschlüsselt)
   ├── Verlauf / Updateprüfung
   ├── Dateivalidierung
   ├── OpenAI CAD-Planung (optional)
@@ -156,6 +156,14 @@ Originalbild und erzeugte Höhenkarte bleiben nebeneinander umschaltbar; damit
 ist sichtbar, welche Information tatsächlich in die Geometrie eingeflossen ist.
 
 ## AMS- und 3MF-Aufbau
+
+Explizite Wappen verwenden ein gemeinsames geschlossenes Mesh mit
+Dreiecksmaterialien. Die Farbprobe berücksichtigt dieselben Höhenstufen wie
+die Geometrie: Antialias-Pixel und Farben benachbarter, anders hoher Flächen
+werden nicht als Konturfarbe übernommen. So erhalten schwarze Konturen neben
+roten Rollen keine weißen Streifen aus dem Wappenfeld. Boden und senkrechte
+Wände behalten die gewählte Seitenfarbe. Die folgenden Deckkörper beschreiben
+die übrigen Rasterpfade.
 
 Die lokal erkannte Palette wird auf zwei bis acht frei definierbare
 Filamentfarben abgebildet. Motivfarben werden als separate, 0,4 mm starke und

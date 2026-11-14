@@ -156,6 +156,17 @@
 - Fehlen Zertifikat oder Notarisierungszugang, wird kein unsicherer offizieller
   Release mehr erzeugt.
 
+## 0.31.55 – 2026-11-14
+
+- Geglättete Wappenkonturen erhalten ihre Farben aus derselben Reliefstufe.
+  Weiße Nachbarfelder und graue Antialias-Pixel färben schwarze Konturen an
+  roten Rollen nicht mehr weiß. Vorschau und 3MF verwenden dieselbe Zuordnung.
+- **Über & Technik** beschreibt die aktuelle SVG-Volumenbildung, lokale
+  Tiefenschätzung ab macOS 14, Slicer-Einstellungen und veröffentlichte Updates.
+- Falsche Angaben zum Passwortschutz des API-Schlüssels wurden korrigiert:
+  Neue Schlüssel werden derzeit ohne App-Passwort unverschlüsselt lokal gespeichert.
+- Komponentenlizenzen und die nichtkommerzielle App-Lizenz sind präzisiert.
+
 ## 0.31.54 – 2026-11-14
 
 - App-Updates bereiten die neue Version vor dem Beenden vor, behalten ein

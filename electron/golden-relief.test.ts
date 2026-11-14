@@ -41,6 +41,17 @@ describe("golden relief exports", () => {
           expect(result.options.pipelineKind).toBe("emblem");
           expect(result.options.processingMode).toBe("vector");
           expect(result.colorRegions).toHaveLength(4);
+          // The fixture's highest band is its black outline. Smoothing must
+          // not paint it with white or yellow from adjacent source pixels.
+          const highest = result.preview.positions.reduce((top, value, index) => index % 3 === 1 ? Math.max(top, value) : top, 0);
+          for (const part of result.preview.colorParts.filter((part) => part.color !== fixture.colors.at(-1))) {
+            for (let offset = 0; offset < part.indices.length; offset += 3) {
+              const onOutline = part.indices.slice(offset, offset + 3).every((vertex) =>
+                Math.abs(result.preview.positions[vertex * 3 + 1] - highest) < 1e-4
+              );
+              expect(onOutline).toBe(false);
+            }
+          }
         }
         expect(result.triangleCount).toBeGreaterThan(100);
         expect(createHash("sha256").update(stl).digest("hex")).toMatchSnapshot();

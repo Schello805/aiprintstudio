@@ -38,6 +38,7 @@ import {
   buildSmoothedBoundaryPositions,
   buildSteppedCellMesh,
   buildVectorColorMeshes,
+  buildVectorCellHeights,
   buildVectorExtrudedMesh,
   buildWatertightHeightMesh,
   flattenSteppedOuterRim,
@@ -436,8 +437,11 @@ export async function createRelief(
   // Reliefstufen nun aus echten Vektorkonturen auf. Vorschau, STL und 3MF
   // verwenden exakt dieses eine Mesh; AMS weist ihm anschließend nur Farben
   // zu und verändert die Geometrie nicht mehr.
-  let planarMesh = pipeline.kind === "emblem" && options.pipelineKind === "emblem" && !steppedCellHeights
-    ? await buildLayeredVectorRelief(gridWidth, gridHeight, options.widthMm, heightMm, heights, cellMask, 8, true)
+  const emblemCellHeights = pipeline.kind === "emblem" && options.pipelineKind === "emblem" && !steppedCellHeights
+    ? buildVectorCellHeights(heights, cellMask, gridWidth)
+    : undefined;
+  let planarMesh = emblemCellHeights
+    ? await buildLayeredCellVectorRelief(gridWidth, gridHeight, options.widthMm, heightMm, emblemCellHeights, cellMask, 8, true)
     : pipeline.kind === "text" && options.pipelineKind === "text" && !steppedCellHeights
       ? await buildLayeredVectorRelief(
           gridWidth,
@@ -479,7 +483,8 @@ export async function createRelief(
     ? buildColorCellAssignments(
       rgba, cellMask, gridWidth, gridHeight,
       options.sourceColors.length === options.colors.length ? options.sourceColors : options.colors,
-      useWordmarkMask ? detectedWordmarkPixels : undefined
+      useWordmarkMask ? detectedWordmarkPixels : undefined,
+      emblemCellHeights ? { pixels: heights, cells: emblemCellHeights } : undefined
     )
     : undefined;
   const mappedColorAssignments = detectedColorAssignments?.map((assignment) =>
@@ -497,7 +502,7 @@ export async function createRelief(
   const canonicalTriangleMaterials = mappedColorAssignments
     ? assignCanonicalTriangleMaterials(
       planarMesh, mappedColorAssignments, gridWidth, gridHeight,
-      options.widthMm, heightMm, options.sideColorIndex
+      options.widthMm, heightMm, options.sideColorIndex, emblemCellHeights
     )
     : undefined;
   const assignedCellCount = detectedColorAssignments?.filter((assignment) => assignment >= 0).length ?? 0;
@@ -1035,7 +1040,8 @@ function buildColorCellAssignments(
   width: number,
   height: number,
   colors: string[],
-  subjectPixels?: boolean[]
+  subjectPixels?: boolean[],
+  surfaceHeights?: { pixels: number[]; cells: number[] }
 ): number[] {
   const palette = colors.map((color) => {
     const [r, g, b] = parseHexColor(color);
@@ -1053,7 +1059,7 @@ function buildColorCellAssignments(
         bestDistance = distance;
       }
     });
-    return best;
+    return { index: best, distance: bestDistance };
   };
   return Array.from({ length: (width - 1) * (height - 1) }, (_, cell) => {
     if (!cellMask[cell]) return -1;
@@ -1069,8 +1075,16 @@ function buildColorCellAssignments(
     for (const sample of samples) {
       const alpha = rgba[sample * 4 + 3] / 255;
       if (alpha <= 0) continue;
-      const colorIndex = nearestPaletteIndex(rgba[sample * 4], rgba[sample * 4 + 1], rgba[sample * 4 + 2]);
-      votes[colorIndex] += alpha;
+      if (surfaceHeights) {
+        const top = Math.round(surfaceHeights.pixels[sample] / 0.2) * 0.2;
+        if (Math.abs(top - surfaceHeights.cells[cell]) > 0.05) continue;
+      }
+      const match = nearestPaletteIndex(rgba[sample * 4], rgba[sample * 4 + 1], rgba[sample * 4 + 2]);
+      // Mixed antialias pixels are poor color evidence. For a layered
+      // emblem, leave these cells unassigned so the canonical face can use
+      // a nearby solid color from the same height band instead.
+      if (surfaceHeights && match.distance > 3 * 64 ** 2) continue;
+      votes[match.index] += alpha;
     }
     let best = 0;
     let bestVote = -1;
@@ -1080,7 +1094,7 @@ function buildColorCellAssignments(
         best = index;
       }
     }
-    return best;
+    return surfaceHeights && bestVote <= 0 ? -1 : best;
   });
 }
 
